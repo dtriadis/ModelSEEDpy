@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 import re
 import json  # !!! import is never used
-from optlang.symbolics import Zero
+from optlang.symbolics import Zero, add  # !!! add is never used
 from cobra import Model, Reaction, Metabolite  # !!! Model is never used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
@@ -65,7 +65,7 @@ default_blacklist = ["rxn12985", "rxn00238", "rxn07058", "rxn05305", "rxn00154",
 
 class GapfillingPkg(BaseFBAPkg):
     """
-    
+
     """
     def __init__(self, model):
         BaseFBAPkg.__init__(self, model, "gapfilling", {}, {})
@@ -81,7 +81,10 @@ class GapfillingPkg(BaseFBAPkg):
         self.build_package(parameters)
 
     def get_model_index_hash(self):
-        """Determine all indices that should be gap filled"""
+        """
+        Determine all indices that should be gap filled
+        :return:
+        """
         index_hash = {"none": 0}
         for metabolite in self.model.metabolites:
             if re.search('_[a-z]\d+$', metabolite.id) is not None:
@@ -94,7 +97,7 @@ class GapfillingPkg(BaseFBAPkg):
                 index_hash["none":0]
                 # Iterating over all indecies with more than 10 intracellular compounds:
         return index_hash
-    
+
     def build_package(self, parameters):
         self.validate_parameters(parameters, [], {
             "auto_sink": ["cpd02701", "cpd11416", "cpd15302"],
@@ -203,7 +206,7 @@ class GapfillingPkg(BaseFBAPkg):
                 m = re.search('(.+)_([a-z])\d+$', modelreaction.id)
                 if m[1] not in self.parameters["blacklist"]:
                     cobra_reaction = modelreaction.copy()
-                    cobra_reaction.id = m[1] + "_" + m[2] + index    
+                    cobra_reaction.id = m[1] + "_" + m[2] + index
                     if cobra_reaction.id not in self.model.reactions and cobra_reaction.id not in self.new_reactions:
                         self.new_reactions[cobra_reaction.id] = cobra_reaction
                         new_penalties[cobra_reaction.id] = {}
@@ -450,7 +453,7 @@ class GapfillingPkg(BaseFBAPkg):
         return solution
     
     def filter_database_based_on_tests(self,test_conditions):
-        filtered_list = []  
+        filtered_list = []
         with self.model:
             rxnlist = []
             for reaction in self.model.reactions:
