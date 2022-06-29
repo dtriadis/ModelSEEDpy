@@ -216,13 +216,14 @@ class GapfillingPkg(BaseFBAPkg):
                         if cobra_reaction.upper_bound > 0:
                             new_penalties[cobra_reaction.id]["forward"] = self.parameters["model_penalty"]
                         # Updating metabolites in reaction to new model
+                        metabolites = cobra_reaction.metabolites;
                         new_stoichiometry = {}
-                        for met in cobra_reaction.metabolites:
+                        for metabolite in metabolites:
                             # Adding new coefficient:
-                            new_stoichiometry[local_remap[met.id]] = cobra_reaction.metabolites[met]
+                            new_stoichiometry[local_remap[metabolite.id]] = metabolites[metabolite]
                             # Zeroing out current coefficients
-                            if local_remap[met.id] != met:
-                                new_stoichiometry[met] = 0
+                            if local_remap[metabolite.id] != metabolite:
+                                new_stoichiometry[metabolite] = 0
                         cobra_reaction.add_metabolites(new_stoichiometry, combine=False)
                     elif cobra_reaction.lower_bound < 0 and self.model.reactions.get_by_id(cobra_reaction.id).lower_bound == 0:
                         self.model.reactions.get_by_id(cobra_reaction.id).lower_bound = cobra_reaction.lower_bound
