@@ -406,13 +406,13 @@ class GapfillingPkg(BaseFBAPkg):
             self.model.objective = self.model.problem.Objective(Zero, direction="min")
             self.model.objective.set_linear_coefficients(objcoef)
             self.model.optimize()
-            new_solution = self.compute_gapfilled_solution()  # !!! should flux_values be added as an argument here?
+            new_solution = self.compute_gapfilled_solution()
         return new_solution
     
     #This function is designed to KO all gapfilled reactions not included in the solution
     def knockout_gf_reactions_outside_solution(self,solution = None,flux_values = None):
         if solution == None:
-            solution = self.compute_gapfilled_solution(flux_values)
+            solution = self.compute_gapfilled_solution()  # !!! should flux_values be added as an argument here?
         if flux_values == None:
             flux_values = FBAHelper.compute_flux_values_from_variables(self.model)
         for rxnobj in self.model.reactions:
