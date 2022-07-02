@@ -576,10 +576,10 @@ class GapfillingHelper():
         metabolites, reactions = [], []
         metabolite_hash = {}
         for i in range(0,count):
-            for met in self.cobramodel.metabolites:
-                metabolite = met.copy()
+            for metabolite in self.cobramodel.metabolites:
+                metabolite = metabolite.copy()
                 metabolite.id += "__"+str(i)
-                metabolite_hash[metabolite.id] = met
+                metabolite_hash[metabolite.id] = metabolite
                 metabolites.append(metabolite)
             for reaction in self.cobramodel.reactions:
                 reaction = reaction.copy()
