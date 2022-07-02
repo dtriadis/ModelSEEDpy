@@ -572,8 +572,7 @@ class GapfillingHelper():
     
     def replicate_model(self,count):
         newmodel = Model(self.cobramodel.id+"_rep"+str(count))
-        utilities = KBaseFBAUtilities(newmodel,newmodel,self.kbapi,self.media,default_uptake = self.default_uptake,  # !!! KBaseFBAUtilities is undefined
-                                       default_excretion = self.default_excretion,blacklist = self.blacklist)
+        utilities = KBaseFBAUtilities(newmodel, newmodel, self.kbapi, self.media, default_uptake = self.default_uptake, default_excretion = self.default_excretion, blacklist = self.blacklist)  # !!! KBaseFBAUtilities is undefined
         metabolites, reactions = [], []
         metabolite_hash = {}
         for i in range(0,count):
