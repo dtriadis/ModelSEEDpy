@@ -182,10 +182,11 @@ class GapfillingHelper():
             cobra_reaction.id = groups[1]+groups[2]+str(index)
             new_penalties[cobra_reaction.id] = dict()
             #Updating metabolites in reaction to new model
+            metabolites = cobra_reaction.metabolites
             new_stoichiometry = {}
-            for metabolite in cobra_reaction.metabolites:
+            for metabolite in metabolites:
                 #Adding new coefficient:
-                new_stoichiometry[local_remap[metabolite.id]] = cobra_reaction.metabolites[metabolite]
+                new_stoichiometry[local_remap[metabolite.id]] = metabolites[metabolite]
                 #Zeroing out current coefficients
                 if local_remap[metabolite.id] != metabolite:
                     new_stoichiometry[metabolite] = 0
@@ -259,7 +260,7 @@ class GapfillingHelper():
         self.cobramodel.add_metabolites(new_metabolites.values())
         
         for template_reaction in template.reactions:
-            if template_reaction.id.split("_")[0] in self.blacklist:   
+            if template_reaction.id.split("_")[0] in self.blacklist:
                 continue
             cobra_reaction = self.convert_template_reaction(template_reaction,index,template,1)
             new_penalties[cobra_reaction.id] = dict()

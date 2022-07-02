@@ -4,8 +4,8 @@ from modelseedpy.ml.predict_phenotype import create_indicator_matrix
 class MSGenomeClassifier:
 
     def __init__(self, model, model_features):
-        self.model = model
         self.features = model_features
+        self.model = model
 
     @staticmethod
     def extract_features_from_genome(genome, ontology_term):
