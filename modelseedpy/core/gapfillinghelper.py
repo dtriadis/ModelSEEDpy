@@ -22,8 +22,6 @@ def build_id(string):
         return string_fix
     return string
 
-#Adding a few exception classes to handle different types of errors
-
 class GapfillingHelper():
     def __init__(self,blacklist = [],auto_sink = ["cpd02701_c", "cpd11416_c0", "cpd15302_c"]):
         self.blacklist = ["rxn12985","rxn00238","rxn07058","rxn05305","rxn00154","rxn09037","rxn10643",
@@ -110,17 +108,17 @@ class GapfillingHelper():
 
     def build_model_extended_for_gapfilling(self,extend_with_template = True, source_models = [], input_templates = [], model_penalty = 1, reaction_scores = {}):
         #Determine all indecies that should be gapfilled
-        indices = [0]*1000
+        indexlist = [0]*1000
         compounds = self.fbamodel["modelcompounds"]
         for compound in compounds:
             compartment = compound['modelcompartment_ref'].split("/").pop()
             basecomp = compartment[0:1]
             if not basecomp == "e":
-                indices[int(compartment[1:])] += 1
+                indexlist[int(compartment[1:])] += 1
 
         #Iterating over all indecies with more than 10 intracellular compounds:
         gapfilling_penalties = dict()
-        for i, val in enumerate(indices):
+        for i, val in enumerate(indexlist):
             if val > 10:
                 if extend_with_template:
                     gapfilling_penalties.update(self.temp_extend_model_index_for_gapfilling(i,input_templates))
@@ -176,39 +174,40 @@ class GapfillingHelper():
         self.cobramodel.add_metabolites(new_metabolites.values())
         
         for modelreaction in source_model.reactions:
-            if modelreaction.id.split("_")[0] not in self.blacklist:
-                #cobra_reaction = self.convert_modelreaction(modelreaction)
-                cobra_reaction = modelreaction.copy()
-                groups = comp.match(cobra_reaction.id)
-                cobra_reaction.id = groups[1]+groups[2]+str(index)
-                new_penalties[cobra_reaction.id] = dict()
-                #Updating metabolites in reaction to new model
-                new_stoichiometry = {}
-                for metabolite in cobra_reaction.metabolites:
-                    #Adding new coefficient:
-                    new_stoichiometry[local_remap[metabolite.id]] = cobra_reaction.metabolites[metabolite]
-                    #Zeroing out current coefficients
-                    if local_remap[metabolite.id] != metabolite:
-                        new_stoichiometry[metabolite] = 0
-                cobra_reaction.add_metabolites(new_stoichiometry,combine=False)
-                rxn = self.cobramodel.reactions.get_by_id(cobra_reaction.id)
-                if cobra_reaction.id not in (self.cobramodel.reactions and new_reactions):
-                    new_reactions[cobra_reaction.id] = cobra_reaction
-                    new_penalties[cobra_reaction.id]["added"] = True
-                    if cobra_reaction.lower_bound < 0:
-                        new_penalties[cobra_reaction.id]["reverse"] = model_penalty
-                    if cobra_reaction.upper_bound > 0:
-                        new_penalties[cobra_reaction.id]["forward"] = model_penalty
-                elif cobra_reaction.lower_bound < 0 and rxn.lower_bound == 0:
-                    rxn.lower_bound = cobra_reaction.lower_bound
-                    rxn.update_variable_bounds()
+            if modelreaction.id.split("_")[0] in self.blacklist:
+                continue
+            #cobra_reaction = self.convert_modelreaction(modelreaction)
+            cobra_reaction = modelreaction.copy()
+            groups = comp.match(cobra_reaction.id)
+            cobra_reaction.id = groups[1]+groups[2]+str(index)
+            new_penalties[cobra_reaction.id] = dict()
+            #Updating metabolites in reaction to new model
+            new_stoichiometry = {}
+            for metabolite in cobra_reaction.metabolites:
+                #Adding new coefficient:
+                new_stoichiometry[local_remap[metabolite.id]] = cobra_reaction.metabolites[metabolite]
+                #Zeroing out current coefficients
+                if local_remap[metabolite.id] != metabolite:
+                    new_stoichiometry[metabolite] = 0
+            cobra_reaction.add_metabolites(new_stoichiometry,combine=False)
+            rxn = self.cobramodel.reactions.get_by_id(cobra_reaction.id)
+            if cobra_reaction.id not in (self.cobramodel.reactions and new_reactions):
+                new_reactions[cobra_reaction.id] = cobra_reaction
+                new_penalties[cobra_reaction.id]["added"] = True
+                if cobra_reaction.lower_bound < 0:
                     new_penalties[cobra_reaction.id]["reverse"] = model_penalty
-                    new_penalties[cobra_reaction.id]["reversed"] = True
-                elif cobra_reaction.upper_bound > 0 and rxn.upper_bound == 0:
-                    rxn.upper_bound = cobra_reaction.upper_bound
-                    rxn.update_variable_bounds()
+                if cobra_reaction.upper_bound > 0:
                     new_penalties[cobra_reaction.id]["forward"] = model_penalty
-                    new_penalties[cobra_reaction.id]["reversed"] = True
+            elif cobra_reaction.lower_bound < 0 and rxn.lower_bound == 0:
+                rxn.lower_bound = cobra_reaction.lower_bound
+                rxn.update_variable_bounds()
+                new_penalties[cobra_reaction.id]["reverse"] = model_penalty
+                new_penalties[cobra_reaction.id]["reversed"] = True
+            elif cobra_reaction.upper_bound > 0 and rxn.upper_bound == 0:
+                rxn.upper_bound = cobra_reaction.upper_bound
+                rxn.update_variable_bounds()
+                new_penalties[cobra_reaction.id]["forward"] = model_penalty
+                new_penalties[cobra_reaction.id]["reversed"] = True
 
         #Only run this on new exchanges so we don't read for all exchanges
         for cpd in new_exchange:
