@@ -502,24 +502,24 @@ class GapfillingHelper():
             flux_values[rxnobj.id]["forward"] = rxnobj.forward_variable.primal
         return flux_values
             
-    def compute_gapfilled_solution(self, penalty_hash, flux_values = None):
+    def compute_gapfilled_solution(self, penalties:dict, flux_values = None):
         flux_values = flux_values or self.compute_flux_values_from_variables()
         directions = {"reversed" : {},"new" : {}}
         for reaction in self.cobramodel.reactions:
-            if reaction.id in penalty_hash:
-                if flux_values[reaction.id]["forward"] > Zero and "forward" in penalty_hash[reaction.id]:
-                    if "added" in penalty_hash[reaction.id]:
+            if reaction.id in penalties:
+                if flux_values[reaction.id]["forward"] > Zero and "forward" in penalties[reaction.id]:
+                    if "added" in penalties[reaction.id]:
                         directions["new"][reaction.id] = ">"
                     else:
                         directions["reversed"][reaction.id] = ">"
-                elif flux_values[reaction.id]["reverse"] > Zero and "reverse" in penalty_hash[reaction.id]:
-                    if "added" in penalty_hash[reaction.id]:
+                elif flux_values[reaction.id]["reverse"] > Zero and "reverse" in penalties[reaction.id]:
+                    if "added" in penalties[reaction.id]:
                         directions["new"][reaction.id] = "<"
                     else:
                         directions["reversed"][reaction.id] = "<"
         return directions
         
-    def add_gapfilling_solution_to_kbase_model(self, newmodel, penalty_hash, media_ref):
+    def add_gapfilling_solution_to_kbase_model(self, newmodel, penalties:dict, media_ref):
         largest_index = max([gapfilling.id.split(".").pop() for gapfilling in newmodel.gapfillings])
         gfid = "gf."+str(largest_index+1)
         newmodel.gapfillings.append({
@@ -530,14 +530,14 @@ class GapfillingHelper():
             "media_ref": media_ref
         })
         for reaction in self.cobramodel.reactions:
-            if reaction.id in penalty_hash:
-                if reaction.forward_variable.primal > Zero and "forward" in penalty_hash[reaction.id]:
+            if reaction.id in penalties:
+                if reaction.forward_variable.primal > Zero and "forward" in penalties[reaction.id]:
                     if reaction.id not in newmodel.modelreactions:
                         self.convert_cobra_reaction_to_kbreaction(reaction,newmodel,">",1)
                     gfrxn = newmodel.modelreactions.get_by_id(reaction.id)
                     gfrxn.gapfill_data[gfid] = dict()
                     gfrxn.gapfill_data[gfid]["0"] = [">",1,[]]
-                elif reaction.forward_variable.primal > Zero and "reverse" in penalty_hash[reaction.id]:
+                elif reaction.forward_variable.primal > Zero and "reverse" in penalties[reaction.id]:
                     if reaction.id not in newmodel.modelreactions:
                         self.convert_cobra_reaction_to_kbreaction(reaction,newmodel,"<",1)
                     gfrxn = newmodel.modelreactions.get_by_id(reaction.id)
@@ -572,7 +572,7 @@ class GapfillingHelper():
     
     def replicate_model(self,count):
         newmodel = Model(self.cobramodel.id+"_rep"+str(count))
-        utilities = KBaseFBAUtilities(newmodel, newmodel, self.kbapi, self.media, default_uptake = self.default_uptake, default_excretion = self.default_excretion, blacklist = self.blacklist)  # !!! KBaseFBAUtilities is undefined
+        # utilities = KBaseFBAUtilities(newmodel, newmodel, self.kbapi, self.media, default_uptake = self.default_uptake, default_excretion = self.default_excretion, blacklist = self.blacklist)  # !!! KBaseFBAUtilities is undefined
         metabolites, reactions = [], []
         metabolite_hash = {}
         for i in range(0,count):
@@ -588,7 +588,7 @@ class GapfillingHelper():
                 reactions.append(reaction)
         newmodel.add_metabolites(metabolites)
         newmodel.add_reactions(reactions)
-        return utilities  # !!! should the output be the newmodel and not the utilities?
+        return newmodel
     
     def test_reaction_additions_againt_limits(self,reactions,tests):
         filtered_tests = {}
