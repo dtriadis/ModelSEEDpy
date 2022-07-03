@@ -3,12 +3,13 @@
 from __future__ import absolute_import
 
 import logging
-# import re   
-# from optlang.symbolics import Zero, add
-# import json as _json
-# from cobra.core import Gene, Metabolite, Model, Reaction
+logger = logging.getLogger(__name__)
+import re  # !!! import is never used
+from optlang.symbolics import Zero, add  # !!! Neither import is never used
+import json as _json  # !!! import is never used
+from cobra.core import Gene, Metabolite, Model, Reaction  # !!! None of these import are ever used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.core.exceptions import FeasibilityError
+from modelseedpy.core.exceptions import FeasibilityError  # !!! import is never used
 
 #Base class for FBA packages
 class TotalFluxPkg(BaseFBAPkg):

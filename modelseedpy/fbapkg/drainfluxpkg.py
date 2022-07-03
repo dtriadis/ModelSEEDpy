@@ -4,7 +4,7 @@ from __future__ import absolute_import
 
 import logging
 logger = logging.getLogger("modelseedpy")
-
+from optlang.symbolics import Zero, add  # !!! Neither Zero nor Add are used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 

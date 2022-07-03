@@ -2,8 +2,9 @@
 
 from __future__ import absolute_import
 
+from optlang.symbolics import Zero, add  # !!! Add is never used
+from cobra.core import Gene, Metabolite, Model, Reaction  # !!! None of these packages are ever used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from optlang.symbolics import Zero
 
 
 #Base class for FBA packages

@@ -3,7 +3,9 @@
 from __future__ import absolute_import
 
 import logging
+logger = logging.getLogger(__name__)
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy.fbapkg.simplethermopkg import SimpleThermoPkg # !!! the import is not used
 from optlang.symbolics import Zero
 
 #Base class for FBA packages
@@ -12,7 +14,7 @@ class MetaboFBAPkg(BaseFBAPkg):
         BaseFBAPkg.__init__(self,model,"metabo fba",{"met":"metabolite","pk":"string"},{"metc":"metabolite","pkc":"string"})
         self.pkgmgr.addpkgs(["SimpleThermoPkg"])
 
-    def build_package(self,parameters, peaks):
+    def build_package(self,parameters):
         self.validate_parameters(parameters,["peaks"],{
             "set_objective":True,
         })
@@ -50,7 +52,7 @@ class MetaboFBAPkg(BaseFBAPkg):
         elif obj_type == "pkc":
             return BaseFBAPkg.build_constraint(self,"pkc",0,0,{self.variables["met"][cobra_obj.id]:1},cobra_obj["id"])
         
-    # def find_metabolites_matching_peak(self,data):
-    #     #TODO: need to write this function
-    #     pass
+    def find_metabolites_matching_peak(self,data):
+        #TODO: need to write this function
+        pass
       

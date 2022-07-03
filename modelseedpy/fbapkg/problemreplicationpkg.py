@@ -2,10 +2,13 @@
 
 from __future__ import absolute_import
 
-
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from optlang import Variable
 import logging
+logger = logging.getLogger(__name__)
+from optlang import Variable
+from optlang.symbolics import Zero, add  # !!! neither Zero nor Add are used
+from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy.fbapkg.revbinpkg import RevBinPkg  # !!! import is unused
+from modelseedpy.fbapkg.totalfluxpkg import TotalFluxPkg  # !!! import is unused
 
 #Base class for FBA packages
 class ProblemReplicationPkg(BaseFBAPkg):
@@ -23,7 +26,6 @@ class ProblemReplicationPkg(BaseFBAPkg):
                 if obj_type in pkg.variables:
                     for objid in pkg.variables[obj_type]:
                         shared_var_hash[pkg.variables[obj_type][objid].name] = pkg.variables[obj_type][objid]
-        
         #Now copying over variables and constraints from other models and replacing shared variables
         count = 0
         for othermdl in self.parameters["models"]:
@@ -36,7 +38,7 @@ class ProblemReplicationPkg(BaseFBAPkg):
                     newvar = Variable.clone(var)
                     newvar.name = var.name+"."+str(count)
                     self.variables[str(count)][var.name] = newvar
-                    new_var_hash[var.name] = newvar   
+                    new_var_hash[var.name] = newvar
                     newobj.append(newvar)       
             self.model.add_cons_vars(newobj)
             newobj = []
