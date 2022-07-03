@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 
 import logging
+logger = logging.getLogger(__name__)
 from scipy.constants import physical_constants, calorie, kilo, R
 from numpy import log as ln
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
