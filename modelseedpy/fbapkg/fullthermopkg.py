@@ -64,7 +64,19 @@ class FullThermoPkg(BaseFBAPkg):
             "infeasible_model": False,
             'dgbin':False
         })
-        self.parameters["modelseed_api"] = FBAHelper.get_modelseed_db_api(self.parameters["modelseed_db_path"])
+        self.parameters["modelseed_api"] = FBAHelper.get_modelseed_db_api(self.parameters["modelseed_db_path"])        
+        # implements an accommodating variable to encourage feasibility
+        simple_thermo_parameters = {
+                "filter":self.parameters["filter"],
+                "min_potential":-100000,     #KJ/mol
+                "max_potential":100000,      #KJ/mol
+                'dgbin':self.parameters['dgbin']
+            }
+
+        if self.parameters['infeasible_model']:
+            simple_thermo_parameters['dgbin'] = True
+        self.pkgmgr.getpkg("SimpleThermoPkg").build_package(simple_thermo_parameters)
+        
         self.parameters["concentrations"] = FullThermoPkg.default_concentrations()
         for cpd in self.parameters["custom_concentrations"]:
             self.parameters["concentrations"][cpd] = self.parameters["custom_concentrations"][cpd]
@@ -74,18 +86,7 @@ class FullThermoPkg(BaseFBAPkg):
         self.parameters["compartment_potential"] = FullThermoPkg.default_compartment_potentials()
         for cmp in self.parameters["custom_compartment_potential"]:
             self.parameters["compartment_potential"][cmp] = self.parameters["custom_compartment_potential"][cmp]
-        
-        # implements an accommodating variable to encourage feasibility
-        simple_thermo_parameters = {
-                "filter":self.parameters["filter"],
-                "min_potential":-100000,     #KJ/mol
-                "max_potential":100000,      #KJ/mol
-                'dgbin':self.parameters['dgbin']
-            }
-        if self.parameters['infeasible_model']:
-            simple_thermo_parameters['dgbin'] = True
-        self.pkgmgr.getpkg("SimpleThermoPkg").build_package(simple_thermo_parameters)
-            
+
         msid_hash = {}
         for metabolite in self.model.metabolites:
             msid = FBAHelper.modelseed_id_from_cobra_metabolite(metabolite)
