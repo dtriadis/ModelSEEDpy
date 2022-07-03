@@ -76,14 +76,14 @@ class FullThermoPkg(BaseFBAPkg):
         if self.parameters['infeasible_model']:
             simple_thermo_parameters['dgbin'] = True
         self.pkgmgr.getpkg("SimpleThermoPkg").build_package(simple_thermo_parameters)
-        
-        self.parameters["concentrations"] = FullThermoPkg.default_concentrations()
+
+        self.parameters["concentrations"] = FullThermoPkg.default_concentration()
         for cpd in self.parameters["custom_concentrations"]:
             self.parameters["concentrations"][cpd] = self.parameters["custom_concentrations"][cpd]
         self.parameters["deltaG_error"] = FullThermoPkg.default_deltaG_error()
         for cpd in self.parameters["custom_deltaG_error"]:
             self.parameters["deltaG_error"][cpd] = self.parameters["custom_deltaG_error"][cpd]
-        self.parameters["compartment_potential"] = FullThermoPkg.default_compartment_potentials()
+        self.parameters["compartment_potential"] = FullThermoPkg.default_compartment_potential()
         for cmp in self.parameters["custom_compartment_potential"]:
             self.parameters["compartment_potential"][cmp] = self.parameters["custom_compartment_potential"][cmp]
 
