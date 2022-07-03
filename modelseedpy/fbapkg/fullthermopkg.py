@@ -9,9 +9,9 @@ from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 
 #Base class for FBA packages
-class FullThermoPkg(BaseFBAPkg):    
+class FullThermoPkg(BaseFBAPkg):
     @staticmethod
-    def default_concentrations():
+    def default_concentration():
         return {
             "cpd00067_c0":[0.0000001,0.0000001],      #M H+ - equivalent to pHint = 7
             "cpd00007_c0":[1E-07,8.2E-06],            #M O2 instracellular
@@ -35,7 +35,7 @@ class FullThermoPkg(BaseFBAPkg):
         }
     
     @staticmethod   
-    def default_compartment_potentials():
+    def default_compartment_potential():
         return {
             "e0":0,       #Extracellular MUST be the zero reference for compartment electrochemical potential (so community modeling works)
             "c0":-160     #mV = 0.33 (pHint - pHext) - 143.33 where pHint = 7 and pHext = 6.5
@@ -49,11 +49,6 @@ class FullThermoPkg(BaseFBAPkg):
                       parameters: dict,      # simulation parameters
                       verbose: bool = True
                       ):
-        # define hard-coded defaults
-        self.parameters["deltaG_error"] = FullThermoPkg.default_deltaG_error()
-        self.parameters["compartment_potential"] = FullThermoPkg.default_compartment_potentials()
-        self.parameters["concentrations"] = FullThermoPkg.default_concentrations()
-
         # amalgamate default and specified paramters 
         self.validate_parameters(parameters,            # specified parameters
                                  ["modelseed_db_path"]  # required parameter for uploading the ModelSEED Database
@@ -70,10 +65,13 @@ class FullThermoPkg(BaseFBAPkg):
             'dgbin':False
         })
         self.parameters["modelseed_api"] = FBAHelper.get_modelseed_db_api(self.parameters["modelseed_db_path"])
+        self.parameters["concentrations"] = FullThermoPkg.default_concentrations()
         for cpd in self.parameters["custom_concentrations"]:
             self.parameters["concentrations"][cpd] = self.parameters["custom_concentrations"][cpd]
+        self.parameters["deltaG_error"] = FullThermoPkg.default_deltaG_error()
         for cpd in self.parameters["custom_deltaG_error"]:
             self.parameters["deltaG_error"][cpd] = self.parameters["custom_deltaG_error"][cpd]
+        self.parameters["compartment_potential"] = FullThermoPkg.default_compartment_potentials()
         for cmp in self.parameters["custom_compartment_potential"]:
             self.parameters["compartment_potential"][cmp] = self.parameters["custom_compartment_potential"][cmp]
         
@@ -100,48 +98,48 @@ class FullThermoPkg(BaseFBAPkg):
             self._build_variable(metabolite,"dgerr")     #Build error variable
             self._build_constraint(metabolite, verbose)  #Build the potential constraint
 
-    def _build_variable(self,object,type):
-        msid = FBAHelper.modelseed_id_from_cobra_metabolite(object)
-        if type == "logconc" and msid != "cpd00001":        #Do not make a concentration variable for water
+    def build_variable(self,cobra_obj,obj_type):
+        msid = FBAHelper.modelseed_id_from_cobra_metabolite(cobra_obj)
+        if obj_type == "logconc" and msid != "cpd00001":        #Do not make a concentration variable for water
             lb = ln(self.parameters["default_min_conc"])
             ub = ln(self.parameters["default_max_conc"])
-            if object.id in self.parameters["concentrations"]:
-                lb = ln(self.parameters["concentrations"][object.id][0])
-                ub = ln(self.parameters["concentrations"][object.id][1])
-            return BaseFBAPkg.build_variable(self,"logconc",lb,ub,"continuous",object)
-        elif type == "dgerr":
+            if cobra_obj.id in self.parameters["concentrations"]:
+                lb = ln(self.parameters["concentrations"][cobra_obj.id][0])
+                ub = ln(self.parameters["concentrations"][cobra_obj.id][1])
+            return BaseFBAPkg.build_variable(self,"logconc",lb,ub,"continuous",cobra_obj)
+        elif obj_type == "dgerr":
             ub = self.parameters["default_max_error"]
-            if object.id in self.parameters["deltaG_error"]:
-                ub = self.parameters["deltaG_error"][object.id]
-            return BaseFBAPkg.build_variable(self,"dgerr",-1*ub,ub,"continuous",object)
+            if cobra_obj.id in self.parameters["deltaG_error"]:
+                ub = self.parameters["deltaG_error"][cobra_obj.id]
+            return BaseFBAPkg.build_variable(self,"dgerr",-1*ub,ub,"continuous",cobra_obj)
     
-    def _build_constraint(self,object, verbose):
+    def build_constraint(self, cobra_obj, verbose):
         #potential(i) (KJ/mol) = deltaG(i) (KJ/mol) + R * T(K) * lnconc(i) + charge(i) * compartment_potential
-        if object.id not in self.pkgmgr.getpkg("SimpleThermoPkg").variables["potential"]:
+        if cobra_obj.id not in self.pkgmgr.getpkg("SimpleThermoPkg").variables["potential"]:
             return None
-        msid = FBAHelper.modelseed_id_from_cobra_metabolite(object)
+        msid = FBAHelper.modelseed_id_from_cobra_metabolite(cobra_obj)
         if msid == None:
             if verbose:
-                print(object.id+" has no modelseed ID!")
+                print(cobra_obj.id+" has no modelseed ID!")
             return None
         mscpd = self.parameters["modelseed_api"].get_seed_compound(msid)
         if mscpd is None:
             if verbose:
-                print(object.id+" has modelseed ID "+msid+" but cannot be found in ModelSEED DB!")
+                print(cobra_obj.id+" has modelseed ID "+msid+" but cannot be found in ModelSEED DB!")
             return None
         if mscpd.deltag == 10000000:
             if verbose:
-                print(object.id+" has modelseed ID "+msid+" but does not have a valid deltaG!")
+                print(cobra_obj.id+" has modelseed ID "+msid+" but does not have a valid deltaG!")
             return None
         Faraday = physical_constants['Faraday constant'][0]#C/mol
         compartment_potential = 0
-        if object.compartment in self.parameters["combined_custom_comp_pot"]:
-            compartment_potential = self.parameters["combined_custom_comp_pot"][object.compartment]
-        constant = mscpd.deltag/calorie + object.charge*Faraday*compartment_potential/kilo/kilo
+        if cobra_obj.compartment in self.parameters["combined_custom_comp_pot"]:
+            compartment_potential = self.parameters["combined_custom_comp_pot"][cobra_obj.compartment]
+        constant = mscpd.deltag/calorie + cobra_obj.charge*Faraday*compartment_potential/kilo/kilo
         coef = {
-            self.pkgmgr.getpkg("SimpleThermoPkg").variables["potential"][object.id]:1,
-            self.variables["dgerr"][object.id]:-1
+            self.pkgmgr.getpkg("SimpleThermoPkg").variables["potential"][cobra_obj.id]:1,
+            self.variables["dgerr"][cobra_obj.id]:-1
         }
         if msid != "cpd00001":#Water concentration should not contribute to potential
-            coef[self.variables["logconc"][object.id]] = -1*R/kilo*self.parameters["temperature"]
-        return BaseFBAPkg.build_constraint(self,"potc",constant,constant,coef,object)
+            coef[self.variables["logconc"][cobra_obj.id]] = -1*R/kilo*self.parameters["temperature"]
+        return BaseFBAPkg.build_constraint(self,"potc",constant,constant,coef,cobra_obj)
