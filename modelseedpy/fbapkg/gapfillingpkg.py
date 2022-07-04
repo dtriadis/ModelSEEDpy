@@ -11,6 +11,7 @@ from optlang.symbolics import Zero, add  # !!! add is never used
 from cobra import Model, Reaction, Metabolite  # !!! Model is never used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy.core.template import Template  # !!! possibly use the conversion functions from this class to replace the conversion functions defined herein?
 
 default_blacklist = ["rxn12985", "rxn00238", "rxn07058", "rxn05305", "rxn00154", "rxn09037", "rxn10643",
                      "rxn11317", "rxn05254", "rxn05257", "rxn05258", "rxn05259", "rxn05264", "rxn05268",
@@ -70,6 +71,7 @@ class GapfillingPkg(BaseFBAPkg):
     def __init__(self, model):
         BaseFBAPkg.__init__(self, model, "gapfilling", {}, {})
         self.gapfilling_penalties = None
+        self.tempalte = Template()
 
     def build(self, template, minimum_objective=0.01):
         parameters = {
@@ -266,7 +268,7 @@ class GapfillingPkg(BaseFBAPkg):
         for template_compound in template.compcompounds:
             compartment = template_compound.compartment
             compartment_index = "0" if compartment == 'e' else index
-            cobra_metabolite = self.convert_template_compound(template_compound, compartment_index, template)  # TODO: move function out
+            cobra_metabolite = self.convert_template_compound(template_compound, compartment_index, template)  # TODO: move function out  # !!! core.template has the same function?
             if cobra_metabolite.id not in self.model.metabolites and cobra_metabolite.id not in self.new_metabolites:
                 self.new_metabolites[cobra_metabolite.id] = cobra_metabolite
                 #self.model.add_metabolites([cobra_metabolite])
@@ -355,13 +357,13 @@ class GapfillingPkg(BaseFBAPkg):
         met.annotation["seed.compound"] = base_id
         return met
 
-    def convert_template_reaction(self, template_reaction, index, template, for_gapfilling=1):
+    def convert_template_reaction(self, template_reaction, index, template, for_gapfilling=True):  # !!! this function is also in core.template??
         base_id = template_reaction.id.split("_")[0]  # !!! base_id is never used
         new_id = template_reaction.id+str(index)
         lower_bound = template_reaction.lower_bound
         upper_bound = template_reaction.upper_bound
         direction = template_reaction.GapfillDirection
-        if for_gapfilling == 0:
+        if not for_gapfilling:
             direction = template_reaction.direction
         if direction == ">":
             lower_bound = 0
