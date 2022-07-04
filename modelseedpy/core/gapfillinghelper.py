@@ -262,7 +262,7 @@ class GapfillingHelper():
         for template_reaction in template.reactions:
             if template_reaction.id.split("_")[0] in self.blacklist:
                 continue
-            cobra_reaction = self.convert_template_reaction(template_reaction,index,template,1)
+            cobra_reaction = self.convert_template_reaction(template_reaction,index,template,True)  # !!! where is convert_template_reaction defined?
             new_penalties[cobra_reaction.id] = dict()
             if cobra_reaction.id not in (self.cobramodel.reactions and new_reactions):
                 #Adding any template reactions missing from the present model
