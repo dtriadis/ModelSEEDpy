@@ -17,7 +17,7 @@ def build_id(string):
         string = string[2:]
     string_fix = string.replace('-', '__DASH__')
     if not string == string_fix:
-        logger.debug('[Species] rename: [%s] -> [%s]', string, string.replace('-', '__DASH__'))
+        logger.debug('[Species] rename: [%s] -> [%s]', string, string_fix)
     if any([string.startswith(x) for x in ["R-", "R_"]]):
         return string_fix
     return string
