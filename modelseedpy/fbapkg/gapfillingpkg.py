@@ -290,7 +290,7 @@ class GapfillingPkg(BaseFBAPkg):
         for template_reaction in template.reactions:
             if template_reaction.reference_id in self.parameters["blacklist"]:
                 continue
-            cobra_reaction = self.convert_template_reaction(template_reaction, index, template, 1)  # TODO: move function out
+            cobra_reaction = self.convert_template_reaction(template_reaction, index, template, True)  # TODO: move function out
             new_penalties[cobra_reaction.id] = dict()
             if cobra_reaction.id not in self.model.reactions and cobra_reaction.id not in self.new_reactions:
                 # Adding any template reactions missing from the present model
