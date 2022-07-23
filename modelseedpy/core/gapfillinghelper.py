@@ -1,5 +1,4 @@
 import logging
-logger = logging.getLogger(__name__)
 
 import re
 import copy  # !!! import never used
@@ -11,6 +10,8 @@ from cobrakbase.core.kbaseobject import AttrDict
 from cobrakbase.annotation_ontology_api.annotation_ontology_apiServiceClient import annotation_ontology_api
 from numpy.f2py.cfuncs import f90modhooks  # !!! import never used
 from modelseedpy.core.exceptions import ObjectError, FeasibilityError  # !!! FeasibilityError is never used
+
+logger = logging.getLogger(__name__)
 
 def build_id(string):
     if any([string.startswith(x) for x in ["M_", "M-", "R-", "R_"]]):
@@ -287,7 +288,7 @@ class GapfillingHelper():
         #Only run this on new exchanges so we don't readd for all exchanges
         for cpd_id in new_exchange:
             drain_reaction = self.add_drain_from_metabolite_id(cpd_id)
-            if drain_reaction and drain_reaction.id not in new_reactions:
+            if drain_reaction is not None and drain_reaction.id not in new_reactions:
                 new_reactions[drain_reaction.id] = drain_reaction
 
         #Only run this on new demands so we don't readd for all exchanges
@@ -560,7 +561,7 @@ class GapfillingHelper():
                                 reaction_genes[newrxn] = {}
                             if gene not in reaction_genes[newrxn]:
                                 reaction_genes[newrxn][gene] = 0            
-                            if weigh_all_events_equally or not weights:
+                            if weigh_all_events_equally or weights is None:
                                 reaction_genes[newrxn][gene] += 1
                             elif event["description"] in weights:
                                 reaction_genes[newrxn][gene] += weights[event["description"]]
