@@ -285,8 +285,8 @@ class GapfillingPkg(BaseFBAPkg):
 
     # Possible new function to add to the KBaseFBAModelToCobraBuilder to extend a model with a template for gapfilling for a specific index
     def extend_model_with_template_for_gapfilling(self, template, index):
-        # Adding all metabolites to model prior to adding reactions
         self.new_reactions, new_penalties = {}, {}
+        # Adding all metabolites to model prior to adding reactions
         new_exchange, new_demand = self.extend_model_with_template_metabolites(template, index)
 
         for template_reaction in template.reactions:
