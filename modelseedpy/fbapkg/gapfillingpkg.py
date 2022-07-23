@@ -3,7 +3,6 @@
 from __future__ import absolute_import
 
 import logging
-logger = logging.getLogger(__name__)
 
 import re
 import json  # !!! import is never used
@@ -12,6 +11,8 @@ from cobra import Model, Reaction, Metabolite  # !!! Model is never used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 from modelseedpy.core.template import Template  # !!! possibly use the conversion functions from this class to replace the conversion functions defined herein?
+
+logger = logging.getLogger(__name__)
 
 default_blacklist = ["rxn12985", "rxn00238", "rxn07058", "rxn05305", "rxn00154", "rxn09037", "rxn10643",
                      "rxn11317", "rxn05254", "rxn05257", "rxn05258", "rxn05259", "rxn05264", "rxn05268",
