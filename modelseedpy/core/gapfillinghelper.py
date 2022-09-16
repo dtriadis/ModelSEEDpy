@@ -84,7 +84,9 @@ class GapfillingHelper():
                 self.auto_sink.extend([sink_id + str(i) for i in range(0,100)])
         
         self.auto_exchange = "e0"
-        self.COBRA_0_BOUND = 0; self.COBRA_DEFAULT_LB = -1000; self.COBRA_DEFAULT_UB = 1000
+        self.COBRA_0_BOUND = 0
+        self.COBRA_DEFAULT_LB = -1000
+        self.COBRA_DEFAULT_UB = 1000
     
     #FBA macro analyses
     def test_reaction_additions_againt_limits(self,model,reactions,tests):
