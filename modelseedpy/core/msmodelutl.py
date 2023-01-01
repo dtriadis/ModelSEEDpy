@@ -97,7 +97,7 @@ class MSModelUtil:
             return None
 
     def __init__(self, model):
-        self.model = model
+        self.model = model.copy()
         self.pkgmgr = MSPackageManager.get_pkg_mgr(model)
         self.atputl = None
         self.gfutl = None

@@ -4,7 +4,7 @@ from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.community.mssteadycom import MSSteadyCom
 from modelseedpy.community.commhelper import build_from_species_models
-from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterError
+from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, FeasibilityError
 from modelseedpy.core.msgapfill import MSGapfill
 from modelseedpy.core.fbahelper import FBAHelper
 #from modelseedpy.fbapkg.gapfillingpkg import default_blacklist
@@ -297,7 +297,7 @@ class MSCommunity:
             self.run(media, pfba)
             return self._compute_relative_abundance_from_solution()
 
-    def run(self,media,pfba = None):  # !!! why is the media needed to execute the model?
+    def run(self, media, pfba=False):
         self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
         self.print_lp()
         save_matlab_model(self.util.model, self.util.model.name+".mat")
@@ -312,7 +312,7 @@ class MSCommunity:
 
     def _compute_relative_abundance_from_solution(self,solution = None):
         if not solution and not self.solution:
-            logger.warning("No feasible solution!")
+            logger.warning("The simulation lacks any flux.")
             return None
         data = {"Species": [], "Abundance": []}
         totalgrowth = sum(
@@ -331,8 +331,7 @@ class MSCommunity:
         return df
 
     def _set_solution(self,solution):
-        self.solution = None
         if solution.status != "optimal":
-            logger.warning("No solution found for the simulation.")
-            return None
+            FeasibilityError(f'The solution is sub-optimal, with a(n) {solution} status.')
+            self.solution = None
         self.solution = solution

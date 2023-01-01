@@ -255,7 +255,7 @@ class MSCompatibility:
 
         file_paths = []
         if conflicts_file_name:
-            path = os.path.join(export_directory,conflicts_file_name)
+            path = os.path.join(export_directory, conflicts_file_name)
             file_paths.append(os.path.relpath(path, export_directory))
             with open(path, 'w') as out:
                 json.dump(conflicts, out, indent = 3)
@@ -358,7 +358,7 @@ class MSCompatibility:
                         new_rxn = Reaction(id=rxn.id, name=rxn.name, subsystem=rxn.subsystem,
                                            lower_bound=rxn.lower_bound, upper_bound=rxn.upper_bound)
                         model.remove_reactions([rxn])
-                        model.add_reaction(new_rxn)
+                        model.add_reactions([new_rxn])
                         new_rxn.add_metabolites(reaction_dict)
                         change = {'original': {'reaction': original_reaction},
                                   'new': {'reaction': new_rxn.reaction},

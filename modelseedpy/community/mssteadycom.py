@@ -38,7 +38,8 @@ class MSSteadyCom:
         if not solution:
             raise ParameterError("A solution must be provided. Interactions are computed from a solution.")
         if all(array(list(solution.fluxes.values)) == 0):
-            raise NoFluxError("No feasible solution!")
+            print(list(solution.fluxes.values))
+            raise NoFluxError("The simulation lacks any flux.")
 
         #Initialize data
         metabolite_data, species_data, species_collection = {}, {"Environment":{}}, {"Environment":{}}
