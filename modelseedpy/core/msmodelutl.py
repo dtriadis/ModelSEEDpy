@@ -5,12 +5,14 @@ import time
 import json
 import sys
 from cobra import Model, Reaction, Metabolite
+from cobra.io.json import from_json, to_json
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
 from modelseedpy.core.exceptions import *
 from modelseedpy.core.fbahelper import FBAHelper
 from optlang.symbolics import Zero
-from optlang import Constraint
+from optlang import Constraint, Objective
+from math import isclose
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -58,25 +60,23 @@ class MSModelUtil:
 
     @staticmethod
     def stoichiometry_to_string(stoichiometry):
-        reactants = []
-        products = []
+        reactants, products = [], []
         for met in stoichiometry:
-            coef = stoichiometry[met]
+            stoich = stoichiometry[met]
             if not isinstance(met, str):
-                if MSModelUtil.metabolite_msid(met) == "cpd00067":
-                    met = None
-                else:
-                    met = met.id
-            if met != None:
-                if coef < 0:
+                met = (
+                    None
+                    if FBAHelper.modelseed_id_from_cobra_metabolite(met) == "cpd00067"
+                    else met.id
+                )
+            if met:
+                if stoich < 0:
                     reactants.append(met)
                 else:
                     products.append(met)
-        reactants.sort()
-        products.sort()
         return [
-            "+".join(reactants) + "=" + "+".join(products),
-            "+".join(products) + "=" + "+".join(reactants),
+            "+".join(sorted(reactants)) + "=" + "+".join(sorted(products)),
+            "+".join(sorted(products)) + "=" + "+".join(sorted(reactants)),
         ]
 
     @staticmethod
@@ -96,8 +96,17 @@ class MSModelUtil:
         else:
             return None
 
+
+    ########################### CLASS METHODS ###########################
+
     def __init__(self, model):
-        self.model = model.copy()
+        self.model = model #.copy()
+        org_obj_val = model.slim_optimize()
+        new_obj_val = self.model.slim_optimize()
+        if not isclose(org_obj_val, new_obj_val, rel_tol=1e-5):
+            raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
+                             f" where the original objective value is {org_obj_val}"
+                             f" and the new objective value is {new_obj_val}.")
         self.pkgmgr = MSPackageManager.get_pkg_mgr(model)
         self.atputl = None
         self.gfutl = None
@@ -189,7 +198,7 @@ class MSModelUtil:
                     output[msid] = []
                 output[msid].append(cpd)
         return output
-    
+
     def exchange_list(self): 
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
 
@@ -246,7 +255,7 @@ class MSModelUtil:
                 if ex_rxn.metabolites[met] == -1:
                     exchange_reactions[met] = ex_rxn
                 else:
-                    logger.warn("Nonstandard exchange reaction ignored:" + reaction.id)
+                    logger.warn("Nonstandard exchange reaction ignored:" + ex_rxn.id)
         return exchange_reactions
     
     def var_names_list(self):
@@ -330,7 +339,6 @@ class MSModelUtil:
                     )
                 compartment_string = compartment_trans[compartment_number]
                 met_output = self.find_met(id, compartment_string)
-                cobramet = None
                 if met_output:
                     cobramet = met_output[0]
                 else:
@@ -346,6 +354,55 @@ class MSModelUtil:
         print(len(output))
         self.model.add_reactions(output)
         return output
+
+    def create_constraint(self, constraint, coef=None):
+        self.model.add_cons_vars(constraint)
+        self.model.solver.update()
+        if coef:
+            constraint.set_linear_coefficients(coef)
+            self.model.solver.update()
+
+    def add_vars_cons(self, vars_cons, sloppy=False):
+        self.model.add_cons_vars(vars_cons, sloppy=sloppy)
+        self.model.solver.update()
+
+    def remove_cons_vars(self, vars_cons):
+        self.model.remove_cons_vars(vars_cons)
+        self.model.solver.update()
+
+    def add_objective(self, objective, direction="max", coef=None):
+        self.model.objective = Objective(objective, direction=direction)
+        self.model.solver.update()
+        if coef:
+            self.model.objective.set_linear_coefficients(coef)
+            self.model.solver.update()
+
+    def set_objective_from_target_reaction(self, target_reaction, minimize=False):
+        target_reaction = self.model.reactions.get_by_id(target_reaction)
+        sense = "max" if not minimize else "min"
+        self.model.objective = self.model.problem.Objective(
+            target_reaction.flux_expression, direction=sense
+        )
+        return target_reaction
+
+    def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None):
+        objective_expr = objective_expr or self.model.objective.expression
+        FBAHelper.create_constraint(self.model, Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+
+    def add_exchange_to_model(self, cpd, rxnID):
+        self.model.add_boundary(metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
+                                reaction_id=rxnID, type="exchange", lb=cpd.minFlux, ub=cpd.maxFlux)
+
+    def update_model_media(self, media):
+        medium = self.model.medium
+        model_reactions = [rxn.id for rxn in self.model.reactions]
+        for cpd in media.data["mediacompounds"]:
+            ex_rxn = f"EX_{cpd.id}_e0"
+            if ex_rxn not in model_reactions:
+                self.add_exchange_to_model(cpd, ex_rxn)
+            medium[ex_rxn] = cpd.maxFlux
+        self.model.medium = medium
+        return self.model
 
     #################################################################################
     # Functions related to managing biomass reactions
@@ -523,7 +580,7 @@ class MSModelUtil:
         unneeded = []
         tempmodel = self.model
         if not keep_changes:
-            tempmodel = cobra.io.json.from_json(cobra.io.json.to_json(self.model))
+            tempmodel = from_json(to_json(self.model))
         tempmodel.objective = solution["target"]
         pkgmgr = MSPackageManager.get_pkg_mgr(tempmodel)
         pkgmgr.getpkg("KBaseMediaPkg").build_package(solution["media"])
@@ -714,7 +771,7 @@ class MSModelUtil:
         if model.solver.status != "optimal":
             self.printlp(condition["media"].id + "-Testing-Infeasible.lp")
             logger.critical(
-                ondition["media"].id
+                condition["media"].id
                 + "testing leads to infeasible problem. LP file printed to debug!"
             )
             return False
@@ -945,10 +1002,9 @@ class MSModelUtil:
             "cpd00009": [1, compartment],
             "cpd00067": [1, compartment],
         }
-        msids = ["cpd00002", "cpd00001", "cpd00008", "cpd00009", "cpd00067"]
         stoichiometry = {}
         id_hash = self.msid_hash()
-        for msid in msids:
+        for msid, content in coefs.items():
             if msid not in id_hash:
                 logger.warning("Compound " + msid + " not found in model!")
                 return None
@@ -972,10 +1028,10 @@ class MSModelUtil:
         return {"reaction": cobra_reaction, "direction": ">", "new": True}
 
     @staticmethod
-    def parse_id(object):
-        if re.search('(.+)_([a-z]+)(\d*)$', object.id) != None:
-            m = re.search('(.+)_([a-z]+)(\d*)$', object.id)
-            return (m[1],m[2],m[3])
+    def parse_id(cobra_obj):
+        if re.search("(.+)_([a-z])(\d+)$", cobra_obj.id):
+            m = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
+            return (m[1], m[2], int(m[3]))
         return None
 
     def add_kbase_media(self, kbase_media):

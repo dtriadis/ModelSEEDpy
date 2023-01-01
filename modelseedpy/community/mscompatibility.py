@@ -226,7 +226,8 @@ class MSCompatibility:
         # ensure that all non-standard exchanges have been corrected
         model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
         if standardize:
-            residual_nonstandard_mets = [met.id for ex_rxn in model_exchanges for met in ex_rxn.metabolites if "cpd" not in met.id]
+            residual_nonstandard_mets = [met.id for ex_rxn in model_exchanges
+                                         for met in ex_rxn.metabolites if "cpd" not in met.id]
             residuals = set(residual_nonstandard_mets)-set(unknown_mets)
             if residuals:
                 logger.error(f"The {model.id} model has residual non-standard metabolites in its exchange reactions:"

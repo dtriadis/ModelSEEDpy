@@ -15,7 +15,6 @@ class MSSteadyCom:
     @staticmethod
     def compute(
             mscommodel,                          # The MSCommunity object of the model (mandatory to prevent circular imports)
-            model=None,                          # the model that will be defined
             models:list=None,                    # the list of models that will be assembled into a community
             solution = None,                     # the COBRA simulation solution that will be parsed and visualized
             media=None,                          # The media in which the community model will be simulated
@@ -30,7 +29,7 @@ class MSSteadyCom:
             ignore_mets=None                     # cross-fed exchanges that will not be displayed in the graphs
             ):
         # defining the models
-        model = model if not models else CommHelper.build_from_species_models(
+        model = mscommodel.util.model if not models else CommHelper.build_from_species_models(
             models, names=names, abundances=abundances, cobra_model=True)
 
         #Check for solution
@@ -128,6 +127,7 @@ class MSSteadyCom:
         ## process the fluxes dataframe
         data["IDs"].append("zzEnvironment")
         data["Metabolites/Donor"].append(0)
+        print(mscommodel.species)
         for individual in mscommodel.species:
             data[individual.id].append(species_data["Environment"][individual.id])
         data["Environment"].append(0)

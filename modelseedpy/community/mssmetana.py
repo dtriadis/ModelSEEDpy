@@ -20,11 +20,11 @@ from numpy import mean
 
 
 def _compatibilize(member_models: Iterable, printing=False):
-    # return member_models
-    models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
-    if not isinstance(member_models, (set, list, tuple)):
-        return models[0]
-    return models
+    return member_models
+    # models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
+    # if not isinstance(member_models, (set, list, tuple)):
+    #     return models[0]
+    # return models
 
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
     ic(member_models, com_model, compatibilize)
@@ -78,6 +78,8 @@ class MSSmetana:
         self.models = _compatibilize(member_models)
         self.community = MSModelUtil(com_model or build_from_species_models(self.models, cobra_model=True))
         ## define the environment
+        print(com_model.optimize())
+        print(self.community.model.optimize())
         if environment:
             if hasattr(environment, "get_media_constraints"):
                 ### standardize modelseed media into COBRApy media

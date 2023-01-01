@@ -57,7 +57,7 @@ class CommunityModelSpecies:
                 self.id = "Species"+str(self.index)
 
         logger.info("Making atp hydrolysis reaction for species: "+self.id)
-        atp_rxn = FBAHelper.add_atp_hydrolysis(self.community.util.model,"c"+str(self.index))
+        atp_rxn = self.community.util.add_atp_hydrolysis("c"+str(self.index))
         # FBAHelper.add_autodrain_reactions_to_self.community_model(self.community.model)  # !!! FIXME This FBAHelper function is not defined.
         self.atp_hydrolysis = atp_rxn["reaction"]
         self.biomass_drain = None
@@ -93,28 +93,15 @@ class CommunityModelSpecies:
     def compute_max_biomass(self):
         if len(self.biomasses) == 0:
             logger.critical("No biomass reaction found for species "+self.id)
-        FBAHelper.add_objective(self.community.model, Zero, coef={self.biomasses[0].forward_variable:1})
+        self.community.util.add_objective(Zero, coef={self.biomasses[0].forward_variable:1})
         if self.community.lp_filename != None:
             self.community.print_lp(self.community.lp_filename+"_"+self.id+"_Biomass")
         return self.community.model.optimize()
 
     def compute_max_atp(self):
         if not self.atp_hydrolysis:
-            logger.critical("No ATP hydrolysis found for species:"+self.id)
-        FBAHelper.add_objective(self.community.model, Zero, coef={self.atp_hydrolysis.forward_variable:1})
-        if self.community.lp_filename:
-            self.community.print_lp(self.community.lp_filename+"_"+self.id+"_ATP")
-        return self.community.model.optimize()
-
-    def compute_max_atp(self):
-        if not self.atp_hydrolysis:
             logger.critical("No ATP hydrolysis found for species:" + self.id)
-        self.community.model.objective = self.community.model.problem.Objective(
-            Zero, direction="max"
-        )
-        self.community.model.objective.set_linear_coefficients(
-            {self.atp_hydrolysis.forward_variable: 1}
-        )
+        self.community.util.add_objective(Zero, coef={self.atp_hydrolysis.forward_variable: 1})
         if self.community.lp_filename:
             self.community.print_lp(self.community.lp_filename + "_" + self.id + "_ATP")
         return self.community.model.optimize()
@@ -138,10 +125,10 @@ class MSCommunity:
         # defining the models
         model = model if not models else build_from_species_models(
             models, names=names, abundances=abundances, cobra_model=True)
+        self.id = model.id
         self.util = MSModelUtil(model)
-        self.id = self.util.model.id
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
-        msid_cobraid_hash = FBAHelper.msid_hash(self.util.model)
+        msid_cobraid_hash = self.util.msid_hash()
         if "cpd11416" not in msid_cobraid_hash:
             raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
@@ -149,20 +136,21 @@ class MSCommunity:
             print(self.biomass_cpd)
             if self.biomass_cpd.compartment == "c0":
                 for reaction in self.util.model.reactions:
-                    if self.biomass_cpd in reaction.metabolites:
-                        print(reaction)
-                        if reaction.metabolites[self.biomass_cpd] == 1 and len(reaction.metabolites) > 1:
-                            if self.primary_biomass:
-                                raise ObjectAlreadyDefinedError(
-                                    f"The primary biomass {self.primary_biomass} is already defined,"
-                                    f"hence, the {reaction} cannot be defined as the model primary biomass.")
-                            print('primary biomass defined', reaction)
-                            self.primary_biomass = reaction
-                        elif (
-                            reaction.metabolites[self.biomass_cpd] < 0
-                            and len(reaction.metabolites) == 1
-                        ):
-                            self.biomass_drain = reaction
+                    if self.biomass_cpd not in reaction.metabolites:
+                        continue
+                    print(reaction)
+                    if reaction.metabolites[self.biomass_cpd] == 1 and len(reaction.metabolites) > 1:
+                        if self.primary_biomass:
+                            raise ObjectAlreadyDefinedError(
+                                f"The primary biomass {self.primary_biomass} is already defined,"
+                                f"hence, the {reaction} cannot be defined as the model primary biomass.")
+                        print('primary biomass defined', reaction)
+                        self.primary_biomass = reaction
+                    elif (
+                        reaction.metabolites[self.biomass_cpd] < 0
+                        and len(reaction.metabolites) == 1
+                    ):
+                        self.biomass_drain = reaction
             elif 'c' in self.biomass_cpd.compartment:
                 other_biomass_cpds.append(self.biomass_cpd)
         for biomass_cpd in other_biomass_cpds:
