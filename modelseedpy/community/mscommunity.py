@@ -287,16 +287,8 @@ class MSCommunity:
 
     def run(self, media, pfba=False):
         self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
-        self.print_lp()
-        save_matlab_model(self.util.model, self.util.model.name+".mat")
-        if pfba or self.pfba:
-            self._set_solution(cobra.flux_analysis.pfba(self.util.model))
-        else:
-            self._set_solution(self.util.model.optimize())
-        if not self.solution:
-            return None
-        logger.info(self.util.model.summary())
-        return self.solution
+        return self._set_solution(cobra.flux_analysis.pfba(self.util.model)
+                                  if pfba or self.pfba else self.util.model.optimize())
 
     def _compute_relative_abundance_from_solution(self,solution = None):
         if not solution and not self.solution:
@@ -318,8 +310,12 @@ class MSCommunity:
         logger.info(df)
         return df
 
-    def _set_solution(self,solution):
+    def _set_solution(self, solution):
         if solution.status != "optimal":
             FeasibilityError(f'The solution is sub-optimal, with a(n) {solution} status.')
             self.solution = None
+            self.print_lp()
+            save_matlab_model(self.util.model, self.util.model.name + ".mat")
         self.solution = solution
+        logger.info(self.util.model.summary())
+        return self.solution

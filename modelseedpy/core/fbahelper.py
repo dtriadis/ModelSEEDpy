@@ -205,16 +205,6 @@ class FBAHelper:
         return unique_objs
 
     @staticmethod
-    def get_reframed_model(kbase_model):
-        from reframed import from_cobrapy
-
-        reframed_model = from_cobrapy(kbase_model)
-        if hasattr(kbase_model, "id"):
-            reframed_model.id = kbase_model.id
-        reframed_model.compartments.e0.external = True
-        return reframed_model
-
-    @staticmethod
     def parse_df(df, float_values=True):
         if isinstance(df, tuple):
             return df
@@ -226,16 +216,6 @@ class FBAHelper:
             values = values.astype("float64")
         return dataframe(list(df.index), list(df.columns), values)
 
-    @staticmethod
-    def filter_cobra_set(cobra_set):
-        unique_ids = set(obj.id for obj in cobra_set)
-        unique_objs = set()
-        for obj in cobra_set:
-            if obj.id in unique_ids:
-                unique_objs.add(obj)
-                unique_ids.remove(obj.id)
-        return unique_objs
-    
     @staticmethod
     def solution_to_dict(solution):
         return {key:flux for key, flux in solution.fluxes.items()}

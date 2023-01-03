@@ -4,7 +4,6 @@ from __future__ import absolute_import
 
 import logging
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.community.mscommunity import MSCommunity
 from modelseedpy.core.fbahelper import FBAHelper
 
 # Base class for FBA packages
@@ -14,15 +13,13 @@ class CommKineticPkg(BaseFBAPkg):
             self, model, "community kinetics", {}, {"commkin": "string"}
         )
 
-    def build_package(self, kinetic_coef, community_model=None):
+    def build_package(self, kinetic_coef, community_model):
         self.validate_parameters(
             {},
             [],
             {
                 "kinetic_coef": kinetic_coef,
-                "community": community_model
-                if community_model
-                else MSCommunity(self.model),
+                "community": community_model,
             },
         )
         for species in self.parameters["community"].species:
