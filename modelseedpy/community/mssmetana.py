@@ -5,12 +5,12 @@ from modelseedpy.community.commhelper import build_from_species_models
 from modelseedpy.community.mscommunity import MSCommunity
 from itertools import combinations, permutations, chain
 from optlang import Variable, Constraint, Objective
-from modelseedpy.core.fbahelper import FBAHelper
 from modelseedpy.core.exceptions import ObjectiveError, ParameterError
 from modelseedpy.core.msmodelutl import MSModelUtil
 from cobra.medium import minimal_medium
 from collections import Counter
 from deepdiff import DeepDiff  # (old, new)
+from itertools import chain
 from typing import Iterable
 from pprint import pprint
 from numpy import array
@@ -20,11 +20,11 @@ from numpy import mean
 
 
 def _compatibilize(member_models: Iterable, printing=False):
-    return member_models
-    # models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
-    # if not isinstance(member_models, (set, list, tuple)):
-    #     return models[0]
-    # return models
+    # return member_models
+    models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
+    if not isinstance(member_models, (set, list, tuple)):
+        return models[0]
+    return models
 
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
     ic(member_models, com_model, compatibilize)
@@ -78,8 +78,6 @@ class MSSmetana:
         self.models = _compatibilize(member_models)
         self.community = MSModelUtil(com_model or build_from_species_models(self.models, cobra_model=True))
         ## define the environment
-        print(com_model.optimize())
-        print(self.community.model.optimize())
         if environment:
             if hasattr(environment, "get_media_constraints"):
                 ### standardize modelseed media into COBRApy media
@@ -136,7 +134,6 @@ class MSSmetana:
         return self.mip
 
     def mp_score(self):
-        print(self.community.model.optimize())
         self.mp = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
         if not self.printing:
             return self.mp
@@ -151,7 +148,7 @@ class MSSmetana:
 
     def mu_score(self):
         member_excreta = self.mp_score() if not hasattr(self, "mp") else self.mp
-        self.mu = MSSmetana.mu(self.models, self.n_solutions, member_excreta, self.n_solutions,
+        self.mu = MSSmetana.mu(self.models, self.environment, member_excreta, self.n_solutions,
                                self.abstol, True, self.printing)
         if not self.printing:
             return self.mu
@@ -265,8 +262,7 @@ class MSSmetana:
     @staticmethod
     def contributions(org_possible_contributions, scores, model_util, abstol):
         # identify and log excreta from the solution
-        FBAHelper.add_objective(model_util.model, sum(
-            ex_rxn.flux_expression for ex_rxn in org_possible_contributions))
+        model_util.add_objective(sum(ex_rxn.flux_expression for ex_rxn in org_possible_contributions))
         sol = model_util.model.optimize()
         if sol.status != "optimal":
             ## exit the while loop by returning the original possible_contributions, hence DeepDiff == {} and the while loop terminates
@@ -325,20 +321,22 @@ class MSSmetana:
         scores = {}
         member_models = member_models if compatibilized else _compatibilize(member_models, printing)
         member_excreta = member_excreta or MSSmetana.mp(member_models, environment, None, abstol, printing)
+        # print(type(member_excreta), member_excreta())
         missing_members = [model for model in member_models if model.id not in member_excreta]
         if missing_members:
             member_excreta.update(MSSmetana.mp([missing_members], environment))
         ic(member_models)
         for org_model in member_models:
-            other_excreta = set(numpy.array([excreta for model, excreta in member_excreta.items()
-                                            if model.id != org_model.id]).flatten())
+            other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
+                                                     if model != org_model.id]))
             model_util = MSModelUtil(org_model)
+            ic(environment)
             if environment:
                 model_util.add_medium(environment)
             ex_rxns = {ex_rxn: met for ex_rxn in model_util.exchange_list() for met in ex_rxn.metabolites}
             variables = {ex_rxn.id: Variable('___'.join([model_util.model.id, ex_rxn.id]),
                                              lb=0, ub=1, type="binary") for ex_rxn in ex_rxns}
-            FBAHelper.add_cons_vars(model_util.model, [list(variables.values())])
+            model_util.add_vars_cons([list(variables.values())])
             media, solutions = [], []
             sol = model_util.model.optimize()
             while sol.status == "optimal" and len(solutions) < n_solutions:
@@ -346,7 +344,7 @@ class MSSmetana:
                 medium = set([ex for ex in ex_rxns if sol.fluxes[ex.id] < -abstol and ex in other_excreta])
                 constraint = Constraint(sum([variables[ex.id] for ex in medium]),
                                         ub=len(medium)-1, name=f"iteration_{len(solutions)}")
-                FBAHelper.add_cons_vars(model_util.model, [constraint])
+                model_util.add_vars_cons([constraint])
                 media.append(medium)
                 sol = model_util.model.optimize()
             counter = Counter(chain(*media))
@@ -365,32 +363,35 @@ class MSSmetana:
 
         # c_{rxn.id}_lb: rxn < 1000*y_{species_id}
         # c_{rxn.id}_ub: rxn > -1000*y_{species_id}
+
         variables = {}
         constraints = []
         # TODO this can be converted to an MSCommunity object by looping through each index
         for org_model in member_models:
-            model = org_model.copy()
-            variables[model.id] = Variable(name=f'y_{model.id}', lb=0, ub=1, type='binary')
-            FBAHelper.add_cons_vars(com_model, [variables[model.id]])
-            for rxn in model.reactions:
+            model_util = MSModelUtil(org_model)
+            variables[model_util.model.id] = Variable(name=f'y_{model_util.model.id}', lb=0, ub=1, type='binary')
+            model_util.add_vars_cons([variables[model_util.model.id]])
+            for rxn in model_util.model.reactions:
                 if "bio" not in rxn.id:
                     # print(rxn.flux_expression)
-                    lb = Constraint(rxn.flux_expression + 1000*variables[model.id], name="_".join(["c", model.id, rxn.id, "lb"]), lb=0)
-                    ub = Constraint(rxn.flux_expression - 1000*variables[model.id], name="_".join(["c", model.id, rxn.id, "ub"]), ub=0)
+                    lb = Constraint(rxn.flux_expression + 1000*variables[model_util.model.id],
+                                    name="_".join(["c", model_util.model.id, rxn.id, "lb"]), lb=0)
+                    ub = Constraint(rxn.flux_expression - 1000*variables[model_util.model.id],
+                                    name="_".join(["c", model_util.model.id, rxn.id, "ub"]), ub=0)
                     constraints.extend([lb, ub])
-        FBAHelper.add_cons_vars(com_model, constraints, sloppy=True)
+        community.add_vars_cons(constraints, sloppy=True)
 
         # calculate the SCS
         scores = {}
         for model in member_models:
-            com_model = com_model.copy()
+            com_model_util = MSModelUtil(com_model)
             other_members = [other for other in member_models if other.id != model.id]
             # model growth is guaranteed while minimizing the growing members of the community
             ## SMETANA_Biomass: {biomass_reactions} > {min_growth}
             smetana_biomass = Constraint(sum(rxn.flux_expression for rxn in model.reactions if "bio" in rxn.id),
                                          name='SMETANA_Biomass', lb=min_growth)
-            FBAHelper.add_cons_vars(com_model, [smetana_biomass], sloppy=True)
-            FBAHelper.add_objective(com_model, sum([variables[other.id] for other in other_members]), "min")
+            com_model_util.add_vars_cons([smetana_biomass], sloppy=True)
+            com_model_util.add_objective(sum([variables[other.id] for other in other_members]), "min")
             previous_constraints, donors_list = [], []
             for i in range(n_solutions):
                 sol = com_model.optimize()  # FIXME The solution is not optimal
@@ -401,8 +402,8 @@ class MSSmetana:
                 donors_list.append(donors)
                 previous_con = f'iteration_{i}'
                 previous_constraints.append(previous_con)
-                FBAHelper.add_cons_vars(com_model, [Constraint(
-                    sum(variables[o.id] for o in donors), name=previous_con, ub=len(previous_constraints)-1)], sloppy=True)
+                com_model_util.add_vars_cons([Constraint(sum(variables[o.id] for o in donors), name=previous_con,
+                                                         ub=len(previous_constraints)-1)], sloppy=True)
             if i != 0:
                 donors_counter = Counter(chain(*donors_list))
                 scores[model.id] = {o.id: donors_counter[o] / len(donors_list) for o in other_members}

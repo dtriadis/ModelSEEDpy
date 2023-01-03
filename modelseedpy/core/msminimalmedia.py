@@ -55,11 +55,11 @@ def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
                              f" where the observed growth value was {simulated_growth}.")
     return sol_dict
 
-def minimizeFlux_withGrowth(model, min_growth, obj):
-    FBAHelper.add_minimal_objective_cons(model, min_growth)
-    FBAHelper.add_objective(model, obj, "min")
-    sol = model.optimize()
-    sol_dict = bioFlux_check(model, sol)
+def minimizeFlux_withGrowth(model_util, min_growth, obj):
+    model_util.add_minimal_objective_cons(min_growth)
+    model_util.add_objective(obj, "min")
+    sol = model_util.model.optimize()
+    sol_dict = bioFlux_check(model_util.model, sol)
     return sol, sol_dict
 
 
@@ -70,9 +70,9 @@ class MSMinimalMedia:
         rxns = model_util.exchange_list() if interacting else model_util.transport_list()
         influxes = []
         for rxn in rxns:
-            if all(["EX_" in met.id for met in rxn.reactants]):  # this is essentially every exchange
+            if all(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
                 influxes.append(rxn.reverse_variable)
-            elif all(["EX_" in met.id for met in rxn.products]):  # this captures edge cases
+            elif all(["e0" in met.id for met in rxn.products]):  # this captures edge cases
                 logger.critical(f"The reaction {rxn} lacks any exchange metabolites, and thus is indicative of an error.")
                 influxes.append(rxn.forward_variable)
         return influxes
@@ -90,7 +90,7 @@ class MSMinimalMedia:
         # min_flux = MSMinimalMedia._define_min_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media
-        sol, sol_dict = minimizeFlux_withGrowth(model_util.model, min_growth, sum(media_exchanges))
+        sol, sol_dict = minimizeFlux_withGrowth(model_util, min_growth, sum(media_exchanges))
         min_media = _exchange_solution(sol_dict)
         total_flux = sum([abs(flux) for flux in min_media.values()])
         simulated_sol = verify(org_model, min_media)
@@ -108,11 +108,10 @@ class MSMinimalMedia:
         for rxn in rxns:
             # define the variable
             vars[rxn.id] = Variable(rxn.id + "_ru", lb=0, ub=1, type="binary")
-            FBAHelper.add_cons_vars(model_util.model, [vars[rxn.id]])
+            model_util.add_vars_cons([vars[rxn.id]])
             # bin_flux: {rxn_bin}*1000 >= {rxn_rev_flux}
-            FBAHelper.create_constraint(
-                model_util.model, Constraint(Zero, lb=0, ub=None, name=rxn.id + "_bin"),
-                coef={vars[rxn.id]: 1000, rxn.reverse_variable: -1})
+            model_util.create_constraint(Constraint(Zero, lb=0, ub=None, name=rxn.id + "_bin"),
+                                         coef={vars[rxn.id]: 1000, rxn.reverse_variable: -1})
         return vars
 
     @staticmethod
@@ -126,13 +125,12 @@ class MSMinimalMedia:
         if environment:
             model_util.add_medium(environment)
         variables = {"ru":{}}
-        FBAHelper.add_minimal_objective_cons(
-            model_util.model, min_growth) #, sum([rxn.flux_expression for rxn in model_util.bio_rxns_list()]))
+        model_util.add_minimal_objective_cons(min_growth) #, sum([rxn.flux_expression for rxn in model_util.bio_rxns_list()]))
         # print(model_util.model.constraints[-1])
         # define the binary variable and constraint
         time1 = process_time()
         variables["ru"] = MSMinimalMedia._define_min_objective(model_util, interacting)
-        FBAHelper.add_objective(model_util.model, sum(variables["ru"].values()), "min")
+        model_util.add_objective(sum(variables["ru"].values()), "min")
         time2 = process_time()
         print(f"\nDefinition of minimum objective time: {(time2 - time1)/60} mins")
 
@@ -157,8 +155,8 @@ class MSMinimalMedia:
             sol_media = _exchange_solution(sol_rxns_dict)
             min_media = sol_media if len(sol_media) < len(min_media) else min_media
             ## omit the solution from future searches
-            FBAHelper.create_constraint(model_util.model, Constraint(  # build exclusion use can be emulated
-                Zero, lb=None, ub=len(sol_dict)-1,name=f"exclude_sol{len(solution_dicts)}"), sol_dict)
+            model_util.create_constraint(Constraint(Zero, lb=None, ub=len(sol_dict)-1,
+                                                    name=f"exclude_sol{len(solution_dicts)}"), sol_dict)
 
             # search the permutation space by omitting previously investigated solution_dicts
             # sol_exchanges = [rxn for rxn in sol_dict if "EX_" in rxn.name]
@@ -195,7 +193,8 @@ class MSMinimalMedia:
                          for rxnVar2 in sol_dict if (
                                  rxnVar != rxnVar2 and any(["_e0" in met.id for met in rxnVar2.metabolites]))
                          })
-        FBAHelper.create_constraint(knocked_model_utl, Constraint(Zero, lb=0.1, ub=None, name=f"{rxnVar.name}-sol{sol_index}"), coef)
+        knocked_model_utl.create_constraint(Constraint(Zero, lb=0.1, ub=None,
+                                                       name=f"{rxnVar.name}-sol{sol_index}"), coef)
         return knocked_model_utl.optimize()
 
     @staticmethod

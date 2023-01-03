@@ -255,7 +255,7 @@ class MSModelUtil:
                 if ex_rxn.metabolites[met] == -1:
                     exchange_reactions[met] = ex_rxn
                 else:
-                    logger.warn("Nonstandard exchange reaction ignored:" + ex_rxn.id)
+                    logger.warning("Nonstandard exchange reaction ignored:" + ex_rxn.id)
         return exchange_reactions
     
     def var_names_list(self):
@@ -308,12 +308,6 @@ class MSModelUtil:
         
     def reaction_scores(self):  #!!! Can this be deleted?
         return {}
-    
-    #adding gapfilling compounds to a KBase model saves gapfilled models 
-    def convert_cobra_compound_to_kbcompound(self, cpd, kbmodel, add_to_model=1):
-        refid = "cpd00000"
-        if re.search('cpd\d+_[a-z]+',cpd.id):
-            refid = re.sub("_[a-z]\d+$","",cpd.id)
 
     #################################################################################
     # Functions related to editing the model
@@ -387,7 +381,7 @@ class MSModelUtil:
 
     def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None):
         objective_expr = objective_expr or self.model.objective.expression
-        FBAHelper.create_constraint(self.model, Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+        self.create_constraint(Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
 
     def add_exchange_to_model(self, cpd, rxnID):
         self.model.add_boundary(metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
@@ -446,6 +440,7 @@ class MSModelUtil:
         return {"ATP": atp, "Total": total}
 
     # Required this function to add gapfilled compounds to a KBase model for saving gapfilled model
+    # adding gapfilling compounds to a KBase model saves gapfilled models
     def convert_cobra_compound_to_kbcompound(self, cpd, kbmodel, add_to_model=1):
         refid = "cpd00000"
         if re.search("cpd\d+_[a-z]+", cpd.id):
