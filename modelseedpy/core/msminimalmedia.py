@@ -83,7 +83,7 @@ class MSMinimalMedia:
         if org_model.slim_optimize() == 0:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
-        model_util = MSModelUtil(org_model)
+        model_util = MSModelUtil(org_model, True)
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
         min_growth = min_growth or model_util.model.optimize().objective_value
@@ -108,20 +108,20 @@ class MSMinimalMedia:
         for rxn in rxns:
             # define the variable
             vars[rxn.id] = Variable(rxn.id + "_ru", lb=0, ub=1, type="binary")
-            model_util.add_vars_cons([vars[rxn.id]])
+            model_util.add_cons_vars([vars[rxn.id]])
             # bin_flux: {rxn_bin}*1000 >= {rxn_rev_flux}
             model_util.create_constraint(Constraint(Zero, lb=0, ub=None, name=rxn.id + "_bin"),
                                          coef={vars[rxn.id]: 1000, rxn.reverse_variable: -1})
         return vars
 
     @staticmethod
-    def minimize_components(org_model, min_growth=0.1, solution_limit=5, interacting=True, environment=None, printing=True):
+    def minimize_components(org_model, min_growth=0.1, environment=None, interacting=True, solution_limit=5, printing=True):
         """minimize the quantity of metabolites that are consumed by the model"""
         if org_model.slim_optimize() == 0:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
         # ic(org_model, min_growth, solution_limit)
-        model_util = MSModelUtil(org_model)
+        model_util = MSModelUtil(org_model, True)
         if environment:
             model_util.add_medium(environment)
         variables = {"ru":{}}
@@ -182,7 +182,7 @@ class MSMinimalMedia:
     @staticmethod
     def _knockout(org_model, rxnVar, variables, sol_dict, sol_index, interacting):
         # knockout the specified exchange
-        knocked_model_utl = MSModelUtil(org_model)
+        knocked_model_utl = MSModelUtil(org_model, True)
         knocked_model_utl, vars = MSMinimalMedia._define_min_objective(knocked_model_utl, interacting)
         coef = {rxnVar: 0}
         if interacting:
@@ -232,13 +232,15 @@ class MSMinimalMedia:
             return interdependencies
 
     @staticmethod
-    def determine_min_media(model, minimization_method="minComponents", min_growth=None, interacting=True, printing=True):
+    def determine_min_media(model, minimization_method="minComponents", min_growth=None, environment=None,
+                            interacting=True, solution_limit=5, printing=True):
         min_growth = min_growth or 0.1
-        if minimization_method == "minComponents":
-            return minimal_medium(model, min_growth, minimize_components=True)
-            # return MSMinimalMedia.minimize_components(model, min_growth, printing=printing)
         if minimization_method == "minFlux":
-            return MSMinimalMedia.minimize_components(model, min_growth, interacting=interacting, printing=printing)
+            # return minimal_medium(model, min_growth, minimize_components=True)
+            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
+        if minimization_method == "minComponents":
+            return MSMinimalMedia.minimize_components(
+                model, min_growth, environment, interacting, solution_limit, printing)
         if minimization_method == "jenga":
             return MSMinimalMedia.jenga_method(model,printing=printing)
 

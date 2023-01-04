@@ -99,15 +99,17 @@ class MSModelUtil:
 
     ########################### CLASS METHODS ###########################
 
-    def __init__(self, model):
-        self.model = model #.copy()
-        org_obj_val = model.slim_optimize()
-        new_obj_val = self.model.slim_optimize()
-        if not isclose(org_obj_val, new_obj_val, rel_tol=1e-5):
-            raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
-                             f" where the original objective value is {org_obj_val}"
-                             f" and the new objective value is {new_obj_val}.")
-        self.pkgmgr = MSPackageManager.get_pkg_mgr(model)
+    def __init__(self, model, copy=False):
+        self.model = model
+        if copy:
+            org_obj_val = model.slim_optimize()
+            self.model = model.copy()
+            new_obj_val = self.model.slim_optimize()
+            if not isclose(org_obj_val, new_obj_val, rel_tol=1e-2):
+                raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
+                                 f" where the original objective value is {org_obj_val}"
+                                 f" and the new objective value is {new_obj_val}.")
+        self.pkgmgr = MSPackageManager.get_pkg_mgr(self.model)
         self.atputl = None
         self.gfutl = None
         self.metabolite_hash = None
@@ -349,14 +351,14 @@ class MSModelUtil:
         self.model.add_reactions(output)
         return output
 
-    def create_constraint(self, constraint, coef=None):
-        self.model.add_cons_vars(constraint)
+    def create_constraint(self, constraint, coef=None, sloppy=False):
+        self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
         if coef:
             constraint.set_linear_coefficients(coef)
             self.model.solver.update()
 
-    def add_vars_cons(self, vars_cons, sloppy=False):
+    def add_cons_vars(self, vars_cons, sloppy=False):
         self.model.add_cons_vars(vars_cons, sloppy=sloppy)
         self.model.solver.update()
 

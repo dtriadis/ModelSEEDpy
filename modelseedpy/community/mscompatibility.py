@@ -67,7 +67,7 @@ class MSCompatibility:
         new_models = []
         models = [models] if not isinstance(models, (list, tuple, set)) else models
         for org_model in models:  # Develop a singular model function and then an abstracted version for multiple models
-            model = org_model.copy()  # model_util cannot be used for a circular import
+            model = org_model.copy()  # model_util cannot be used, since it would cause a circular import
             model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
             reactions = {}
             # standardize metabolites

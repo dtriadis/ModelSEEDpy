@@ -1,3 +1,5 @@
+from optlang import Objective
+
 from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
@@ -120,21 +122,14 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
     comm_biorxn.add_metabolites(metabolites)
     newmodel.add_reactions([comm_biorxn])
 
-    # define the model objective
-    FBAHelper.add_objective(newmodel, comm_biorxn.flux_expression)
-    return newmodel
-
-    # create a biomass sink reaction
+    # update model components
     newutl = MSModelUtil(newmodel)
+    newutl.add_objective(comm_biorxn.flux_expression)
     newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
     if cobra_model:
-        return newmodel
-    return newmodel, names, abundances
-
+        return newutl.model
+    return newutl.model, names, abundances
 
 
 class CommHelper:
-
-    @staticmethod
-    def placeholder():
-        pass
+    pass

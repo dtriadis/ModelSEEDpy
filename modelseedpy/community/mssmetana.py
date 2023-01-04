@@ -50,7 +50,8 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
         return media
     # model_s_ is either a singular model or a list of models
     if com_model:
-        com_media = MSMinimalMedia.determine_min_media(com_model, minimization_method, min_growth, interacting, printing)
+        com_media = MSMinimalMedia.determine_min_media(
+            com_model, minimization_method, min_growth, None, interacting, 5, printing)
     if model_s_:
         if not isinstance(model_s_, (list,set,tuple)):
             return MSMinimalMedia.determine_min_media(model_s_, minimization_method, min_growth, interacting, printing)
@@ -90,11 +91,12 @@ class MSSmetana:
                 raise ObjectiveError(f"The model {model.id} possesses an objective value of 0 in complete media, "
                                      "which is incompatible with minimal media computations and hence SMETANA.")
         if self.community.model.slim_optimize() == 0:
-            raise ObjectiveError(f"The community model {self.community.model.id} possesses an objective value of 0 in complete "
-                                 f"media, which is incompatible with minimal media computations and hence SMETANA.")
+            raise ObjectiveError(f"The community model {self.community.model.id} possesses an objective "
+                                 "value of 0 in complete media, which is incompatible with minimal "
+                                 "media computations and hence SMETANA.")
         ## determine the minimal media for each model, including the community
-        self.media = media_dict or _get_media(
-                None, self.community.model, self.models, min_growth, True, printing, minimal_media_method)
+        self.media = media_dict if media_dict else MSMinimalMedia.determine_min_media(
+                self.community.model, minimal_media_method, min_growth, self.environment, printing=printing)
 
     def all_scores(self):
         mro = self.mro_score()
@@ -134,6 +136,7 @@ class MSSmetana:
         return self.mip
 
     def mp_score(self):
+        print("executing MP")
         self.mp = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
         if not self.printing:
             return self.mp
@@ -245,7 +248,7 @@ class MSSmetana:
             noninteracting_media_dict=None, printing=True, compatibilized=False):
         """Determine the maximum quantity of nutrients that can be sourced through syntrophy"""
         member_models, community = _load_models(
-            member_models, com_model, compatibilized==False, printing=printing)
+            member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
         noninteracting_medium = _get_media(noninteracting_media_dict, community, None, min_growth, False)
         if "community_media" in noninteracting_medium:
@@ -278,7 +281,8 @@ class MSSmetana:
     @staticmethod
     def mp(member_models:Iterable, environment, com_model=None, minimal_media=None, abstol=1e-3, printing=False):
         """Discover the metabolites that each species can contribute to a community"""
-        community = _compatibilize(com_model) or build_from_species_models(member_models, cobra_model=True, standardize=True)
+        community = _compatibilize(com_model) if com_model else build_from_species_models(
+            member_models, cobra_model=True, standardize=True)
         # TODO support parsing the individual members through the MSCommunity object
         community.medium = minimal_media or MSMinimalMedia.minimize_flux(community)
         scores = {}
@@ -292,7 +296,7 @@ class MSSmetana:
             # determines possible member contributions in the community environment, where the excretion of media compounds is irrelevant
             org_possible_contributions = [ex_rxn for ex_rxn in model_util.exchange_list()
                                           if (ex_rxn.id not in community.medium and ex_rxn.upper_bound > 0)]
-            ic(org_possible_contributions, len(model_util.exchange_list()), len(community.medium))
+            # ic(org_possible_contributions, len(model_util.exchange_list()), len(community.medium))
             scores, possible_contributions = MSSmetana.contributions(
                 org_possible_contributions, scores, model_util, abstol)
             while DeepDiff(org_possible_contributions, possible_contributions):
@@ -321,30 +325,30 @@ class MSSmetana:
         scores = {}
         member_models = member_models if compatibilized else _compatibilize(member_models, printing)
         member_excreta = member_excreta or MSSmetana.mp(member_models, environment, None, abstol, printing)
-        # print(type(member_excreta), member_excreta())
         missing_members = [model for model in member_models if model.id not in member_excreta]
         if missing_members:
-            member_excreta.update(MSSmetana.mp([missing_members], environment))
-        ic(member_models)
+            print(f"The {','.join(missing_members)} members are missing from the defined "
+                  f"excreta list and will therefore be determined through an additional MP simulation.")
+            member_excreta.update(MSSmetana.mp(missing_members, environment))
         for org_model in member_models:
             other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
                                                      if model != org_model.id]))
-            model_util = MSModelUtil(org_model)
-            ic(environment)
+            print(f"\n{org_model.id}\tOther Excreta", other_excreta)
+            model_util = MSModelUtil(org_model, True)
             if environment:
                 model_util.add_medium(environment)
-            ex_rxns = {ex_rxn: met for ex_rxn in model_util.exchange_list() for met in ex_rxn.metabolites}
+            ex_rxns = {ex_rxn: list(ex_rxn.metabolites)[0] for ex_rxn in model_util.exchange_list()}
+            print(f"\n{org_model.id}\tExtracellular reactions", ex_rxns)
             variables = {ex_rxn.id: Variable('___'.join([model_util.model.id, ex_rxn.id]),
                                              lb=0, ub=1, type="binary") for ex_rxn in ex_rxns}
-            model_util.add_vars_cons([list(variables.values())])
+            model_util.add_cons_vars(list(variables.values()))
             media, solutions = [], []
             sol = model_util.model.optimize()
             while sol.status == "optimal" and len(solutions) < n_solutions:
                 solutions.append(sol)
                 medium = set([ex for ex in ex_rxns if sol.fluxes[ex.id] < -abstol and ex in other_excreta])
-                constraint = Constraint(sum([variables[ex.id] for ex in medium]),
-                                        ub=len(medium)-1, name=f"iteration_{len(solutions)}")
-                model_util.add_vars_cons([constraint])
+                model_util.create_constraint(Constraint(sum([variables[ex.id] for ex in medium]),
+                                                        ub=len(medium)-1, name=f"iteration_{len(solutions)}"))
                 media.append(medium)
                 sol = model_util.model.optimize()
             counter = Counter(chain(*media))
@@ -353,24 +357,23 @@ class MSSmetana:
         return scores
 
     @staticmethod
-    def sc(member_models:Iterable=None, com_model=None, min_growth=0.1, n_solutions=100, abstol=1e-6,
-           compatibilized=True, printing=False):
+    def sc(member_models:Iterable=None, com_model=None, min_growth=0.1, n_solutions=100,
+           abstol=1e-6, compatibilized=True, printing=False):
         """Calculate the frequency of interspecies dependency in a community"""
         member_models, community = _load_models(
-            member_models, com_model, compatibilized==False, printing=printing)
+            member_models, com_model, not compatibilized, printing=printing)
         for rxn in com_model.reactions:
             rxn.lower_bound = 0 if 'bio' in rxn.id else rxn.lower_bound
 
         # c_{rxn.id}_lb: rxn < 1000*y_{species_id}
         # c_{rxn.id}_ub: rxn > -1000*y_{species_id}
-
         variables = {}
         constraints = []
         # TODO this can be converted to an MSCommunity object by looping through each index
         for org_model in member_models:
-            model_util = MSModelUtil(org_model)
+            model_util = MSModelUtil(org_model, True)
             variables[model_util.model.id] = Variable(name=f'y_{model_util.model.id}', lb=0, ub=1, type='binary')
-            model_util.add_vars_cons([variables[model_util.model.id]])
+            model_util.add_cons_vars([variables[model_util.model.id]])
             for rxn in model_util.model.reactions:
                 if "bio" not in rxn.id:
                     # print(rxn.flux_expression)
@@ -379,18 +382,17 @@ class MSSmetana:
                     ub = Constraint(rxn.flux_expression - 1000*variables[model_util.model.id],
                                     name="_".join(["c", model_util.model.id, rxn.id, "ub"]), ub=0)
                     constraints.extend([lb, ub])
-        community.add_vars_cons(constraints, sloppy=True)
 
         # calculate the SCS
         scores = {}
         for model in member_models:
-            com_model_util = MSModelUtil(com_model)
-            other_members = [other for other in member_models if other.id != model.id]
+            com_model_util = MSModelUtil(com_model, True)
+            com_model_util.add_cons_vars(constraints, sloppy=True)
             # model growth is guaranteed while minimizing the growing members of the community
             ## SMETANA_Biomass: {biomass_reactions} > {min_growth}
-            smetana_biomass = Constraint(sum(rxn.flux_expression for rxn in model.reactions if "bio" in rxn.id),
-                                         name='SMETANA_Biomass', lb=min_growth)
-            com_model_util.add_vars_cons([smetana_biomass], sloppy=True)
+            com_model_util.create_constraint(Constraint(sum(rxn.flux_expression for rxn in model.reactions
+                                                            if "bio" in rxn.id), name='SMETANA_Biomass', lb=min_growth)) # sloppy = True)
+            other_members = [other for other in member_models if other.id != model.id]
             com_model_util.add_objective(sum([variables[other.id] for other in other_members]), "min")
             previous_constraints, donors_list = [], []
             for i in range(n_solutions):
@@ -402,7 +404,7 @@ class MSSmetana:
                 donors_list.append(donors)
                 previous_con = f'iteration_{i}'
                 previous_constraints.append(previous_con)
-                com_model_util.add_vars_cons([Constraint(sum(variables[o.id] for o in donors), name=previous_con,
+                com_model_util.add_cons_vars([Constraint(sum(variables[o.id] for o in donors), name=previous_con,
                                                          ub=len(previous_constraints)-1)], sloppy=True)
             if i != 0:
                 donors_counter = Counter(chain(*donors_list))

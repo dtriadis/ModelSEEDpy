@@ -126,7 +126,7 @@ class MSCommunity:
         model = model if not models else build_from_species_models(
             models, names=names, abundances=abundances, cobra_model=True)
         self.id = model.id
-        self.util = MSModelUtil(model)
+        self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
         msid_cobraid_hash = self.util.msid_hash()
         if "cpd11416" not in msid_cobraid_hash:
@@ -209,7 +209,7 @@ class MSCommunity:
             show_figure=True, ignore_mets=ignore_mets)
 
     #Utility functions
-    def print_lp(self,filename = None):
+    def print_lp(self, filename=None):
         if not filename:
             filename = self.lp_filename
         if filename:
@@ -219,7 +219,7 @@ class MSCommunity:
 
     #Analysis functions
     def gapfill(self, media = None, target = None, minimize = False, default_gapfill_templates=None, default_gapfill_models=None,
-                test_conditions=None, reaction_scores=None, blacklist=None, suffix = None, solver = 'glpk'):
+                test_conditions=None, reaction_scores=None, blacklist=None, suffix = None, solver:str="glpk"):
         default_gapfill_templates = default_gapfill_templates or []
         default_gapfill_models = default_gapfill_models or []
         test_conditions = test_conditions or []
@@ -231,8 +231,9 @@ class MSCommunity:
         gfname = FBAHelper.medianame(media) + "-" + target
         if suffix:
             gfname += f"-{suffix}"
-        self.gapfillings[gfname] = MSGapfill(self.util.model, default_gapfill_templates, default_gapfill_models, test_conditions, reaction_scores, blacklist)
-        gfresults = self.gapfillings[gfname].run_gapfilling(media,target, solver = solver)
+        self.gapfillings[gfname] = MSGapfill(self.util.model, default_gapfill_templates, default_gapfill_models,
+                                             test_conditions, reaction_scores, blacklist, solver)
+        gfresults = self.gapfillings[gfname].run_gapfilling(media, target)
         if not gfresults:
             logger.critical(
                 "Gapfilling failed with the specified model, media, and target reaction."

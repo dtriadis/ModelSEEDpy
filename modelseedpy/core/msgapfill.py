@@ -70,6 +70,7 @@ class MSGapfill:
         minimum_obj=0.01,
         binary_check=False,
         prefilter=True,
+        solver="glpk"
     ):
         if target:
             self.model.objective = self.model.problem.Objective(

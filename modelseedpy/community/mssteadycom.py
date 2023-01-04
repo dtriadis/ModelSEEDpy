@@ -2,7 +2,6 @@ from icecream import ic
 
 from modelseedpy import FBAHelper
 from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterError, NoFluxError
-from modelseedpy.community.commhelper import CommHelper
 from itertools import combinations
 from optlang.symbolics import Zero
 from pandas import DataFrame
