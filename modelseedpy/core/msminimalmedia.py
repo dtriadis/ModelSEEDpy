@@ -86,8 +86,8 @@ class MSMinimalMedia:
         model_util = MSModelUtil(org_model, True)
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
-        min_growth = min_growth or model_util.model.optimize().objective_value
-        # min_flux = MSMinimalMedia._define_min_objective(model_util, interacting)
+        min_growth = min_growth or model_util.model.slim_optimize()
+        # min_flux = MSMinimalMedia._min_consumption_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media
         sol, sol_dict = minimizeFlux_withGrowth(model_util, min_growth, sum(media_exchanges))
@@ -102,34 +102,45 @@ class MSMinimalMedia:
         return min_media
 
     @staticmethod
-    def _define_min_objective(model_util, interacting):
+    def _min_consumption_objective(model_util, interacting):
         rxns = model_util.exchange_list() if interacting else model_util.transport_list()
         vars = {}
         for rxn in rxns:
+            cons_name = rxn.id + "_bin"
+            if cons_name in model_util.model.constraints:
+                print(f"The {cons_name} constraint already exists in "
+                      f"{model_util.model.id} and thus is skipped.\n")
+                continue
+
             # define the variable
-            vars[rxn.id] = Variable(rxn.id + "_ru", lb=0, ub=1, type="binary")
+            var_name = rxn.id + "_ru"
+            if var_name in model_util.model.variables:
+                print(f"The {var_name} variable already exists in "
+                      f"{model_util.model.id} and thus is skipped.\n")
+                continue
+            vars[rxn.id] = Variable(var_name, lb=0, ub=1, type="binary")
             model_util.add_cons_vars([vars[rxn.id]])
             # bin_flux: {rxn_bin}*1000 >= {rxn_rev_flux}
-            model_util.create_constraint(Constraint(Zero, lb=0, ub=None, name=rxn.id + "_bin"),
+            model_util.create_constraint(Constraint(Zero, lb=0, ub=None, name=cons_name),
                                          coef={vars[rxn.id]: 1000, rxn.reverse_variable: -1})
         return vars
 
     @staticmethod
-    def minimize_components(org_model, min_growth=0.1, environment=None, interacting=True, solution_limit=5, printing=True):
+    def minimize_components(org_model, min_growth=0.1, environment=None,
+                            interacting=True, solution_limit=5, printing=True):
         """minimize the quantity of metabolites that are consumed by the model"""
         if org_model.slim_optimize() == 0:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
-        # ic(org_model, min_growth, solution_limit)
         model_util = MSModelUtil(org_model, True)
         if environment:
             model_util.add_medium(environment)
-        variables = {"ru":{}}
-        model_util.add_minimal_objective_cons(min_growth) #, sum([rxn.flux_expression for rxn in model_util.bio_rxns_list()]))
+        # ic(org_model, min_growth, solution_limit)
+        model_util.add_minimal_objective_cons(min_growth) #, model_util.model.reactions.bio1.flux_expression)
         # print(model_util.model.constraints[-1])
         # define the binary variable and constraint
         time1 = process_time()
-        variables["ru"] = MSMinimalMedia._define_min_objective(model_util, interacting)
+        variables = {"ru": MSMinimalMedia._min_consumption_objective(model_util, interacting)}
         model_util.add_objective(sum(variables["ru"].values()), "min")
         time2 = process_time()
         print(f"\nDefinition of minimum objective time: {(time2 - time1)/60} mins")
@@ -137,7 +148,7 @@ class MSMinimalMedia:
         # determine each solution
         # interdependencies = {}
         solution_dicts, min_media = [], [0]*1000
-        sol = model_util.model.optimize()
+        sol = model_util.model.optimize()  # This is the troublesome line that occasionally refuses to solve
         if "optimal" not in sol.status:
             raise FeasibilityError(f"The simulation for minimal uptake in {model_util.model.id} was {sol.status}.")
         time3 = process_time()
@@ -155,8 +166,8 @@ class MSMinimalMedia:
             sol_media = _exchange_solution(sol_rxns_dict)
             min_media = sol_media if len(sol_media) < len(min_media) else min_media
             ## omit the solution from future searches
-            model_util.create_constraint(Constraint(Zero, lb=None, ub=len(sol_dict)-1,
-                                                    name=f"exclude_sol{len(solution_dicts)}"), sol_dict)
+            model_util.create_constraint(Constraint(
+                Zero, lb=None, ub=len(sol_dict)-1, name=f"exclude_sol{len(solution_dicts)}"), sol_dict)
 
             # search the permutation space by omitting previously investigated solution_dicts
             # sol_exchanges = [rxn for rxn in sol_dict if "EX_" in rxn.name]
@@ -176,14 +187,14 @@ class MSMinimalMedia:
             raise FeasibilityError(f"The predicted media {min_media} is not compatible with its model {org_model.id}, "
                                    f"and possesses a(n) {simulated_sol.status} status.")
         time6 = process_time()
-        print(f"\nOptimization time: {(time6-time3)/60} mins")
+        print(f"Optimization time: {(time6-time3)/60} mins")
         return min_media
 
     @staticmethod
     def _knockout(org_model, rxnVar, variables, sol_dict, sol_index, interacting):
         # knockout the specified exchange
         knocked_model_utl = MSModelUtil(org_model, True)
-        knocked_model_utl, vars = MSMinimalMedia._define_min_objective(knocked_model_utl, interacting)
+        knocked_model_utl, vars = MSMinimalMedia._min_consumption_objective(knocked_model_utl, interacting)
         coef = {rxnVar: 0}
         if interacting:
             coef.update({variables["ru"][_var_to_ID(rxnVar2)]: 1
@@ -242,34 +253,40 @@ class MSMinimalMedia:
             return MSMinimalMedia.minimize_components(
                 model, min_growth, environment, interacting, solution_limit, printing)
         if minimization_method == "jenga":
-            return MSMinimalMedia.jenga_method(model,printing=printing)
+            return MSMinimalMedia.jenga_method(model, printing=printing)
 
     @staticmethod
-    def comm_media_est(models, comm_model, min_growth=0.1, minimization_method="jenga", interacting=True, environment=None, printing=False):
+    def comm_media_est(models, comm_model, minimization_method="minComponents", min_growth=0.1,
+                       environment=None, interacting=True, n_solutions=5, printing=False):
         media = {"community_media": {}, "members": {}}
+        print("com_mdeia_est")
         for org_model in models:
-            model = org_model.copy()
-            model.medium = environment or model.medium
-            reactions = [rxn.name for rxn in model.variables]
-            duplicate_reactions = DeepDiff(sorted(set(reactions)), sorted(reactions))
-            if duplicate_reactions:
-                logger.critical(f'CodeError: The model {model.id} contains {duplicate_reactions}'
-                                f' that compromise the model.')
-            media["members"][model.id] = {"media": MSMinimalMedia.determine_min_media(
-                model, minimization_method, min_growth, interacting, printing)}
-            if minimization_method == "jenga":
-                media["community_media"] = FBAHelper.sum_dict(media["members"][model.id]["media"], media["community_media"])
-            model.medium = media["members"][model.id]["media"]
-            media["members"][model.id]["solution"] = FBAHelper.solution_to_dict(model.optimize())
-        if comm_model:
+            model_util = MSModelUtil(org_model, True)
+            print(model_util.model.optimize())
             if environment:
-                comm_model.medium = environment
+                print(environment)
+                model_util.add_medium(environment)
+            # reactions = [rxn.name for rxn in model.variables]
+            # duplicate_reactions = DeepDiff(sorted(set(reactions)), sorted(reactions))
+            # if duplicate_reactions:
+            #     logger.critical(f'CodeError: The model {model.id} contains {duplicate_reactions}'
+            #                     f' that compromise the model.')
+            media["members"][model_util.model.id] = {"media": MSMinimalMedia.determine_min_media(
+                model_util.model, minimization_method, min_growth, environment, interacting, n_solutions, printing)}
+            media["members"][model_util.model.id]["solution"] = FBAHelper.solution_to_dict(model_util.model.optimize())
             if minimization_method == "jenga":
-                print("Community models are too excessive for direct assessment via the JENGA method; "
-                      "thus, the community minimal media is estimated as the combination of member media.")
-                return media
+                media["community_media"] = FBAHelper.sum_dict(
+                    media["members"][model_util.model.id]["media"], media["community_media"])
+        if comm_model:
+            comm_util = MSModelUtil(comm_model)
+            if environment:
+                comm_util.add_medium(environment)
+            # if minimization_method == "jenga":
+            #     print("Community models are too excessive for direct assessment via the JENGA method; "
+            #           "thus, the community minimal media is estimated as the combination of member media.")
+            #     return media
             media["community_media"] = MSMinimalMedia.determine_min_media(
-                comm_model, minimization_method, min_growth, interacting, printing)
+                comm_model, minimization_method, min_growth, environment, interacting, n_solutions, printing)
         return media
 
     @staticmethod

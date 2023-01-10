@@ -95,16 +95,16 @@ class MSSmetana:
                                  "value of 0 in complete media, which is incompatible with minimal "
                                  "media computations and hence SMETANA.")
         ## determine the minimal media for each model, including the community
-        self.media = media_dict if media_dict else MSMinimalMedia.determine_min_media(
-                self.community.model, minimal_media_method, min_growth, self.environment, printing=printing)
+        self.media = media_dict if media_dict else MSMinimalMedia.comm_media_est(
+            member_models, com_model, minimal_media_method, min_growth, self.environment, True, n_solutions, printing)
 
     def all_scores(self):
         mro = self.mro_score()
         mip = self.mip_score(interacting_media=self.media)
         mp = self.mp_score()
-        mu = self.mu_score()
-        sc = self.sc_score()
-        smetana = self.smetana_score()
+        mu = None # self.mu_score()
+        sc = None # self.sc_score()
+        smetana = None # self.smetana_score()
         return (mro, mip, mp, mu, sc, smetana)
 
     def mro_score(self):
@@ -126,6 +126,7 @@ class MSSmetana:
         return self.mro
 
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
+        interacting_media = interacting_media or self.media or None
         diff, self.mip = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
                                        noninteracting_media, self.printing, True)
         if not self.printing:
@@ -258,6 +259,7 @@ class MSSmetana:
             interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
+        print(interact_diff)
         if "dictionary_item_removed" in interact_diff:
             return interact_diff["dictionary_item_removed"], len(interact_diff["dictionary_item_removed"])
         return None, 0
@@ -386,7 +388,7 @@ class MSSmetana:
         # calculate the SCS
         scores = {}
         for model in member_models:
-            com_model_util = MSModelUtil(com_model, True)
+            com_model_util = MSModelUtil(com_model)
             com_model_util.add_cons_vars(constraints, sloppy=True)
             # model growth is guaranteed while minimizing the growing members of the community
             ## SMETANA_Biomass: {biomass_reactions} > {min_growth}

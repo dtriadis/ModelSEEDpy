@@ -201,7 +201,7 @@ class MSModelUtil:
                 output[msid].append(cpd)
         return output
 
-    def exchange_list(self): 
+    def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
 
     def carbon_mets(self):
@@ -259,7 +259,7 @@ class MSModelUtil:
                 else:
                     logger.warning("Nonstandard exchange reaction ignored:" + ex_rxn.id)
         return exchange_reactions
-    
+
     def var_names_list(self):
         return [var.name for var in self.model.variables]
 
@@ -307,7 +307,7 @@ class MSModelUtil:
                 drains.append(drain_reaction)
         self.model.add_reactions(drains)
         return drains
-        
+
     def reaction_scores(self):  #!!! Can this be deleted?
         return {}
 
@@ -381,9 +381,22 @@ class MSModelUtil:
         )
         return target_reaction
 
+    def biomass_expression(self):
+        for met in self.model.metabolites:
+            if "cpd11416" in met.id:
+                # returns the biomass expression of the lowest cytoplasmic compartment
+                return met.constraint.expression
+
     def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None):
-        objective_expr = objective_expr or self.model.objective.expression
-        self.create_constraint(Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+        if "min_value" not in self.model.constraints:
+            objective_expr = objective_expr or self.model.objective.expression
+            self.create_constraint(Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+            # print(self.model.constraints["min_value"])
+        else:
+            print(f"The min_value constraint already exists in {self.model.id}, "
+                  f"hence the lb is simply updated from"
+                  f" {self.model.constraints['min_value'].lb} to {min_value}.\n")
+            self.model.constraints["min_value"].lb = min_value
 
     def add_exchange_to_model(self, cpd, rxnID):
         self.model.add_boundary(metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
