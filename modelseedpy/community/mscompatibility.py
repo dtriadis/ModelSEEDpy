@@ -67,7 +67,7 @@ class MSCompatibility:
         new_models = []
         models = [models] if not isinstance(models, (list, tuple, set)) else models
         for org_model in models:  # Develop a singular model function and then an abstracted version for multiple models
-            model = org_model.copy()  # model_util cannot be used for a circular import
+            model = org_model.copy()  # model_util cannot be used, since it would cause a circular import
             model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
             reactions = {}
             # standardize metabolites
@@ -206,7 +206,7 @@ class MSCompatibility:
             for met_id, content in met_conflicts.items():
                 export_met_conflicts[met_id] = {}
                 for key, val in content.items():
-                    if '_met' not in key:
+                    if "_met" not in key:
                         export_met_conflicts[met_id][key] = val
                     else:
                         export_met_conflicts[met_id][key.replace('_met','_formula')] = val.formula
@@ -226,7 +226,8 @@ class MSCompatibility:
         # ensure that all non-standard exchanges have been corrected
         model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
         if standardize:
-            residual_nonstandard_mets = [met.id for ex_rxn in model_exchanges for met in ex_rxn.metabolites if "cpd" not in met.id]
+            residual_nonstandard_mets = [met.id for ex_rxn in model_exchanges
+                                         for met in ex_rxn.metabolites if "cpd" not in met.id]
             residuals = set(residual_nonstandard_mets)-set(unknown_mets)
             if residuals:
                 logger.error(f"The {model.id} model has residual non-standard metabolites in its exchange reactions:"
@@ -252,10 +253,10 @@ class MSCompatibility:
     def _export(models, conflicts, conflicts_file_name, model_names, export_directory):
         if export_directory is None:
             export_directory = os.getcwd()
-                    
+
         file_paths = []
         if conflicts_file_name:
-            path = os.path.join(export_directory,conflicts_file_name)
+            path = os.path.join(export_directory, conflicts_file_name)
             file_paths.append(os.path.relpath(path, export_directory))
             with open(path, 'w') as out:
                 json.dump(conflicts, out, indent = 3)
@@ -264,7 +265,9 @@ class MSCompatibility:
                 path = os.path.join(export_directory,f'{model_names[index]}.json')
                 file_paths.append(os.path.relpath(path, export_directory))
                 save_json_model(model, path)
-        with ZipFile('_'.join(model_names[:4])+'.zip', 'w', compression = ZIP_LZMA) as zip:
+        with ZipFile(
+            "_".join(model_names[:4]) + ".zip", "w", compression=ZIP_LZMA
+        ) as zip:
             for file in file_paths:
                 zip.write(file)
                 os.remove(file)
@@ -356,7 +359,7 @@ class MSCompatibility:
                         new_rxn = Reaction(id=rxn.id, name=rxn.name, subsystem=rxn.subsystem,
                                            lower_bound=rxn.lower_bound, upper_bound=rxn.upper_bound)
                         model.remove_reactions([rxn])
-                        model.add_reaction(new_rxn)
+                        model.add_reactions([new_rxn])
                         new_rxn.add_metabolites(reaction_dict)
                         change = {'original': {'reaction': original_reaction},
                                   'new': {'reaction': new_rxn.reaction},
