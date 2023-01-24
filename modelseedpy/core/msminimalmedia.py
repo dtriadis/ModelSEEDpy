@@ -133,6 +133,8 @@ class MSMinimalMedia:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
         model_util = MSModelUtil(org_model, True)
+        model_util.add_timeout(10)
+        print("Minimal Components media")
         if environment:
             model_util.add_medium(environment)
         # ic(org_model, min_growth, solution_limit)
@@ -148,7 +150,7 @@ class MSMinimalMedia:
         # determine each solution
         # interdependencies = {}
         solution_dicts, min_media = [], [0]*1000
-        sol = model_util.model.optimize()  # This is the troublesome line that occasionally refuses to solve
+        sol = model_util.model.optimize()  #TODO This is the troublesome line that occasionally refuses to solve
         if "optimal" not in sol.status:
             raise FeasibilityError(f"The simulation for minimal uptake in {model_util.model.id} was {sol.status}.")
         time3 = process_time()
@@ -247,11 +249,11 @@ class MSMinimalMedia:
                             interacting=True, solution_limit=5, printing=True):
         min_growth = min_growth or 0.1
         if minimization_method == "minFlux":
-            # return minimal_medium(model, min_growth, minimize_components=True)
             return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
         if minimization_method == "minComponents":
-            return MSMinimalMedia.minimize_components(
-                model, min_growth, environment, interacting, solution_limit, printing)
+            return minimal_medium(model, min_growth, minimize_components=True)
+            # return MSMinimalMedia.minimize_components(
+            #     model, min_growth, environment, interacting, solution_limit, printing)
         if minimization_method == "jenga":
             return MSMinimalMedia.jenga_method(model, printing=printing)
 
