@@ -126,6 +126,14 @@ class MSMinimalMedia:
         return vars
 
     @staticmethod
+    def conserved_exchanges():
+        pass
+
+    @staticmethod
+    def rel_media():
+        pass
+
+    @staticmethod
     def minimize_components(org_model, min_growth=0.1, environment=None,
                             interacting=True, solution_limit=5, printing=True):
         """minimize the quantity of metabolites that are consumed by the model"""
