@@ -269,12 +269,12 @@ class MSMinimalMedia:
     def comm_media_est(models, comm_model, minimization_method="minComponents", min_growth=0.1,
                        environment=None, interacting=True, n_solutions=5, printing=False):
         media = {"community_media": {}, "members": {}}
-        print("com_mdeia_est")
+        # print("com_media_est")
         for org_model in models:
             model_util = MSModelUtil(org_model, True)
-            print(model_util.model.optimize())
+            # print(model_util.model.optimize())
             if environment:
-                print(environment)
+                # print(environment)
                 model_util.add_medium(environment)
             # reactions = [rxn.name for rxn in model.variables]
             # duplicate_reactions = DeepDiff(sorted(set(reactions)), sorted(reactions))

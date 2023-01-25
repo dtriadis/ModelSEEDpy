@@ -27,7 +27,7 @@ def _compatibilize(member_models: Iterable, printing=False):
     return models
 
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
-    ic(member_models, com_model, compatibilize)
+    # ic(member_models, com_model, compatibilize)
     if not com_model and member_models:
         model, names, abundances = build_from_species_models(member_models, name="SMETANA_example")
         return member_models, model  # (model, names=names, abundances=abundances)
@@ -131,7 +131,7 @@ class MSSmetana:
                                        noninteracting_media, self.printing, True)
         if not self.printing:
             return self.mip_val
-        print(f"\nMIP score: {self.mip_val}\t\t\t{self.mi_val} required compound(s) can be sourced via syntrophy:")
+        print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
         if self.raw_content:
             pprint(diff)
         return self.mip_val
@@ -331,7 +331,7 @@ class MSSmetana:
             if missing_members:
                 print(f"The {','.join(missing_members)} members are missing from the defined "
                       f"excreta list and will therefore be determined through an additional MP simulation.")
-            member_excreta.update(MSSmetana.mp(missing_members, environment))
+                member_excreta.update(MSSmetana.mp(missing_members, environment))
         else:
             member_excreta = MSSmetana.mp(member_models, environment, None, abstol, printing)
         for org_model in member_models:
