@@ -36,7 +36,7 @@ setup(
     install_requires=[
         "networkx >= 2.4",
         "cobra >= 0.17.1",
-        "scikit-learn >= 0.23.2",  # too support KBase pickle models
+        "scikit-learn == 1.2.0",  # version lock for pickle ML models
         "scipy >= 1.5.4",
         "chemicals >= 1.0.13",
         "chemw >= 0.3.2",
@@ -50,7 +50,7 @@ setup(
         "pytest",
     ],
     project_urls={
-        "Documentation": "https://modelseedpy.readthedocs.io/en/stable/",
+        "Documentation": "https://modelseedpy.readthedocs.io/en/latest/",
         "Issues": "https://github.com/ModelSEED/ModelSEEDpy/issues",
     },
 )
