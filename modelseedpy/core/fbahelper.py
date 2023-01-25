@@ -5,7 +5,6 @@ from chemicals import periodic_table
 import re
 from cobra.core import Gene, Metabolite, Model, Reaction   # !!! Gene and Model are never used
 from cobra.util import solver as sutil  # !!! sutil is never used
-from modelseedpy.biochem import from_local
 from scipy.odr import Output  # !!! Output is never used
 from typing import Iterable
 import time
