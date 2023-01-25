@@ -70,11 +70,13 @@ class MSMinimalMedia:
         rxns = model_util.exchange_list() if interacting else model_util.transport_list()
         influxes = []
         for rxn in rxns:
-            if all(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
+            if any(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
                 influxes.append(rxn.reverse_variable)
-            elif all(["e0" in met.id for met in rxn.products]):  # this captures edge cases
-                logger.critical(f"The reaction {rxn} lacks any exchange metabolites, and thus is indicative of an error.")
+            elif any(["e0" in met.id for met in rxn.products]):  # this captures edge cases or transporters
                 influxes.append(rxn.forward_variable)
+            else:
+                logger.critical(f"The reaction {rxn} lacks any exchange metabolites, "
+                                f"and thus is indicative of an error.")
         return influxes
 
     @staticmethod
@@ -253,7 +255,7 @@ class MSMinimalMedia:
             return interdependencies
 
     @staticmethod
-    def determine_min_media(model, minimization_method="minComponents", min_growth=None, environment=None,
+    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
                             interacting=True, solution_limit=5, printing=True):
         min_growth = min_growth or 0.1
         if minimization_method == "minFlux":

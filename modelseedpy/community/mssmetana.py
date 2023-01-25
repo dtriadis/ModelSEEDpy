@@ -38,7 +38,7 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
     return member_models, com_model  # MSCommunity(com_model)
 
 def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
-               interacting=True, printing=False, minimization_method="minComponents"):
+               interacting=True, printing=False, minimization_method="minFlux"):
     # ic(media, com_model, model_s_)
     if not com_model and not model_s_:
         raise TypeError("Either the com_model or model_s_ arguments must be parameterized.")
@@ -70,7 +70,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
 class MSSmetana:
     def __init__(self, member_models: Iterable, com_model, min_growth=0.1, n_solutions=100, environment=None,
                  abstol=1e-3, media_dict=None, printing=True, raw_content=False, antismash_json_path:str=None,
-                 antismash_zip_path:str=None, minimal_media_method="minComponents"):
+                 antismash_zip_path:str=None, minimal_media_method="minFlux"):
         self.min_growth = min_growth ; self.abstol = abstol ; self.n_solutions = n_solutions
         self.printing = printing ; self.raw_content = raw_content
         self.antismash_json_path = antismash_json_path ; self.antismash_zip_path = antismash_zip_path
