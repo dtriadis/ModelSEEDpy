@@ -105,7 +105,7 @@ class MSSmetana:
         mu = None # self.mu_score()
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
-        return (mro, mip, mp, mu, sc, smetana)
+        return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     def mro_score(self):
         self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
