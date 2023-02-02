@@ -1,32 +1,52 @@
-mscommfitting
+mscommphitting
 --------------------------
 
 +++++++++++++++++++++++++
-MSCommFitting()
+MSCommPhitting()
 +++++++++++++++++++++++++
 
-This class contains the functions that load and parse experimental data, define a linear problem that represents the examined system, simulates the problem, graphs the results, and can optimize parameters to best fit the experimental system:
+This class contains the functions that load and parameterize experimental data, define a linear problem for the defined system with the parameterized data, simulates the LP, and graphically the results:
 
 .. code-block:: python
 
- from modelseedpy.community import CommunityModelSpecies
- mscommfit = MSCommFitting()
+ from modelseedpy.community import MSCommPhitting
+ mscommfit = MSCommPhitting(msdb_path, community_members: dict=None, fluxes_df=None, 
+                            growth_df=None, carbon_conc=None, media_conc=None, 
+                            experimental_metadata=None, base_media=None, solver: str = "glpk", 
+                            all_phenotypes=True, data_paths: dict = None, 
+                            species_abundances: str = None, carbon_conc_series: dict = None,
+                            ignore_trials: Union[dict, list] = None, ignore_timesteps: list = None, 
+                            species_identities_rows=None, significant_deviation: float = 2, 
+                            extract_zip_path: str = None)
 
-----------------------
-load_data()
-----------------------
+The member models and experimental data can be parsed and parameterized or the processed files of experimental data can be passed in the class initialization. The former option is enacted by providing the ``community_members`` argument or when one of the ``fluxes_df`` and ``growth_df`` arguments are missing; the latter option is enacted otherwise.
 
-The experimental data, through multiple different channels, are imported and parsed into amenable forms for the fitting model:
 
-.. code-block:: python
+- *msdb_path* ``str``: the path to the ModelSEED Database GitHub repository, which is loaded and referenced by the model. This is the only ubiquitously required argument.
+- *community_members* ``dict``: a description of the member models and phenotypes in the simulated community. A community of *E. coli* (Acetate and Maltose phenotypes) and *Pseudomonas fluorescens* (Acetate and 4-Hydroxybenzoate phenotypes) would be expressed by the following block, where ``ecoli`` and ``pf`` denote the COBRA model objects and the list keys with "consumed" and "excreted" describe the set of metabolites that are consumed or excreted for the given growth phenotype, respectively.
 
- mscommfit.load_data(community_members={}, kbase_token=None, solver='glpk', signal_tsv_paths={}, phenotypes_csv_path=None, media_conc_path=None,
-                     species_abundance_path=None, carbon_conc_series={}, ignore_trials={}, ignore_timesteps=[], significant_deviation=2, zip_path=None)
+.. code-block:: json
 
-- *community_members* ``dict``: the model of the community that was experimentally investigated and will be examined via fitting, which includes the permanent KBase ID of the media (e.g. 93465/3/1) that describe each respective community model.
-- *kbase_token* ``str``: the KBase user token that must be provided to access permanent_media_id.
-- *solver*  ``str``: the LP solver that will optimize the community model in the given media.
-- *signal_tsv_paths* ``dict``: the dictionary of index names for each paths to signal TSV data that will be fitted.
+ {
+   ecoli: {
+     "name": "ecoli", 
+     "phenotypes": {
+       "Maltose": {"consumed":["cpd00179"], "excreted":["cpd00029"]},
+       "Acetate": {"consumed":["cpd00029"]},
+     }
+ },
+   pf: {
+   	 "name": "pf",
+     "phenotypes": {
+       "Acetate": {"consumed":["cpd00029"]},
+       "4-Hydroxybenzoate": {"consumed":["cpd00136"]}
+     }
+   }
+ }
+
+- *fluxes_df*  ``Pandas DataFrame``: a DataFrame that consists of the metabolic flux profile for each phenotype that is described in ``community_members`` and will be simulated by CommPhiting. Each column is a separate phenotype, each row is an exchange reaction, and each element is the flux of the exchange reaction for the respective phenotype. This argument offers an opportunity to save compute time by loading a defined DataFrame from a previous simulation.
+- *growth_df*  ``Pandas DataFrame``: a DataFrame that contains parsed and organized experimental data to which the model will fit. The DataFrame is indexed by ``short_codes`` that concisely describe the experiment, while the ``trial_IDs`` fields offer more detail about the trial, including the relative abundances of each member and the initial *mM* concentrations of all pertinent compounds delimited by ``-`` hyphens. This argument offers an opportunity to save compute time by loading a defined DataFrame from a previous simulation.
+- *carbon* ``dict``: the dictionary of index names for each paths to signal TSV data that will be fitted.
 - *phenotypes_csv_path* ``str``: a custom CSV of media phenotypic data.
 - *media_conc_path* ``str``: a CSV of the media concentrations.
 - *species_abundance_path* ``str``: a CSV over the series of species abundances for a range of trials.
@@ -44,6 +64,12 @@ The parsed experimental data is used to define and constrain a Global Linear Pro
 
 .. code-block:: python
 
+ mscommfit.load_data(community_members={}, kbase_token=None, solver="glpk", signal_tsv_paths={}, phenotypes_csv_path=None, media_conc_path=None,
+                     species_abundance_path=None, carbon_conc_series={}, ignore_trials={}, ignore_timesteps=[], significant_deviation=2, zip_path=None)
+
+
+.. code-block:: python
+
  mscommfit.define_problem(parameters={}, zip_name=None, export_parameters=True, export_lp=True)
 
 - *parameters* ``dict``: the parameters that will overwrite the default options. The possible key values include 
@@ -57,7 +83,7 @@ The parsed experimental data is used to define and constrain a Global Linear Pro
    "bcv",              "1",  "the highest fraction of species biomass that can convert phenotypes in a timestep"
    "cvmin",               "0",                "the lowest fraction of biomass that converts phenotypes in a single timestep"
    "v",              "0.4",  "the growth kinetics constant, which represents 1st-order kinetics"
-   "carbon_sources",               "['cpd00136', 'cpd00179']",                "the ModelSEED IDs of the carbon sources in the media"
+   "carbon_sources",               "["cpd00136", "cpd00179"]",                "the ModelSEED IDs of the carbon sources in the media"
    "diffpos & diffneg",              "1",  "objective coefficients that correspond with the positive and negative differences between experimental and predicted bimoass values"
 
 An example parameter dictionary may include the following::
@@ -131,7 +157,7 @@ Primal values are visualized as figures.
  mscommfit.compute(graphs=[], primal_values_filename=None, primal_values_zip_path=None, zip_name=None, data_timestep_hr=0.163)
 
 - *graph* ``list``: the graph specifications that specify which primal values will be graphed, which is elaborated above for the ``compute`` function. 
-- *primal_values_filename* ``str``: the name of the primal value JSON file ('primal_values.json')
+- *primal_values_filename* ``str``: the name of the primal value JSON file ("primal_values.json")
 - *primal_values_zip_path* ``str``: the path of the zip file that contains the primal values file
 - *zip_name* ``str``: the name of the export zip file to which content will be exported.
 - *data_timestep_hr* ``float``: the timestep value in hours of the data that is being graphed. This permits graphing primal values without previously simulating a model. The value is automatically overwritten by previously defined data timesteps in the ``MSCommFitting`` class object.
@@ -161,7 +187,7 @@ Primal values are visualized figures.
 
 .. code-block:: python
 
- mscommfit.load_model(cvt=None, cvf=None, diff=None, vmax=None, mscomfit_json_path='mscommfitting.json', zip_name=None, class_object=False)
+ mscommfit.load_model(cvt=None, cvf=None, diff=None, vmax=None, mscomfit_json_path="mscommfitting.json", zip_name=None, class_object=False)
 
 - *cvt*, *cvf*, *diff*, & *vmax* ``float`` or ``dict``: the parameter values that will replace existing values in the LP file. The parameters may be defined as either floats, which will be applied globally to all applicable instances in the model, or as dictionaries that defined values at specific times and possibly at specific trials for a certain time. The latter follows a dictionary structure of ``param["time"]["trial"]``, where the "trial" level can be omitted to applied a parameter value at every trial of a time. A default value can also be specified in the dictionary ``param["default"]`` that applies to times+trials that are not captured by the defined conditions.
 - *mscomfit_json_path* ``str``: the path of the JSON model file that will be loaded and simulated.
