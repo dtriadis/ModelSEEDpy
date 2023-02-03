@@ -175,7 +175,7 @@ class MSCommPhitting:
 
     def __init__(self, msdb_path, community_members: dict=None, fluxes_df=None, growth_df=None, carbon_conc=None,
                  media_conc=None, experimental_metadata=None, base_media=None, solver: str = 'glpk', all_phenotypes=True,
-                 data_paths: dict = None, species_abundances: str = None, carbon_conc_series: dict = None,
+                 data_paths: dict = None, species_abundances: str = None,
                  ignore_trials: Union[dict, list] = None, ignore_timesteps: list = None, species_identities_rows=None,
                  significant_deviation: float = 2, extract_zip_path: str = None
                  ):
@@ -183,7 +183,7 @@ class MSCommPhitting:
             (experimental_metadata, growth_df, fluxes_df, carbon_conc, requisite_biomass,
              trial_name_conversion, data_timestep_hr, simulation_timestep, media_conc
              ) = GrowthData.process(community_members, base_media, solver, all_phenotypes, data_paths,
-                                    species_abundances, carbon_conc_series, ignore_trials, ignore_timesteps,
+                                    species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
                                     species_identities_rows, significant_deviation, extract_zip_path)
             self.data_timestep_hr = data_timestep_hr
             self.requisite_biomass = requisite_biomass
@@ -202,7 +202,7 @@ class MSCommPhitting:
     def fit_kcat(self, parameters: dict = None, mets_to_track: list = None, rel_final_conc: dict = None, zero_start: list = None,
                  abs_final_conc: dict = None, graphs: list = None, data_timesteps: dict = None,
                  export_zip_name: str = None, export_parameters: bool = True, requisite_biomass: dict = None,
-                 export_lp: str = f'solveKcat.lp', publishing=True, primals_export_path=None):
+                 export_lp: str = f'solveKcat.lp', figures_zip_name:str=None, publishing=True, primals_export_path=None):
         if export_zip_name and os.path.exists(export_zip_name):
             os.remove(export_zip_name)
         kcat_primal = None
@@ -217,7 +217,7 @@ class MSCommPhitting:
                 data_timesteps, export_zip_name, export_parameters, export_lp, kcat_primal, coefs, requisite_biomass)
             # time1 = process_time()
             primals_export_path = primals_export_path or re.sub(r"(.lp)", ".json", export_lp)
-            new_simulation.compute(graphs, export_zip_name, None, publishing, primals_export_path)
+            new_simulation.compute(graphs, export_zip_name, figures_zip_name, publishing, primals_export_path)
             kcat_primal = parse_primals(new_simulation.values, "kcat", coefs, new_simulation.parameters["kcat"])
             # time2 = process_time()
             # print(f"Done simulating with the coefficients for biomass partitions: {index}"
@@ -527,11 +527,11 @@ class MSCommPhitting:
         self.parameters["data_timestep_hr"] = np.mean(np.diff(np.array(list(
             self.times.values())).flatten()))/hour if not hasattr(self, "data_timestep_hr") else self.data_timestep_hr
         self.parameters.update({
-            "timestep_hr": self.parameters['data_timestep_hr'],  # Simulation timestep magnitude in hours
-            "cvct": 0.01, "cvcf": 0.01,  # Minimization coefficients of the phenotype conversion to and from the stationary phase.
-            "bcv": 0.1,  # The highest fraction of species biomass that can change phenotypes in a timestep
-            "cvmin": 0,  # The lowest value the limit on phenotype conversion goes,
-            "kcat": 0.33,  # The kinetics constant that is externally adjusted
+            "timestep_hr": self.parameters['data_timestep_hr'],
+            "cvct": 0.01, "cvcf": 0.01,
+            "bcv": 0.1,
+            "cvmin": 0,
+            "kcat": 0.33,
             'diffpos': 1, 'diffneg': 1,  # coefficients that weight difference between experimental and predicted biomass
             "stationary": 0.075,  # the penalty coefficient for the stationary phenotype
         })

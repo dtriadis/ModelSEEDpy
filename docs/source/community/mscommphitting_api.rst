@@ -46,61 +46,200 @@ The member models and experimental data can be parsed and parameterized or the p
 
 - *fluxes_df*  ``Pandas DataFrame``: a DataFrame that consists of the metabolic flux profile for each phenotype that is described in ``community_members`` and will be simulated by CommPhiting. Each column is a separate phenotype, each row is an exchange reaction, and each element is the flux of the exchange reaction for the respective phenotype. This argument offers an opportunity to save compute time by loading a defined DataFrame from a previous simulation.
 - *growth_df*  ``Pandas DataFrame``: a DataFrame that contains parsed and organized experimental data to which the model will fit. The DataFrame is indexed by ``short_codes`` that concisely describe the experiment, while the ``trial_IDs`` fields offer more detail about the trial, including the relative abundances of each member and the initial *mM* concentrations of all pertinent compounds delimited by ``-`` hyphens. This argument offers an opportunity to save compute time by loading a defined DataFrame from a previous simulation.
-- *carbon* ``dict``: the dictionary of index names for each paths to signal TSV data that will be fitted.
-- *phenotypes_csv_path* ``str``: a custom CSV of media phenotypic data.
-- *media_conc_path* ``str``: a CSV of the media concentrations.
-- *species_abundance_path* ``str``: a CSV over the series of species abundances for a range of trials.
-- *carbon_conc_series* ``dict``: the concentrations (``values``) of carbon sources as ModelSEED IDs (``keys``) in the media.
-- *ignore_trials* ``dict``: the trials (row+column coordinates) that will be ignored by the model.
-- *ignore_timesteps* ``list``: timesteps that will be ignored.
-- *significant_deviation* ``float``: the lowest multiple of a trial mean from its initial value that will permit its inclusion in the model fit.
-- *zip_path* ``str``: specifies whether the input contents are in a zipped file.
+- *carbon_conc* ``dict``: the concentrations (``values``) of carbon sources as ModelSEED IDs (``keys``) in the media, denoted by either ``columns`` or ``rows`` for the dimension in the experimental well-plate where the specified concentration varies.
+
+.. code-block:: json
+
+ {
+ "rows": {
+    "cpd00136": {"B":0, "C": 0, "D": 1, "E": 1, "F": 4, "G": 4},
+    "cpd00179": {"B":5, "C": 5, "D":5, "E": 5, "F": 5, "G": 5},
+  },
+ "columns": {
+    "cpd00029": {2:100, 3: 50, 4: 25, 5: 12.5, 6: 6.25, 7: 3}
+  }
+ }
+
+- *media_conc* ``dict``: the mM concentration of each media component indexed by its ModelSEED ID.
+- *experimental_metadata* ``Pandas DataFrame``: a DataFrame that consists of metadata for the experiments, indexed by the ``short_codes``. The ``trial_IDs`` column emulates that of the ``growth_df`` DataFrame. The a ``additional_compounds`` column lists the chemicals, and their initial and final mM concentrations, that augment the media defined in the ``base_media`` column. The ``strains`` column lists the community members and their respective relative abundances (an abbreviated form of this information is provided in the ``trial_IDs`` column). The ``date`` column provides the date when the experiment occurred.
+- *base_media* ``ModelSEEDpy Media``: a media object that is parsed to acquire the concentration for each component in the media, and can therefore supplement the omission of the ``media_conc`` argument.
+- *solver* ``str``: the Linear Programming solver that will be used to solve the constructed problem. The open-source GLPK solveris used by default, to accommodate the greatest number of users.
+- *all_phenotypes* ``bool``: specifies whether all phenotypes for the respective members will be defined and simulated.
+- *data_paths* ``dict``: the local path to the data spreadsheet and the identification of pertinent content in the worksheets:
+
+.. code-block:: json
+
+ {
+    "path":"data/Jeffs_data/PF-EC 4-29-22 ratios and 4HB changes.xlsx", 
+    "Raw OD(590)":"OD", 
+    "mNeonGreen":"pf", 
+    "mRuby":"ecoli"
+ }
+
+- *species_abundance* ``dict``: the relative abundances of all members in the community for each column in the experimental well-plates:
+
+.. code-block:: json
+
+ {
+    1:{"ecoli":0, "pf":1},
+    2:{"ecoli":1, "pf":50},
+    3:{"ecoli":1, "pf":20},
+    4:{"ecoli":1, "pf":10},
+    5:{"ecoli":1, "pf":3},
+    6:{"ecoli":1, "pf":1},
+    7:{"ecoli":3, "pf":1},
+    8:{"ecoli":10, "pf":1},
+    9:{"ecoli":20, "pf":1},
+    10:{"ecoli":1, "pf":0},
+    11:{"ecoli":0, "pf":0}
+ }
+
+- *ignore_trials* ``list``: the trials (identified through the row & column well-plate coordinates) that will be ignored in the simulation.
+- *ignore_timesteps* ``list``: the timesteps that will be ignored in the simulation.
+- *species_identities_rows* ``dict``: the specification of strains for each member species, where it differs, per row in the well-plate experiments:
+
+.. code-block:: json
+
+ {
+    1:{"ecoli":"mRuby"},
+    2:{"ecoli":"ACS"},
+    3:{"ecoli":"mRuby"},
+    4:{"ecoli":"ACS"},
+    5:{"ecoli":"mRuby"},
+    6:{"ecoli":"ACS"}
+ }
+
+- *significant_deviation* ``float``: the smallest multiple of a trial mean relative to its initial value that permits its inclusion in the simulation.
+- *extract_zip_path* ``str``: the path of a zipped file that contents some or all of the files that must be loaded in the simulation.
 
 -----------------------------
-define_problem()
+fit()
 -----------------------------
 
 The parsed experimental data is used to define and constrain a Global Linear Problem of the community system:
 
 .. code-block:: python
 
- mscommfit.load_data(community_members={}, kbase_token=None, solver="glpk", signal_tsv_paths={}, phenotypes_csv_path=None, media_conc_path=None,
-                     species_abundance_path=None, carbon_conc_series={}, ignore_trials={}, ignore_timesteps=[], significant_deviation=2, zip_path=None)
+ mscommfit.fit(parameters:dict=None, mets_to_track: list = None, 
+               rel_final_conc:dict=None, zero_start:list=None, 
+               abs_final_conc:dict=None, graphs: list = None, 
+               data_timesteps: dict = None, export_zip_name: str = None, 
+               export_parameters: bool = True, requisite_biomass: dict = None,
+               export_lp: str = "CommPhitting.lp", figures_zip_name:str=None, 
+               publishing:bool=False, primals_export_path=None)
 
 
-.. code-block:: python
-
- mscommfit.define_problem(parameters={}, zip_name=None, export_parameters=True, export_lp=True)
-
-- *parameters* ``dict``: the parameters that will overwrite the default options. The possible key values include 
+- *parameters* ``dict``: simulation parameters that will overwrite default and calculated options. The possible key values include 
 
 .. csv-table::
    :header: "Parameter", "Default", "Description"
 
-   "timestep",               "the timestep that is parsed from the data",      "the timestep size of the simulation in hours"
-   "cvct",               "1",      "the coefficient that penalizes phenotype conversion to the stationary phase"
-   "cvcf",               "1",                "the coefficient that penalizes phenotype conversion from the stationary phase"
-   "bcv",              "1",  "the highest fraction of species biomass that can convert phenotypes in a timestep"
+   "timestep_hr",               "the average timestep that is parsed from the data",      "the timestep size of the simulation in hours"
+   "cvct",               "0.01",      "the coefficient that penalizes phenotype conversion to the stationary phase"
+   "cvcf",               "0.01",                "the coefficient that penalizes phenotype conversion from the stationary phase"
+   "bcv",              "0.1",  "the highest fraction of species biomass that can convert phenotypes in a timestep"
    "cvmin",               "0",                "the lowest fraction of biomass that converts phenotypes in a single timestep"
-   "v",              "0.4",  "the growth kinetics constant, which represents 1st-order kinetics"
+   "kcat",              "0.33",  "the growth constant for linear 1st-order kinetics"
    "carbon_sources",               "["cpd00136", "cpd00179"]",                "the ModelSEED IDs of the carbon sources in the media"
-   "diffpos & diffneg",              "1",  "objective coefficients that correspond with the positive and negative differences between experimental and predicted bimoass values"
+   "diffpos",              "1",  "the objective coefficient that corresponds with the positive difference between experimental and predicted biomass values"
+   "diffneg",			"1",	"the objective coefficient that corresponds with the negative difference between experimental and predicted biomass values"
+   "stationary",		"0.075",  "the penalty coefficient for the stationary phenotype"
 
-An example parameter dictionary may include the following::
+- *mets_to_track* ``list``: the ModelSEED ID"s of all compounds that will be graphically plotted, unless metabolites are specifically listed in a graph of the ``graphs`` argument.
+- *rel_final_conc* ``dict``: the final concentration of a phenotype compound in the media that is normalized by its initial concentration: e.g.
 
 .. code-block:: json
 
  {
-            "cvct": 0.5,
-            "cvcf": 0.5, 
-            "v": 0.3,
-            "carbon_sources": ["cpd00136"]
+    "cpd00179":0.1
  }
 
-- *zip_name* ``str``: the name of the export zip file to which content will be exported.
-- *export_parameters* & *export_lp* ``bool``: specify whether the parameters and LP file will be exported.
+denotes that the final concentration of Maltose is 10% of its initial concentration.
+
+- *zero_start* ``list``: the compounds that possess a zero initial concentration, which is often assumed for cross-feeding compounds that are not provided in the media.
+- *abs_final_conc* ``dict``: the final mM concentration of a phenotype compound in the media, which follows the same syntactic structure as the ``rel_final_conc`` parameter.
+- *graphs* ``list<dict>``: the collection of graphs that will be plotted from the primal values after the simulation executes. Each dictionary in the list describes a figure, with descriptive keys that specify the type of figure, attributes of the figure, and the data that populates the figure. The ``trial`` key designates which experimental trial will be simulated. The ``experimental_data`` key accepts a boolean for whether the experimental growth data is overlaid as a scatter upon the predicted biomass plots, where the default is ``true``. The ``content`` key designates what content of the trial will be plotted, with acceptable string values of
+
+.. csv-table::
+   :header: "content option", "Description"
+
+   "biomass",               "The g/L biomass of the defined phenotypes"
+   "total_biomass",			"The g/L biomass of the defined phenotypes and the total OD biomass of the complete community"
+   "conc",					"The mM concentration of the metabolites that are defined in either 1) an accompanying ``mets`` key that corresponds to a list of metabolites to plot, 2) the ``mets_to_track`` parameter of the function, or 3) all carbonaceous metabolites in the simulated phenotypes as a default."
+
+Graphing designations for non-concentration figures can be tailored with the ``species`` and ``phenotype`` keys, which correspond lists of the species and phenotypes for which primal values will be graphed, or a string ``"*"`` can be passed as the value to denote all available species and phenotypes will be plotted. Finally, the ``parsed`` key accepts a boolean for whether the biomass plots are segregated for each species, which can alleviate busyness for complex communities. All of these plots are all defined with time on the x-axis, and either mM concentration or g/L on the y-axis depending upon the plotted content.
+
+The following ``graphs`` argument samples the range of supported figures:
+
+.. code-block:: json
+
+ [
+    {
+        "trial":"G48",
+        "phenotype": "*",
+        "content": "biomass",
+        "experimental_data": false
+    },
+    {
+        "trial":"G48",
+        "content": "conc"
+    },
+    {
+        "trial":"G48",
+        "phenotype": "*",
+        "content": "biomass",
+        "parsed": true
+    },
+    {
+        "trial":"G48",
+        "content": "total_biomass",
+        "experimental_data": true
+    }
+ ]
+ 
+- *data_timesteps* ``dict``: a list of timesteps for each ``short_code`` trial that will be simulated, which can be a more succinct tool for tailoring a simulation than specifying the timesteps to ignore from the full dataset.
+- *export_zip_name* ``str``: the name of the zip file to which the simulation contents will be stored, where the omission of this parameter does not export content to a zip file.
+- *export_parameters* ``bool``: specifies whether the simulation parameters will be exported as CSV to the current working directory.
+- *requisite_biomass* ``dict``: the requisite amount of biomass that must grow for the prescribed final metabolite concentration to be achieved, according to the phenotype flux profiles. This is calculated in the ``MSCommPhitting`` initialization when ``community_members`` is defined, but this parameter option allows previous or custom objects to be provided for the simulation.
+- *export_lp* ``str``: the name of the LP file, including the ".lp" extension, that will be exported to the current working directory. The default is "CommPhitting.lp".
+- *figures_zip_name* ``str``: the name of the zip file to which all of the figures will be exported, where omitting this argument exports the figures to the current working directory.
+- *publishing* ``bool``: specifies whether figure proportions and attributes are tailored to make the figures more desirable for publication or poster formats.
+- *primals_export_path* ``str``: the path to which simulation primal values will be exported, which defaults to the ``export_lp`` name with "json" extension.
+
+
+-----------------------------
+fit_kcat()
+-----------------------------
+
+This function simulates the defined community while implementing a range growth kinetic constants for  each phenotype and refining the estimate of phenotype growth kinetics through a few iterative simulations. The parameters are identical to the ``fit()`` function:
+
+.. code-block:: python
+
+ mscommfit.fit_kcat(parameters:dict=None, mets_to_track: list = None, 
+                    rel_final_conc:dict=None, zero_start:list=None, 
+               		abs_final_conc:dict=None, graphs: list = None, 
+               		data_timesteps: dict = None, export_zip_name: str = None, 
+               		export_parameters: bool = True, requisite_biomass: dict = None,
+               		export_lp: str = "CommPhitting.lp", figures_zip_name:str=None, 
+               		publishing:bool=False, primals_export_path=None)
                        
-                       
+
+
+
+
+
+
+
+++++++++++++++++++++++++++++++++++++
+Un-updated documentation
+++++++++++++++++++++++++++++++++++++
+
+
+
+
+
+
+
 ----------------------
 compute()
 ----------------------
@@ -110,38 +249,6 @@ The Linear Problem is simulated, and the primal values are parsed, optionally ex
 .. code-block:: python
 
  mscommfit.compute(graphs=[], zip_name=None)
-
-- *graphs* ``list``: the graph specifications that specify which primal values will be graphed. Each list element describes a figure, with descriptive keys of ``trial``, ``content``, ``species``, ``phenotype``, and ``experimental_data``. The plots are all defined with time on the x-axis. The following graphs for the "B4" trial sample the range of possible figures that can be constructed through the API::
-
-.. code-block:: json
-
- graph = [
-    {
-        "trial":"B4",
-        "content": "biomass",
-        "species": "ecoli",
-        "phenotype": "*"
-    },
-    {
-        "trial":"B4",
-        "content": "biomass",
-        "species": "pf",
-        "phenotype": "*"
-    },
-    {
-        "trial":"B4",
-        "content": "OD",
-        "experimental_data": true
-    },
-    {
-        "trial":"B4",
-        "content": "EX_cpd00179_e0",
-        "species": "ecoli",
-        "phenotype": "malt"
-    }
- ]
- 
-The first and second figures will be plots of biomass for all phenotypes of *E. coli* and *P. fluorescens*, respectively. The third figure will overlay predicted community biomass and experimental OD biomass, which derives from converting OD signal to biomass from the model. The final figure displays the concentration of maltose, as its ModelSEED ID, for the maltose (``malt``) phenotype of *E. coli*.
 
 - *zip_name* ``str``: the name of the export zip file to which content will be exported.
                        

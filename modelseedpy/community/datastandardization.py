@@ -610,9 +610,8 @@ class GrowthData:
         column_num = len(species_abundances)
 
         # define the metadata DataFrame and a few columns
-        constructed_experiments = DataFrame()
-        ex_prefix = "G"
-        constructed_experiments["short_code"] = [f"{ex_prefix}{x+1}" for x in list(range(column_num*row_num))]
+        constructed_experiments = DataFrame(index = [f"G{x+1}" for x in list(range(column_num*row_num))])
+        constructed_experiments.index.name = "short_code"
         base_media_path = "minimal components media" if not base_media else base_media.path[0]
         constructed_experiments["base_media"] = [base_media_path] * (column_num*row_num)
 
@@ -674,7 +673,7 @@ class GrowthData:
                 experiment_id.extend([":".join(row.split(":")[:2]) for row in row_conc])
                 experiment_id = '-'.join(experiment_id)
                 experiment_ids.append(experiment_id)
-                trial_name_conversion[trial_letter][str(col+1)] = (ex_prefix+str(count), experiment_id)
+                trial_name_conversion[trial_letter][str(col+1)] = ("G"+str(count), experiment_id)
                 count += 1
 
         # convert the variable concentrations to short codes
