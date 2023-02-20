@@ -316,15 +316,19 @@ class GrowthData:
                 org_coef = {model_util.model.reactions.get_by_id("EX_cpd00007_e0").reverse_variable: -1}
             model_util.standard_exchanges()
             models[org_model.id] = {"exchanges": model_util.exchange_list(), "solutions": {}, "name": content["name"]}
-            phenoRXNs = model_util.carbon_exchange_list(include_unknown=False)
+            phenotypes = content.get("phenotypes", {m.name: {"consumed":[m.id]}
+                                                    for m in model_util.carbon_exchange_list(include_unknown=False)})
+            # print(phenotypes)
             if "phenotypes" in content:
                 models[org_model.id]["phenotypes"] = ["stationary"] + [
                     content["phenotypes"].keys() for member, content in comm_members.items()]
-                phenoRXNs = [model_util.model.reactions.get_by_id("EX_"+pheno_cpd+"_e0")
-                             for pheno, pheno_cpds in content['phenotypes'].items()
-                             for pheno_cpd in pheno_cpds["consumed"]]
-            for phenoRXN in phenoRXNs:
-                # print(phenoRXN.id)
+                # phenoRXNs = [model_util.model.reactions.get_by_id("EX_"+pheno_cpd+"_e0")
+                #              for pheno, pheno_cpds in content['phenotypes'].items()
+                #              for pheno_cpd in pheno_cpds["consumed"]]
+            for name, phenoCPDs in phenotypes.items():
+                metID = phenoCPDs["consumed"][0]
+                phenoRXN = model_util.model.reactions.get_by_id(f'EX_{metID}_e0')
+                print(phenoRXN.id)
                 pheno_util = MSModelUtil(org_model, True)
                 pheno_util.model.solver = solver
                 media = {cpd: 100 for cpd, flux in pheno_util.model.medium.items()}
@@ -371,16 +375,16 @@ class GrowthData:
                 phenoRXN.lower_bound = phenoRXN.upper_bound = sol.fluxes[phenoRXN.id]
 
                 ## maximize excretion in phenotypes where the excreta is known
-                met = list(phenoRXN.metabolites)[0]
-                if "excretions" in content and met.id in content["excretions"]:
+                # met = list(phenoRXN.metabolites)[0]
+                if "excreted" in phenoCPDs:
                     obj = sum([pheno_util.model.reactions.get_by_id("EX_" + excreta + "_e0").flux_expression
-                               for excreta in content["excretions"][met.id]])
+                               for excreta in phenoCPDs["excreted"]])
                     pheno_util.add_objective(direction="max", objective=obj)
                     # with open("maximize_excreta.lp", 'w') as out:
                     #     out.write(pheno_util.model.solver.to_lp())
                     sol = pheno_util.model.optimize()
                     bioFlux_check(pheno_util.model, sol)
-                    for excreta in content["excretions"][met.id]:
+                    for excreta in phenoCPDs["excreted"]:
                         excretaEX = pheno_util.model.reactions.get_by_id("EX_" + excreta + "_e0")
                         excretaEX.lower_bound = excretaEX.upper_bound = sol.fluxes["EX_" + excreta + "_e0"]
 
@@ -397,7 +401,7 @@ class GrowthData:
                                          f" during the simulation, where the observed growth was {simulated_growth}.")
 
                 # sol.fluxes /= abs(pheno_influx)
-                met_name = strip_comp(met.name).replace(" ", "-")
+                met_name = strip_comp(name).replace(" ", "-")
                 col = content["name"] + '_' + met_name
                 models[pheno_util.model.id]["solutions"][col] = sol
                 solutions.append(models[pheno_util.model.id]["solutions"][col].objective_value)
@@ -407,15 +411,16 @@ class GrowthData:
                 met_name = met_name.replace("_", "-").replace("~", "-")
                 if all_phenotypes:
                     if "phenotypes" not in comm_members[org_model]:
-                        comm_members[org_model]["phenotypes"] = {met_name: {"consumed": [strip_comp(met.id)]}}
+                        comm_members[org_model]["phenotypes"] = {met_name: {"consumed": [strip_comp(metID)]}}
                     if met_name not in comm_members[org_model]["phenotypes"]:
-                        comm_members[org_model]["phenotypes"].update({met_name: {"consumed": [strip_comp(met.id)]}})
+                        comm_members[org_model]["phenotypes"].update({met_name: {"consumed": [strip_comp(metID)]}})
                     else:
-                        comm_members[org_model]["phenotypes"][met_name]["consumed"] = [strip_comp(met.id)]
-                    if "excretions" in content and strip_comp(met.id) in content["excretions"]:
-                        comm_members[org_model]["phenotypes"][met_name].update(
-                            {"excreted": content["excretions"][strip_comp(met.id)]})
+                        comm_members[org_model]["phenotypes"][met_name]["consumed"] = [strip_comp(metID)]
+                    met_pheno = content["phenotypes"][met_name]
+                    if "excreted" in met_pheno and strip_comp(metID) in met_pheno["excreted"]:
+                        comm_members[org_model]["phenotypes"][met_name].update({"excreted": met_pheno})
                 # print(community_members)
+                # print(phenotypes)
 
         # construct the parsed table of all exchange fluxes for each phenotype
         cols = {}
@@ -741,7 +746,7 @@ class GrowthData:
                             utilized_phenos[pheno] = source_conc*0.9 / val
             total_consumed = sum(list(utilized_phenos.values()))
             excreta = {}
-            # display(fluxes_df)
+            display(fluxes_df)
             for pheno, absorption in utilized_phenos.items():
                 species, phenotype = pheno.split("_", 1)
                 fluxes = fluxes_df.loc[:, pheno] * abs(utilized_phenos[pheno])*(absorption/total_consumed)
