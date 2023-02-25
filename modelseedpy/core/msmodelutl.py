@@ -5,6 +5,7 @@ import time
 import json
 import sys
 from cobra import Model, Reaction, Metabolite
+from cobra import flux_analysis
 from cobra.io.json import from_json, to_json
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
@@ -651,6 +652,14 @@ class MSModelUtil:
 
     def add_gapfilling(self, solution):
         self.integrated_gapfillings.append(solution)
+
+    def run(self, media, pfba=False, fva=False, fva_reactions=None):
+        self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
+        if pfba:
+            return flux_analysis.pfba(self.util.model)
+        if fva:
+            return flux_analysis.variability.flux_variability_analysis(self.util.model, fva_reactions)
+        return self.util.model.optimize()
 
     def create_kb_gapfilling_data(self, kbmodel, atpmedia_ws="94026"):
         gapfilling_hash = {}

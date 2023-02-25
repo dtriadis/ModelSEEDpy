@@ -2,6 +2,7 @@ from icecream import ic
 
 from modelseedpy import FBAHelper
 from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterError, NoFluxError
+# from modelseedpy.community.commhelper import build_from_species_models, CommHelper
 from itertools import combinations
 from optlang.symbolics import Zero
 from pandas import DataFrame
@@ -38,6 +39,9 @@ class MSSteadyCom:
             show_figure: bool = True,            # specifies whether the figure will be printed to the console
             ignore_mets=None                     # cross-fed exchanges that will not be displayed in the graphs
             ):
+        # # defining the models
+        # model = model if not models else build_from_species_models(
+        #     models, names=names, abundances=abundances, cobra_model=True)
         #Check for solution
         solution = solution or mscommodel.run(media)
         if not solution:

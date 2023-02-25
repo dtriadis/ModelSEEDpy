@@ -286,10 +286,8 @@ class MSCommunity:
             self.run(media, pfba)
             return self._compute_relative_abundance_from_solution()
 
-    def run(self, media, pfba=False):
-        self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
-        return self._set_solution(cobra.flux_analysis.pfba(self.util.model)
-                                  if pfba or self.pfba else self.util.model.optimize())
+    def run(self, media, pfba=False, fva=False, fva_reactions=None):
+        return self._set_solution(self.util.run(media, pfba, fva, fva_reactions))
 
     def _compute_relative_abundance_from_solution(self,solution = None):
         if not solution and not self.solution:
