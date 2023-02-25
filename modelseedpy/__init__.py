@@ -49,7 +49,7 @@ from modelseedpy.core import (
 from modelseedpy.core.exceptions import *
 
 from modelseedpy.community import (
-    MSCommunity, CommunityModelSpecies, MSCompatibility, dFBAPkg, MSSmetana,
+    MSCommunity, CommunityModelSpecies, MSCompatibility, dFBAPkg, MSSmetana, MSCommPhitting,
     MSSteadyCom, CommHelper, build_from_species_models)
 
 from modelseedpy.fbapkg import (

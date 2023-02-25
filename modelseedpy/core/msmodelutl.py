@@ -127,6 +127,10 @@ class MSModelUtil:
         """
         self.reaction_scores = {}
 
+    def add_timeout(self, timeout_s=10):
+        from optlang.interface import Configuration
+        Configuration(self.model.problem, timeout=timeout_s)
+
     def printlp(self, lpfilename="debug.lp"):
         with open(lpfilename, "w") as out:
             out.write(str(self.model.solver))

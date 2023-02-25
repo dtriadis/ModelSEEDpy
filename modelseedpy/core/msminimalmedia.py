@@ -70,11 +70,13 @@ class MSMinimalMedia:
         rxns = model_util.exchange_list() if interacting else model_util.transport_list()
         influxes = []
         for rxn in rxns:
-            if all(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
+            if any(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
                 influxes.append(rxn.reverse_variable)
-            elif all(["e0" in met.id for met in rxn.products]):  # this captures edge cases
-                logger.critical(f"The reaction {rxn} lacks any exchange metabolites, and thus is indicative of an error.")
+            elif any(["e0" in met.id for met in rxn.products]):  # this captures edge cases or transporters
                 influxes.append(rxn.forward_variable)
+            else:
+                logger.critical(f"The reaction {rxn} lacks any exchange metabolites, "
+                                f"and thus is indicative of an error.")
         return influxes
 
     @staticmethod
@@ -141,6 +143,8 @@ class MSMinimalMedia:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
         model_util = MSModelUtil(org_model, True)
+        model_util.add_timeout(10)
+        print("Minimal Components media")
         if environment:
             model_util.add_medium(environment)
         # ic(org_model, min_growth, solution_limit)
@@ -156,7 +160,7 @@ class MSMinimalMedia:
         # determine each solution
         # interdependencies = {}
         solution_dicts, min_media = [], [0]*1000
-        sol = model_util.model.optimize()  # This is the troublesome line that occasionally refuses to solve
+        sol = model_util.model.optimize()  #TODO This is the troublesome line that occasionally refuses to solve
         if "optimal" not in sol.status:
             raise FeasibilityError(f"The simulation for minimal uptake in {model_util.model.id} was {sol.status}.")
         time3 = process_time()
@@ -251,15 +255,15 @@ class MSMinimalMedia:
             return interdependencies
 
     @staticmethod
-    def determine_min_media(model, minimization_method="minComponents", min_growth=None, environment=None,
+    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
                             interacting=True, solution_limit=5, printing=True):
         min_growth = min_growth or 0.1
         if minimization_method == "minFlux":
-            # return minimal_medium(model, min_growth, minimize_components=True)
             return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
         if minimization_method == "minComponents":
-            return MSMinimalMedia.minimize_components(
-                model, min_growth, environment, interacting, solution_limit, printing)
+            return minimal_medium(model, min_growth, minimize_components=True)
+            # return MSMinimalMedia.minimize_components(
+            #     model, min_growth, environment, interacting, solution_limit, printing)
         if minimization_method == "jenga":
             return MSMinimalMedia.jenga_method(model, printing=printing)
 
@@ -267,12 +271,12 @@ class MSMinimalMedia:
     def comm_media_est(models, comm_model, minimization_method="minComponents", min_growth=0.1,
                        environment=None, interacting=True, n_solutions=5, printing=False):
         media = {"community_media": {}, "members": {}}
-        print("com_mdeia_est")
+        # print("com_media_est")
         for org_model in models:
             model_util = MSModelUtil(org_model, True)
-            print(model_util.model.optimize())
+            # print(model_util.model.optimize())
             if environment:
-                print(environment)
+                # print(environment)
                 model_util.add_medium(environment)
             # reactions = [rxn.name for rxn in model.variables]
             # duplicate_reactions = DeepDiff(sorted(set(reactions)), sorted(reactions))

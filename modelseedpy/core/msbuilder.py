@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
-logger = logging.getLogger(__name__)
-
+import itertools
+from enum import Enum
 import cobra
 from modelseedpy.core.exceptions import ModelSEEDError
 from modelseedpy.core.rast_client import RastClient
@@ -10,7 +10,7 @@ from modelseedpy.core.msmodel import (
     get_gpr_string,
     get_reaction_constraints_from_direction,
 )
-from cobra.core import Gene, Metabolite, Model, Reaction
+from cobra.core import Gene, Metabolite, Model, Reaction, Group
 from modelseedpy.core import FBAHelper
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.helpers import get_template, get_classifier
@@ -191,6 +191,13 @@ grampos = {
 }
 
 
+class MSGenomeClass(Enum):
+    P = "Gram Positive"
+    N = "Gram Negative"
+    C = "Cyano"
+    A = "Archaea"
+
+
 def build_biomass(rxn_id, cobra_model, template, biomass_compounds, index="0"):
     bio_rxn = Reaction(rxn_id, "biomass", "", 0, 1000)
     metabolites = {}
@@ -305,7 +312,8 @@ class MSBuilder:
         self.name = name
         self.genome = genome
         self.template = template
-        self.search_name_to_genes, self.search_name_to_original = _aaaa(
+        self.genome_class = None
+        self.search_name_to_genes, self.search_name_to_original = _aSearch(
             genome, ontology_term
         )
         self.template_species_to_model_species = None
@@ -556,6 +564,7 @@ class MSBuilder:
     @staticmethod
     def build_biomass_new(model, template, index):
         biomasses = []
+        types = ["cofactor", "lipid", "cellwall"]
         for bio in template.biomasses:
             # Creating biomass reaction object
             metabolites = {}
@@ -631,7 +640,6 @@ class MSBuilder:
             biomasses.append(biorxn)
         return biomasses
 
-    @staticmethod
     def build_static_biomasses(self, model, template):
         res = []
         if template.name.startswith("CoreModel"):
@@ -651,9 +659,10 @@ class MSBuilder:
         from modelseedpy.helpers import get_template, get_classifier
         from modelseedpy.core.mstemplate import MSTemplateBuilder
 
-        genome_classifier = get_classifier("knn_ACNP_RAST_filter")
-        genome_class = genome_classifier.classify(self.genome)
+        genome_classifier = get_classifier("knn_ACNP_RAST_filter_01_17_2023")
+        self.genome_class = genome_classifier.classify(self.genome)
 
+        # TODO: update with enum MSGenomeClass
         template_genome_scale_map = {
             "A": "template_gram_neg",
             "C": "template_gram_neg",
@@ -668,16 +677,16 @@ class MSBuilder:
         }
 
         if (
-            genome_class in template_genome_scale_map
-            and genome_class in template_core_map
+            self.genome_class in template_genome_scale_map
+            and self.genome_class in template_core_map
         ):
             self.template = MSTemplateBuilder.from_dict(
-                get_template(template_genome_scale_map[genome_class])
+                get_template(template_genome_scale_map[self.genome_class])
             ).build()
         elif self.template is None:
-            raise Exception(f'A template cannot be selected for the genome class {genome_class}.')
+            raise Exception(f"unable to select template for {self.genome_class}")
 
-        return genome_class
+        return self.genome_class
 
     def generate_reaction_complex_sets(self, allow_incomplete_complexes=True):
         self.reaction_to_complex_sets = {}
@@ -859,7 +868,7 @@ class MSBuilder:
                 cpd = cobra_model.metabolites.get_by_id(model_species_id)
                 metabolites[cpd] = biomass_compounds[template_cpd_id]
             else:
-                template_cpd = template.compcompounds.get_by_id(template_cpd_id)
+                template_cpd = template.compcompounds.get_by_id(template_cpd_id[:-1])
                 m = template_cpd.to_metabolite(self.index)
                 metabolites[m] = biomass_compounds[template_cpd_id]
                 self.template_species_to_model_species[template_cpd_id] = m
@@ -870,14 +879,14 @@ class MSBuilder:
 
     def build(
         self,
-        model_id_or_id,
+        model_or_id,
         index="0",
         allow_all_non_grp_reactions=False,
         annotate_with_rast=True,
     ):
         """
 
-        @param model_id_or_id: a string ID to build from cobra.core.Model otherwise a type of cobra.core.Model
+        @param model_or_id: a string ID to build from cobra.core.Model otherwise a type of cobra.core.Model
         as Base Model
         @param index:
         @param allow_all_non_grp_reactions:
@@ -888,7 +897,7 @@ class MSBuilder:
         if annotate_with_rast:
             rast = RastClient()
             res = rast.annotate_genome(self.genome)
-            self.search_name_to_genes, self.search_name_to_original = _aaaa(
+            self.search_name_to_genes, self.search_name_to_original = _aSearch(
                 self.genome, "RAST"
             )
 
@@ -896,11 +905,12 @@ class MSBuilder:
         if not self.template:
             self.auto_select_template()
 
-        cobra_model = model_id_or_id
-        if type(model_id_or_id) == str:
+        cobra_model = model_or_id
+        if type(model_or_id) == str:
             from cobra.core import Model
 
-            cobra_model = Model(model_id_or_id)
+            cobra_model = Model(model_or_id)
+
         self.base_model = cobra_model
 
         self.generate_reaction_complex_sets()

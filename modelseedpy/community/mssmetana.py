@@ -27,7 +27,7 @@ def _compatibilize(member_models: Iterable, printing=False):
     return models
 
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
-    ic(member_models, com_model, compatibilize)
+    # ic(member_models, com_model, compatibilize)
     if not com_model and member_models:
         model, names, abundances = build_from_species_models(member_models, name="SMETANA_example")
         return member_models, model  # (model, names=names, abundances=abundances)
@@ -38,8 +38,8 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
     return member_models, com_model  # MSCommunity(com_model)
 
 def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
-               interacting=True, printing=False, minimization_method="minComponents"):
-    ic(media, com_model, model_s_)
+               interacting=True, printing=False, minimization_method="minFlux"):
+    # ic(media, com_model, model_s_)
     if not com_model and not model_s_:
         raise TypeError("Either the com_model or model_s_ arguments must be parameterized.")
     if media:
@@ -70,7 +70,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
 class MSSmetana:
     def __init__(self, member_models: Iterable, com_model, min_growth=0.1, n_solutions=100, environment=None,
                  abstol=1e-3, media_dict=None, printing=True, raw_content=False, antismash_json_path:str=None,
-                 antismash_zip_path:str=None, minimal_media_method="minComponents"):
+                 antismash_zip_path:str=None, minimal_media_method="minFlux"):
         self.min_growth = min_growth ; self.abstol = abstol ; self.n_solutions = n_solutions
         self.printing = printing ; self.raw_content = raw_content
         self.antismash_json_path = antismash_json_path ; self.antismash_zip_path = antismash_zip_path
@@ -105,83 +105,83 @@ class MSSmetana:
         mu = None # self.mu_score()
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
-        return (mro, mip, mp, mu, sc, smetana)
+        return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     def mro_score(self):
-        self.mro = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
-                                 self.media, self.raw_content, self.printing, True)
+        self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
+                                     self.media, self.raw_content, self.printing, True)
         if not self.printing:
-            return self.mro
+            return self.mro_val
         if self.raw_content:
-            for pair, (interaction, media) in self.mro.items():
+            for pair, (interaction, media) in self.mro_val.items():
                 newcomer, established = pair.split('---')
                 print(f"\n(MRO) The {newcomer} media {media} possesses {interaction} shared "
                       f"requirements with the {established} established member.")
-                return self.mro
-        for pair, mro in self.mro.items():
+                return self.mro_val
+        for pair, mro in self.mro_val.items():
             newcomer, established = pair.split('---')
             print(f"\nThe {newcomer} on {established} MRO score: {mro[0]} ({mro[0]*100:.2f}%). "
                   f"This is the percent of nutritional requirements in {newcomer} "
                   f"that overlap with {established} ({mro[1]}/{mro[2]}).")
-        return self.mro
+        return self.mro_val
 
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
         interacting_media = interacting_media or self.media or None
-        diff, self.mip = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
+        diff, self.mip_val = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
                                        noninteracting_media, self.printing, True)
         if not self.printing:
-            return self.mip
-        print(f"\nMIP score: {self.mip}\t\t\t{self.mip} required compound(s) can be sourced via syntrophy:")
+            return self.mip_val
+        print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
         if self.raw_content:
             pprint(diff)
-        return self.mip
+        return self.mip_val
 
     def mp_score(self):
         print("executing MP")
-        self.mp = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
+        self.mp_val = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
         if not self.printing:
-            return self.mp
+            return self.mp_val
         if self.raw_content:
             print("\n(MP) The possible contributions of each member in the member media include:\n")
-            pprint(self.mp)
+            pprint(self.mp_val)
         else:
             print("\nMP score:\t\t\tEach member can possibly contribute the following to the community:\n")
-            for member, contributions in self.mp.items():
+            for member, contributions in self.mp_val.items():
                 print(member, "\t", len(contributions))
-        return self.mp
+        return self.mp_val
 
     def mu_score(self):
-        member_excreta = self.mp_score() if not hasattr(self, "mp") else self.mp
-        self.mu = MSSmetana.mu(self.models, self.environment, member_excreta, self.n_solutions,
+        member_excreta = self.mp_score() if not hasattr(self, "mp_val") else self.mp_val
+        self.mu_val = MSSmetana.mu(self.models, self.environment, member_excreta, self.n_solutions,
                                self.abstol, True, self.printing)
         if not self.printing:
-            return self.mu
+            return self.mu_val
         print("\nMU score:\t\t\tThe fraction of solutions in which each member is the "
               "syntrophic receiver that contain a respective metabolite:\n")
-        pprint(self.mu)
-        return self.mu
+        pprint(self.mu_val)
+        return self.mu_val
 
     def sc_score(self):
-        self.sc = MSSmetana.sc(self.models, self.community.model, self.min_growth,
+        self.sc_val = MSSmetana.sc(self.models, self.community.model, self.min_growth,
                                self.n_solutions, self.abstol, True, self.printing)
         if not self.printing:
-            return self.sc
+            return self.sc_val
         print("\nSC score:\t\t\tThe fraction of community members who syntrophically contribute to each species:\n")
-        pprint(self.sc)
-        return self.sc
+        pprint(self.sc_val)
+        return self.sc_val
 
     def smetana_score(self):
-        if not hasattr(self, "sc"):
-            self.sc = self.sc_score()
+        if not hasattr(self, "sc_val"):
+            self.sc_val = self.sc_score()
         sc_coupling = all(array(list(self.sc.values())) != None)
-        if not hasattr(self, "mu"):
-            self.mu = self.mu_score()
-        if not hasattr(self, "mp"):
-            self.mp = self.mp_score()
+        if not hasattr(self, "mu_val"):
+            self.mu_val = self.mu_score()
+        if not hasattr(self, "mp_val"):
+            self.mp_val = self.mp_score()
 
         self.smetana = MSSmetana.smetana(
             self.models, self.community.model, self.min_growth, self.n_solutions, self.abstol,
-            (self.sc, self.mu, self.mp), True, sc_coupling, self.printing)
+            (self.sc_val, self.mu_val, self.mp_val), True, sc_coupling, self.printing)
         if self.printing:
             print("\nsmetana score:\n")
             pprint(self.smetana)
@@ -326,12 +326,14 @@ class MSSmetana:
         # member_solutions = member_solutions if member_solutions else {model.id: model.optimize() for model in member_models}
         scores = {}
         member_models = member_models if compatibilized else _compatibilize(member_models, printing)
-        member_excreta = member_excreta or MSSmetana.mp(member_models, environment, None, abstol, printing)
-        missing_members = [model for model in member_models if model.id not in member_excreta]
-        if missing_members:
-            print(f"The {','.join(missing_members)} members are missing from the defined "
-                  f"excreta list and will therefore be determined through an additional MP simulation.")
-            member_excreta.update(MSSmetana.mp(missing_members, environment))
+        if member_excreta:
+            missing_members = [model for model in member_models if model.id not in member_excreta]
+            if missing_members:
+                print(f"The {','.join(missing_members)} members are missing from the defined "
+                      f"excreta list and will therefore be determined through an additional MP simulation.")
+                member_excreta.update(MSSmetana.mp(missing_members, environment))
+        else:
+            member_excreta = MSSmetana.mp(member_models, environment, None, abstol, printing)
         for org_model in member_models:
             other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
                                                      if model != org_model.id]))

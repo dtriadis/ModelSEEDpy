@@ -125,7 +125,9 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
-    newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
+    # newmodel.remove_reactions(newmodel.sinks)
+    newmodel.add_boundary(comm_biomass, "sink")
+    # newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
     if cobra_model:
         return newutl.model
     return newutl.model, names, abundances
