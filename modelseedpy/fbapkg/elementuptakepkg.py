@@ -23,10 +23,10 @@ class ElementUptakePkg(BaseFBAPkg):
             # define the constraint
             coef = {self.variables["elements"][element]: -1}
             for exRXN in self.modelutl.exchange_list():
-                totalNumAtoms = sum([met.elements[element] * exRXN.metabolites[met]
-                                     for met in exRXN.metabolites if element in met.elements])
-                if totalNumAtoms < 0:
-                    coef[exRXN.reverse_variable] = abs(totalNumAtoms)
-                elif totalNumAtoms > 0:
-                    coef[exRXN.forward_variable] = totalNumAtoms
+                ExNumAtoms = sum([met.elements[element] * exRXN.metabolites[met]
+                                  for met in exRXN.metabolites if element in met.elements])
+                if ExNumAtoms < 0:
+                    coef[exRXN.reverse_variable] = abs(ExNumAtoms)
+                elif ExNumAtoms > 0:
+                    coef[exRXN.forward_variable] = ExNumAtoms
             self.build_constraint("elements", 0, 0, coef, element)

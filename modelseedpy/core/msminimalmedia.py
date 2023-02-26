@@ -132,7 +132,7 @@ class MSMinimalMedia:
         pass
 
     @staticmethod
-    def rel_media():
+    def relative_media():
         pass
 
     @staticmethod
