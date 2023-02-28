@@ -18,6 +18,10 @@ from icecream import ic
 from numpy import mean
 # from math import prod
 
+# silence deprecation warnings from DeepDiff parsing the
+import warnings
+warnings.simplefilter("ignore", category=DeprecationWarning)
+
 
 def _compatibilize(member_models: Iterable, printing=False):
     # return member_models
