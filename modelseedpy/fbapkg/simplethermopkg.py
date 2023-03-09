@@ -41,19 +41,19 @@ class SimpleThermoPkg(BaseFBAPkg):
                         self.variables["potential"][metabolite.id]
                     ] = reaction.metabolites[metabolite]
 
-                # define the maximum progression
-                self.model.objective = self.model.problem.Objective(Zero, direction="max")
-                self.model.objective.set_linear_coefficients(objective_coefficient)
-                self.model.update()
-                solution = self.model.optimize()
-                max_value = solution.objective_value
-
                 # define the minimum progression
                 self.model.objective = self.model.problem.Objective(Zero, direction="min")
                 self.model.objective.set_linear_coefficients(objective_coefficient)
                 self.model.update()
                 solution = self.model.optimize()
                 min_value = solution.objective_value
+
+                # define the maximum progression
+                self.model.objective = self.model.problem.Objective(Zero, direction="max")
+                self.model.objective.set_linear_coefficients(objective_coefficient)
+                self.model.update()
+                solution = self.model.optimize()
+                max_value = solution.objective_value
 
                 # build constraints for the filtered reactions
                 if self.parameters["filter"] is None or reaction.id in self.parameters["filter"]:
@@ -73,25 +73,25 @@ class SimpleThermoPkg(BaseFBAPkg):
             obj,
         )
 
-    def build_cons(self, obj, min_value, max_value):
+    def build_cons(self, obj, min_energy, max_energy):
         # Gibbs: dg = Sum(st(i,j)*p(j))
-        # 0 <= max_energy*revbin(i) - max_energy*dgbinR + max_energy*dgbinF + Sum(st(i,j)*p(j)) <= max_energy
+        # 0 <= max_abs_energy*revbin(i) - |min_energy|*dgbinR + max_energy*dgbinF + dg <= max_abs_energy
 
         coef = {self.variables["potential"][metabolite.id]: obj.metabolites[metabolite]
                 for metabolite in obj.metabolites}
-        max_energy = max([abs(min_value), abs(max_value)])
+        max_abs_energy = max([abs(min_energy), abs(max_energy)])
         built_constraint = None
         if not self.parameters["reduced_constraints"]:
-            coef[self.pkgmgr.getpkg("RevBinPkg").variables["revbin"][obj.id]] = max_energy
+            coef[self.pkgmgr.getpkg("RevBinPkg").variables["revbin"][obj.id]] = max_abs_energy
             if self.parameters["dgbin"]:
                 # build the dgbin variables
                 BaseFBAPkg.build_variable(self, "dgbinF", 0, 1, "binary", obj)
                 BaseFBAPkg.build_variable(self, "dgbinR", 0, 1, "binary", obj)
                 # define the dgbin coefficients
-                coef[self.variables["dgbinF"][obj.id]] = max_value
-                coef[self.variables["dgbinR"][obj.id]] = abs(min_value)
+                coef[self.variables["dgbinF"][obj.id]] = max_energy
+                coef[self.variables["dgbinR"][obj.id]] = abs(min_energy)
             # build the constraint
-            built_constraint = BaseFBAPkg.build_constraint(self, "thermo", 0, max_energy, coef, obj)
+            built_constraint = BaseFBAPkg.build_constraint(self, "thermo", 0, max_abs_energy, coef, obj)
 
         return built_constraint
 

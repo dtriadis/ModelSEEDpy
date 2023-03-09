@@ -689,13 +689,12 @@ class MSCommPhitting:
                                 self.variables['b3_' + pheno][short_code][timestep].name,
                                 self.variables['b4_' + pheno][short_code][timestep].name,
                                 self.variables['b5_' + pheno][short_code][timestep].name]
-                    b_terms = [{"elements": [-self.parameters["kcat"][species][phenotype], b], "operation": "Mul"} for b in b_values]
+                    b_terms = [{"elements": [-self.parameters["kcat"][species][phenotype], b],
+                                "operation": "Mul"} for b in b_values]
                     self.constraints['gc_' + pheno][short_code][timestep] = tupConstraint(
                         name=_name('gc_', pheno, short_code, timestep, self.names),
-                        expr={
-                            "elements": [*b_terms, self.variables['g_' + pheno][short_code][timestep].name],
-                            "operation": "Add"
-                        })
+                        expr={"elements": [*b_terms, self.variables['g_' + pheno][short_code][timestep].name],
+                              "operation": "Add"})
 
                     constraints.extend([self.constraints['cvc_' + pheno][short_code][timestep],
                                         self.constraints['gc_' + pheno][short_code][timestep],])

@@ -50,7 +50,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
                 index = 0 if met.compartment[0] == "e" else model_index
                 met.compartment = met.compartment[0] + str(index)
                 if "_" in met.id:
-                    print(met.id)
+                    # print(met.id)
                     met.id = met.id.split("_")[:-1] + met.compartment
             else:
                 name, compartment, out_index = output
@@ -65,7 +65,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
                     met.id = name + "_" + met.compartment
             new_metabolites.add(met)
             if "cpd11416_c" in met.id:
-                print(met.id, model_util.model.id)
+                # print(met.id, model_util.model.id)
                 biomass_compounds.append(met)
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
@@ -77,11 +77,11 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
                             biomass_index += 1
                     if index not in biomass_indices and index >= minimal_biomass_index:
                         biomass_indices.append(index)
-                        print(rxn.id, '2')
+                        # print(rxn.id, '2')
                     else:  # biomass indices can be decoupled from the respective reaction indices of the same model
                         rxn.id = "bio" + str(biomass_index)
                         if rxn.id not in model_reaction_ids:
-                            print(rxn.id, '1')
+                            # print(rxn.id, '1')
                             biomass_indices.append(biomass_index)
                         else:
                             index = minimal_biomass_index
@@ -90,7 +90,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
                                 index += 1
                                 rxn.id = "bio" + str(index)
                             biomass_indices.append(index)
-                            print(rxn.id, '3')
+                            # print(rxn.id, '3')
                     biomass_index += 1
                 else:
                     output = MSModelUtil.parse_id(rxn)
@@ -107,7 +107,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
                             else:
                                 rxn.id = rxn_id + str(model_index)
             new_reactions.add(rxn)
-        print(biomass_indices)
+        # print(biomass_indices)
     # adds only unique reactions and metabolites to the community model
     newmodel = Model(model_id or "+".join([model.id for model in models]),
                      name or "+".join([model.name for model in models]))
@@ -124,6 +124,8 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
 
     # update model components
     newutl = MSModelUtil(newmodel)
+    msid_cobraid_hash = newutl.msid_hash()
+    print(msid_cobraid_hash["cpd11416"])
     newutl.add_objective(comm_biorxn.flux_expression)
     # newmodel.remove_reactions(newmodel.sinks)
     newmodel.add_boundary(comm_biomass, "sink")

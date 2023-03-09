@@ -344,19 +344,27 @@ class GrowthData:
 
                 ## minimize the influx of all non-phenotype compounds at a fixed biomass growth
                 ### Penalization of only uptake.
-                min_growth = .1
+                min_growth = 1  # arbitrarily assigned minimal growth
                 pheno_util.add_minimal_objective_cons(min_growth)
-                pheno_util.add_objective(sum([ex.reverse_variable for ex in pheno_util.carbon_exchange_list()
-                                              if ex.id != phenoRXN.id]), "min")
+                pheno_util.add_objective(Zero, "min", coef={
+                    ex.reverse_variable: (1000 if ex.id != phenoRXN.id else 1)
+                    for ex in pheno_util.carbon_exchange_list()})
                 # with open(f"minimize_cInFlux_{phenoRXN.id}.lp", 'w') as out:
                 #     out.write(pheno_util.model.solver.to_lp())
                 sol = pheno_util.model.optimize()
                 bioFlux_check(pheno_util.model, sol)
                 ### parameterize the optimization fluxes as lower bounds of the net flux, without exceeding the upper_bound
                 for ex in pheno_util.carbon_exchange_list():
-                    if ex.id != phenoRXN.id:
-                        ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
+                    # if ex.id != phenoRXN.id:
+                    ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
                 # print(sol.status, sol.objective_value, [(ex.id, ex.bounds) for ex in pheno_util.exchange_list()])
+
+                #TODO - perform FVA on all potentially excretable carbon sources whose #C's < the phenotype source
+                phenotype_source_carbons = FBAHelper.rxn_mets_list(phenoRXN)[0].elements["C"]
+                for carbon_source in pheno_util.carbon_exchange_list(include_unknown=False):
+                    if FBAHelper.rxn_mets_list(carbon_source)[0].elements["C"] < phenotype_source_carbons:
+                        pass
+                        #TODO - perform FVA
 
                 ## maximize the phenotype yield with the previously defined growth and constraints
                 pheno_util.add_objective(phenoRXN.reverse_variable, "min")

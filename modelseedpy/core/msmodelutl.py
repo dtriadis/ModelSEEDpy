@@ -660,10 +660,10 @@ class MSModelUtil:
     def run(self, media, pfba=False, fva=False, fva_reactions=None):
         self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
         if pfba:
-            return flux_analysis.pfba(self.util.model)
+            return flux_analysis.pfba(self.model)
         if fva:
-            return flux_analysis.variability.flux_variability_analysis(self.util.model, fva_reactions)
-        return self.util.model.optimize()
+            return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
+        return self.model.optimize()
 
     def create_kb_gapfilling_data(self, kbmodel, atpmedia_ws="94026"):
         gapfilling_hash = {}

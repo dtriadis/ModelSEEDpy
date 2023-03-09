@@ -146,12 +146,9 @@ class MSCommunity:
                                 f"hence, the {reaction} cannot be defined as the model primary biomass.")
                         print('primary biomass defined', reaction)
                         self.primary_biomass = reaction
-                    elif (
-                        reaction.metabolites[self.biomass_cpd] < 0
-                        and len(reaction.metabolites) == 1
-                    ):
+                    elif reaction.metabolites[self.biomass_cpd] < 0 and len(reaction.metabolites) == 1:
                         self.biomass_drain = reaction
-            elif 'c' in self.biomass_cpd.compartment:
+            elif 'c' in self.biomass_cpd.compartment:  # else does not seem to capture built model members
                 other_biomass_cpds.append(self.biomass_cpd)
         for biomass_cpd in other_biomass_cpds:
             print(biomass_cpd)
