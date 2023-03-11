@@ -74,7 +74,7 @@ class SimpleThermoPkg(BaseFBAPkg):
         )
 
     def build_cons(self, obj, min_energy, max_energy):
-        # Gibbs: dg = Sum(st(i,j)*p(j))
+        # Gibbs: dg = Sum(n_(i,j)*\Delta G_(j))
         # 0 <= max_abs_energy*revbin(i) - |min_energy|*dgbinR + max_energy*dgbinF + dg <= max_abs_energy
 
         coef = {self.variables["potential"][metabolite.id]: obj.metabolites[metabolite]

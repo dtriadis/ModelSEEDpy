@@ -1,4 +1,3 @@
-import numpy
 from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msminimalmedia import MSMinimalMedia
 from modelseedpy.community.commhelper import build_from_species_models
@@ -41,7 +40,7 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
         return _compatibilize(member_models, printing), _compatibilize([com_model], printing)[0]
     return member_models, com_model  # MSCommunity(com_model)
 
-def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
+def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, environment=None,
                interacting=True, printing=False, minimization_method="minFlux"):
     # ic(media, com_model, model_s_)
     if not com_model and not model_s_:
@@ -63,7 +62,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None,
             members_media = {}
             for model in model_s_:
                 members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
-                    model, minimization_method, min_growth, interacting, printing)}
+                    model, minimization_method, min_growth, environment, interacting, printing)}
             if not com_model:
                 return members_media
     else:
@@ -102,18 +101,45 @@ class MSSmetana:
         self.media = media_dict if media_dict else MSMinimalMedia.comm_media_est(
             member_models, com_model, minimal_media_method, min_growth, self.environment, True, n_solutions, printing)
 
-    def all_scores(self):
+    def all_scores(self, mp_score=True):
         mro = self.mro_score()
         mip = self.mip_score(interacting_media=self.media)
-        mp = self.mp_score()
+        mp = None if not mp_score else self.mp_score()
         mu = None # self.mu_score()
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
+    @staticmethod
+    def kbase_output(models, environment):
+        from pandas import Series
+        # define general and model biomass yields
+        community_model = build_from_species_models(models, cobra_model=True)
+        kbase_dic = {"model1": models[0].id, "model2": models[1].id,
+                     "comm_biomass_yield": community_model.slim_optimize()}
+        kbase_dic.update({model.id: model.slim_optimize() for model in models})
+        # define the MRO content
+        mro_values = MSSmetana.mro(models, None, raw_content=True, environment=environment)
+        kbase_dic.update({f"mro_{models_string.split('--')[0]}": f"{len(intersection)/len(memMedia)} "
+                                                                 f"({len(intersection)}/{len(memMedia)})"
+                          for models_string, (intersection, memMedia) in mro_values.items()})
+        # define the MIP score
+        mip_values = MSSmetana.mip(community_model, models, environment=environment, compatibilized=True)
+        kbase_dic.update({"mip": mip_values[1]})
+        # return the content as a pandas Series, which can be easily aggregated with other
+        ## community values as a DataFrame row
+        return Series(kbase_dic), {"mip_mets":mip_values[0], "mro_mets":list(mro_values.values())}
+
+    def kbase_report(self, kbase_outputs):
+        from pandas import concat
+        df = concat(kbase_outputs, axis=1).T
+        df_html = df.to_html()
+
+        # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
+
     def mro_score(self):
         self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
-                                     self.media, self.raw_content, self.printing, True)
+                                     self.media, self.raw_content, self.environment, self.printing, True)
         if not self.printing:
             return self.mro_val
         if self.raw_content:
@@ -132,7 +158,7 @@ class MSSmetana:
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
         interacting_media = interacting_media or self.media or None
         diff, self.mip_val = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
-                                       noninteracting_media, self.printing, True)
+                                           noninteracting_media, self.environment, self.printing, True)
         if not self.printing:
             return self.mip_val
         print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
@@ -177,7 +203,7 @@ class MSSmetana:
     def smetana_score(self):
         if not hasattr(self, "sc_val"):
             self.sc_val = self.sc_score()
-        sc_coupling = all(array(list(self.sc.values())) != None)
+        sc_coupling = all(array(list(self.sc.values())) is not None)
         if not hasattr(self, "mu_val"):
             self.mu_val = self.mu_score()
         if not hasattr(self, "mp_val"):
@@ -225,14 +251,14 @@ class MSSmetana:
 
     @staticmethod
     def mro(member_models:Iterable=None, mem_media:dict=None, min_growth=0.1, media_dict=None,
-            raw_content=False, printing=False, compatibilized=False):
+            raw_content=False, environment=None, printing=False, compatibilized=False):
         """Determine the overlap of nutritional requirements (minimal media) between member organisms."""
         # determine the member minimal media if they are not parameterized
         if not mem_media:
             if not member_models:
                 raise ParameterError("The either member_models or minimal_media parameter must be defined.")
             member_models = _compatibilize(member_models, printing)
-            mem_media = _get_media(media_dict, None, member_models, min_growth, printing=printing)
+            mem_media = _get_media(media_dict, None, member_models, min_growth, environment, printing=printing)
             if "community_media" in mem_media:
                 mem_media = mem_media["members"]
         # MROs = array(list(map(len, pairs.values()))) / array(list(map(len, mem_media.values())))
@@ -250,15 +276,17 @@ class MSSmetana:
 
     @staticmethod
     def mip(com_model=None, member_models:Iterable=None, min_growth=0.1, interacting_media_dict=None,
-            noninteracting_media_dict=None, printing=True, compatibilized=False):
+            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False):
         """Determine the maximum quantity of nutrients that can be sourced through syntrophy"""
         member_models, community = _load_models(
             member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
-        noninteracting_medium = _get_media(noninteracting_media_dict, community, None, min_growth, False)
+        noninteracting_medium = _get_media(noninteracting_media_dict, community,
+                                           None, min_growth, environment, False)
         if "community_media" in noninteracting_medium:
             noninteracting_medium = noninteracting_medium["community_media"]
-        interacting_medium = _get_media(interacting_media_dict, community, None, min_growth, True)
+        interacting_medium = _get_media(interacting_media_dict, community,
+                                        None, min_growth, environment, True)
         if "community_media" in interacting_medium:
             interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
@@ -274,7 +302,8 @@ class MSSmetana:
         model_util.add_objective(sum(ex_rxn.flux_expression for ex_rxn in org_possible_contributions))
         sol = model_util.model.optimize()
         if sol.status != "optimal":
-            ## exit the while loop by returning the original possible_contributions, hence DeepDiff == {} and the while loop terminates
+            # exit the while loop by returning the original possible_contributions,
+            ## hence DeepDiff == {} and the while loop terminates
             return scores, org_possible_contributions
         # identify and log excreta from the solution
         possible_contributions = org_possible_contributions[:]
