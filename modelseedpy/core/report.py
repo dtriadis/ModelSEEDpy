@@ -181,7 +181,27 @@ def steadycom_report(flux_df, exMets_df):
     content = {'flux_table': flux_df.to_html(),
                "total_table": total_table.to_html(),
                "exchanged_mets": exMets_df.to_html()}
-    package_dir = "/".join(os.path.dirname(os.path.realpath(__file__)).split("\\")[:-1])
+    package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(package_dir),
+        autoescape=jinja2.select_autoescape(['html', 'xml']))
+    # print(os.path.dirname(__file__))
+    # Return string of html
+    # print(os.path.exists(os.path.join(os.path.dirname(__file__), '..', "community", "steadycom_output.html")))
+    return env.get_template("/".join(["community", "steadycom_output.html"])).render(content)
+
+def smetana_report(df, mets):
+    # refine the DataFrame into a heatmap
+    heatmap_df = df.copy(deep=True)
+    heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
+    heatmap_df.index = ["---".join(index) for index in heatmap_df_index]
+    heatmap_df = heatmap_df.drop(["model1", "model2"]).style.background_gradient()
+
+    # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
+    content = {'table': df.to_html(),
+               "heatmap": heatmap_df.to_html(),
+               "mets": mets}
+    package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))

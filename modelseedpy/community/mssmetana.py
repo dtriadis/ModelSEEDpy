@@ -9,7 +9,6 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 from cobra.medium import minimal_medium
 from collections import Counter
 from deepdiff import DeepDiff  # (old, new)
-from itertools import chain
 from typing import Iterable
 from pprint import pprint
 from numpy import array
@@ -111,31 +110,30 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(models, environment):
-        from pandas import Series
-        # define general and model biomass yields
-        community_model = build_from_species_models(models, cobra_model=True)
-        kbase_dic = {"model1": models[0].id, "model2": models[1].id,
-                     "comm_biomass_yield": community_model.slim_optimize()}
-        kbase_dic.update({model.id: model.slim_optimize() for model in models})
-        # define the MRO content
-        mro_values = MSSmetana.mro(models, None, raw_content=True, environment=environment)
-        kbase_dic.update({f"mro_{models_string.split('--')[0]}": f"{len(intersection)/len(memMedia)} "
-                                                                 f"({len(intersection)}/{len(memMedia)})"
-                          for models_string, (intersection, memMedia) in mro_values.items()})
-        # define the MIP score
-        mip_values = MSSmetana.mip(community_model, models, environment=environment, compatibilized=True)
-        kbase_dic.update({"mip": mip_values[1]})
-        # return the content as a pandas Series, which can be easily aggregated with other
-        ## community values as a DataFrame row
-        return Series(kbase_dic), {"mip_mets":mip_values[0], "mro_mets":list(mro_values.values())}
-
-    def kbase_report(self, kbase_outputs):
-        from pandas import concat
-        df = concat(kbase_outputs, axis=1).T
-        df_html = df.to_html()
-
-        # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
+    def kbase_output(models, environment=None):
+        from pandas import Series, concat
+        series, mets = [], []
+        for models in permutations(models, 2):   # all permutations of 2 models from the total set of models
+            # define general and model biomass yields
+            modelIDs = [model.id for model in models]
+            community_model = build_from_species_models(models, cobra_model=True)
+            kbase_dic = {"comm_biomass_yield": community_model.slim_optimize()}
+            for index, model in enumerate(models):
+                kbase_dic[f"model{index}"] = model.id
+                kbase_dic[f"model{index}_biomass yield"] = model.slim_optimize()
+            # define the MRO content
+            mro_values = MSSmetana.mro(models, None, raw_content=True, environment=environment)
+            kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])}":
+                              f"{len(intersection)/len(memMedia)} ({len(intersection)}/{len(memMedia)})"
+                              for models_string, (intersection, memMedia) in mro_values.items()})
+            # define the MIP score
+            mip_values = MSSmetana.mip(community_model, models, environment=environment, compatibilized=True)
+            kbase_dic.update({"mip": mip_values[1]})
+            # return the content as a pandas Series, which can be easily aggregated with other
+            ## community values as a DataFrame row
+            series.append(Series(kbase_dic))
+            mets.append({"mip_mets":mip_values[0], "mro_mets":list(mro_values.values())})
+        return concat(series, axis=1).T, mets
 
     def mro_score(self):
         self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
