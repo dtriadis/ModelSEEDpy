@@ -7,7 +7,8 @@ from cobra import Model, Reaction, Metabolite
 import re
 
 
-def build_from_species_models(org_models, model_id=None, name=None, names=None, abundances=None, cobra_model=False, standardize=False):
+def build_from_species_models(org_models, model_id=None, name=None, names=None,
+                              abundances=None, cobra_model=False, standardize=False, copy_models=True):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -37,7 +38,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None, 
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
     for model_index, org_model in enumerate(models):
-        model_util = MSModelUtil(org_model)
+        model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
         model_index += 1
         # print([rxn.id for rxn in model.reactions if "bio" in rxn.id])

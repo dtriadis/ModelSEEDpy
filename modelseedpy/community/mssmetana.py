@@ -114,21 +114,23 @@ class MSSmetana:
         from pandas import Series, concat
         series, mets = [], []
         for models in permutations(models, 2):   # all permutations of 2 models from the total set of models
-            # define general and model biomass yields
+            # initiate the KBase output
             modelIDs = [model.id for model in models]
             community_model = build_from_species_models(models, cobra_model=True)
-            kbase_dic = {"comm_biomass_yield": community_model.slim_optimize()}
-            for index, model in enumerate(models):
-                kbase_dic[f"model{index}"] = model.id
-                kbase_dic[f"model{index}_biomass yield"] = model.slim_optimize()
+            kbase_dic = {f"model{index+1}": model.id for index, model in enumerate(models)}
             # define the MRO content
             mro_values = MSSmetana.mro(models, None, raw_content=True, environment=environment)
-            kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])}":
-                              f"{len(intersection)/len(memMedia)} ({len(intersection)}/{len(memMedia)})"
+            kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
+                              f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                               for models_string, (intersection, memMedia) in mro_values.items()})
             # define the MIP score
             mip_values = MSSmetana.mip(community_model, models, environment=environment, compatibilized=True)
             kbase_dic.update({"mip": mip_values[1]})
+            # determine the optimized growths
+            kbase_dic.update({f"model{index+1}_biomass yield": model.slim_optimize()
+                              for index, model in enumerate(models)})
+            kbase_dic.update({"comm_biomass_yield": community_model.slim_optimize()})
+
             # return the content as a pandas Series, which can be easily aggregated with other
             ## community values as a DataFrame row
             series.append(Series(kbase_dic))

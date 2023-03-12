@@ -1,9 +1,7 @@
-import os
-import json
-import math
-import jinja2
-import numpy as np
 from django import shortcuts
+import numpy as np
+import jinja2
+import os, re, math, json
 
 # Helper function
 def round_float_str(s, precision=6):
@@ -192,14 +190,29 @@ def steadycom_report(flux_df, exMets_df):
 
 def smetana_report(df, mets):
     # refine the DataFrame into a heatmap
+    import seaborn as sns
+    cm = sns.light_palette("green", as_cmap=True)
+
+    def quantify_MRO(element):
+        return float(re.sub("(\s\(.+\))", "", element))
+
     heatmap_df = df.copy(deep=True)
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
-    heatmap_df.index = ["---".join(index) for index in heatmap_df_index]
-    heatmap_df = heatmap_df.drop(["model1", "model2"]).style.background_gradient()
+    heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
+    heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
+    heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
+    heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
+    heatmap_df = heatmap_df.astype(float)
+    # import plotly.express as px
+    # fig = px.imshow(heatmap_df.to_numpy())
+    # fig.update_layout(xaxis_title="comparison", yaxis_title="models")
+    # fig.update_xaxes(tickangle=45, tickmode = 'array', ticktext = list(heatmap_df.columns))
+    # fig.update_xaxes(tickmode = 'array', ticktext = heatmap_df.index)
+    # fig.show()
 
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(),
-               "heatmap": heatmap_df.to_html(),
+               "heatmap": heatmap_df.style.background_gradient().to_html(),
                "mets": mets}
     package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(
@@ -208,4 +221,4 @@ def smetana_report(df, mets):
     # print(os.path.dirname(__file__))
     # Return string of html
     # print(os.path.exists(os.path.join(os.path.dirname(__file__), '..', "community", "steadycom_output.html")))
-    return env.get_template("/".join(["community", "steadycom_output.html"])).render(content)
+    return env.get_template("/".join(["community", "smetana_output.html"])).render(content)
