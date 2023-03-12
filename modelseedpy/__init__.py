@@ -44,7 +44,8 @@ if sys.version_info[0] == 2:
 import modelseedpy
 from modelseedpy.core import (
     RastClient, MSGenome, MSBuilder, MSMedia, MSGrowthPhenotypes,MSModelUtil,
-    FBAHelper, MSEditorAPI, MSATPCorrection, MSGapfill, MSEquation, OptlangHelper
+    FBAHelper, MSEditorAPI, MSATPCorrection, MSGapfill, MSEquation, OptlangHelper,
+    smetana_report, steadycom_report
 )
 from modelseedpy.core.exceptions import *
 

@@ -14,4 +14,5 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.msminimalmedia import MSMinimalMedia
 from modelseedpy.core.optlanghelper import OptlangHelper
 from modelseedpy.core.mstemplate import MSTemplateBuilder
+from modelseedpy.core.report import *
 from modelseedpy.core.exceptions import *
