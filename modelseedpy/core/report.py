@@ -176,8 +176,11 @@ def build_report(model, fba_sol, fva_sol,
 def steadycom_report(flux_df, exMets_df):
     total_table = flux_df.iloc[-len(flux_df.columns):]
     total_table.index = [i.replace("zz_", "") for i in total_table.index]
-    content = {'flux_table': flux_df.to_html(),
-               "total_table": total_table.to_html(),
+    print(len(flux_df))
+    flux_df = flux_df.iloc[:-len(flux_df.columns)]
+    print(len(flux_df))
+    content = {'flux_table': flux_df.style.background_gradient().to_html(),
+               "total_table": total_table.style.background_gradient().to_html(),
                "exchanged_mets": exMets_df.to_html()}
     package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(
@@ -190,9 +193,6 @@ def steadycom_report(flux_df, exMets_df):
 
 def smetana_report(df, mets):
     # refine the DataFrame into a heatmap
-    import seaborn as sns
-    cm = sns.light_palette("green", as_cmap=True)
-
     def quantify_MRO(element):
         return float(re.sub("(\s\(.+\))", "", element))
 

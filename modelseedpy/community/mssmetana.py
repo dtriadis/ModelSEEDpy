@@ -277,7 +277,7 @@ class MSSmetana:
     @staticmethod
     def mip(com_model=None, member_models:Iterable=None, min_growth=0.1, interacting_media_dict=None,
             noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False):
-        """Determine the maximum quantity of nutrients that can be sourced through syntrophy"""
+        """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(
             member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
