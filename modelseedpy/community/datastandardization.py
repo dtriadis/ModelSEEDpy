@@ -300,7 +300,7 @@ class GrowthData:
 
 
     @staticmethod
-    def phenotypes(community_members, all_phenotypes=True, solver:str="glpk"):
+    def phenotypes(community_members, all_phenotypes=True, phenotype_flux_threshold=None, solver:str="glpk"):
         # log information of each respective model
         models = OrderedDict()
         solutions = []
@@ -359,12 +359,19 @@ class GrowthData:
                     ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
                 # print(sol.status, sol.objective_value, [(ex.id, ex.bounds) for ex in pheno_util.exchange_list()])
 
-                #TODO - perform FVA on all potentially excretable carbon sources whose #C's < the phenotype source
+                ## perform FVA on all potentially excretable carbon sources whose #C's < the phenotype source
                 phenotype_source_carbons = FBAHelper.rxn_mets_list(phenoRXN)[0].elements["C"]
-                for carbon_source in pheno_util.carbon_exchange_list(include_unknown=False):
-                    if FBAHelper.rxn_mets_list(carbon_source)[0].elements["C"] < phenotype_source_carbons:
-                        pass
-                        #TODO - perform FVA
+                eligible_carbon_byproducts = [
+                    carbon_source for carbon_source in pheno_util.carbon_exchange_list(include_unknown=False)
+                    if FBAHelper.rxn_mets_list(carbon_source)[0].elements["C"] < phenotype_source_carbons]
+                variability_df = pheno_util.run(fva=True, fva_reactions=eligible_carbon_byproducts)
+                display(variability_df)
+                ### optimize the excretion of the discovered phenotype excreta
+                max_excretion_cpd = variability_df["minimum"].idxmin()
+                if "excreted" in phenoCPDs:
+                    phenoCPDs["excreted"].append(max_excretion_cpd)
+                else:
+                    phenoCPDs["excreted"] = [max_excretion_cpd]
 
                 ## maximize the phenotype yield with the previously defined growth and constraints
                 pheno_util.add_objective(phenoRXN.reverse_variable, "min")

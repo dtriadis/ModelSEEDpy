@@ -176,9 +176,7 @@ def build_report(model, fba_sol, fva_sol,
 def steadycom_report(flux_df, exMets_df):
     total_table = flux_df.iloc[-len(flux_df.columns):]
     total_table.index = [i.replace("zz_", "") for i in total_table.index]
-    print(len(flux_df))
     flux_df = flux_df.iloc[:-len(flux_df.columns)]
-    print(len(flux_df))
     content = {'flux_table': flux_df.style.background_gradient().to_html(),
                "total_table": total_table.style.background_gradient().to_html(),
                "exchanged_mets": exMets_df.to_html()}
@@ -186,9 +184,6 @@ def steadycom_report(flux_df, exMets_df):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    # print(os.path.dirname(__file__))
-    # Return string of html
-    # print(os.path.exists(os.path.join(os.path.dirname(__file__), '..', "community", "steadycom_output.html")))
     return env.get_template("/".join(["community", "steadycom_output.html"])).render(content)
 
 def smetana_report(df, mets):
@@ -203,12 +198,6 @@ def smetana_report(df, mets):
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
     heatmap_df = heatmap_df.astype(float)
-    # import plotly.express as px
-    # fig = px.imshow(heatmap_df.to_numpy())
-    # fig.update_layout(xaxis_title="comparison", yaxis_title="models")
-    # fig.update_xaxes(tickangle=45, tickmode = 'array', ticktext = list(heatmap_df.columns))
-    # fig.update_xaxes(tickmode = 'array', ticktext = heatmap_df.index)
-    # fig.show()
 
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(),
@@ -218,7 +207,4 @@ def smetana_report(df, mets):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    # print(os.path.dirname(__file__))
-    # Return string of html
-    # print(os.path.exists(os.path.join(os.path.dirname(__file__), '..', "community", "steadycom_output.html")))
     return env.get_template("/".join(["community", "smetana_output.html"])).render(content)

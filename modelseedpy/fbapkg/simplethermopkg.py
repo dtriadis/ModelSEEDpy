@@ -41,19 +41,11 @@ class SimpleThermoPkg(BaseFBAPkg):
                         self.variables["potential"][metabolite.id]
                     ] = reaction.metabolites[metabolite]
 
-                # define the minimum progression
-                self.model.objective = self.model.problem.Objective(Zero, direction="min")
-                self.model.objective.set_linear_coefficients(objective_coefficient)
-                self.model.update()
-                solution = self.model.optimize()
-                min_value = solution.objective_value
-
-                # define the maximum progression
-                self.model.objective = self.model.problem.Objective(Zero, direction="max")
-                self.model.objective.set_linear_coefficients(objective_coefficient)
-                self.model.update()
-                solution = self.model.optimize()
-                max_value = solution.objective_value
+                # define the minimum and maximum progressions
+                self.modelutl.add_objective(Zero, "min", objective_coefficient)
+                min_value = self.modelutl.model.slim_optimize()
+                self.modelutl.add_objective(Zero, "max", objective_coefficient)
+                max_value = self.modelutl.model.slim_optimize()
 
                 # build constraints for the filtered reactions
                 if self.parameters["filter"] is None or reaction.id in self.parameters["filter"]:

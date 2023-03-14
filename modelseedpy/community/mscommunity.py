@@ -184,19 +184,21 @@ class MSCommunity:
             direction=sense
         )
 
-    def constrain(self, element_uptake_limit=None, kinetic_coeff=None, msdb_path=None):
-        # applying uptake constraints
+    def constrain(self, element_uptake_limit=None, kinetic_coeff=None,
+                  thermo_params=None, msdb_path=None):
         if element_uptake_limit:
             self.element_uptake_limit = element_uptake_limit
             self.pkgmgr.getpkg("ElementUptakePkg").build_package(element_uptake_limit)
-        # applying kinetic constraints
         if kinetic_coeff:
             self.kinetic_coeff = kinetic_coeff
             self.pkgmgr.getpkg("CommKineticPkg").build_package(kinetic_coeff, self)
-        # applying FullThermo constraints
-        if msdb_path:
-            self.msdb_path = msdb_path
-            self.pkgmgr.getpkg("FullThermoPkg").build_package({'modelseed_db_path':msdb_path})
+        if thermo_params:
+            if msdb_path:
+                self.msdb_path = msdb_path
+                thermo_params.update({'modelseed_db_path':msdb_path})
+                self.pkgmgr.getpkg("FullThermoPkg").build_package(thermo_params)
+            else:
+                self.pkgmgr.getpkg("SimpleThermoPkg").build_package(thermo_params)
 
     def steadycom(self, solution=None, media=None, filename=None, export_directory=None,
                   node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
