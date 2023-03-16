@@ -175,55 +175,59 @@ class MSCommPhitting:
 
     def __init__(self, msdb_path, community_members: dict=None, fluxes_df=None, growth_df=None, carbon_conc=None,
                  media_conc=None, experimental_metadata=None, base_media=None, solver: str = 'glpk', all_phenotypes=True,
-                 data_paths: dict = None, species_abundances: str = None,
-                 ignore_trials: Union[dict, list] = None, ignore_timesteps: list = None, species_identities_rows=None,
-                 significant_deviation: float = 2, extract_zip_path: str = None
-                 ):
+                 data_paths: dict = None, species_abundances: str = None, ignore_trials: Union[dict, list] = None,
+                 ignore_timesteps: list = None, species_identities_rows=None, significant_deviation: float = 2,
+                 extract_zip_path: str = None, determine_requisite_biomass:bool = True):
+        self.solver = solver ; self.all_phenotypes = all_phenotypes ; self.data_paths = data_paths
+        self.species_abundances = species_abundances ; self.ignore_trials = ignore_trials
+        self.ignore_timesteps = ignore_timesteps ; self.species_identities_rows = species_identities_rows
+        self.significant_deviation = significant_deviation ; self.extract_zip_path = extract_zip_path
+
+        self.community_members = community_members
         if community_members is not None or any([x is None for x in [fluxes_df, growth_df]]):
-            (experimental_metadata, growth_df, fluxes_df, carbon_conc, requisite_biomass,
-             trial_name_conversion, data_timestep_hr, simulation_timestep, media_conc
+            (self.experimental_metadata, self.growth_df, fluxes_df, carbon_conc, self.requisite_biomass,
+             trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
              ) = GrowthData.process(community_members, base_media, solver, all_phenotypes, data_paths,
                                     species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
-                                    species_identities_rows, significant_deviation, extract_zip_path)
-            self.data_timestep_hr = data_timestep_hr
-            self.requisite_biomass = requisite_biomass
-
+                                    species_identities_rows, significant_deviation, extract_zip_path,
+                                    determine_requisite_biomass)
+        self.fluxes_tup = FBAHelper.parse_df(fluxes_df) ; self.fluxes_df = fluxes_df
+        self.default_excreta = [index for index, row in fluxes_df.iterrows() if any(row > 1)]
 
         self.parameters, self.variables, self.constraints = {}, {}, {}
-        self.zipped_output, self.plots = [], []
-        self.fluxes_tup = FBAHelper.parse_df(fluxes_df)
-        self.growth_df = growth_df; self.experimental_metadata = experimental_metadata
+        self.zipped_output, self.plots, self.names = [], [], []
+        self.experimental_metadata = experimental_metadata
         self.carbon_conc = carbon_conc; self.media_conc = media_conc
-        self.names = []
         self.msdb = from_local(msdb_path) ; self.msdb_path = msdb_path
 
     #################### FITTING PHASE METHODS ####################
 
-    def fit_kcat(self, parameters: dict = None, mets_to_track: list = None, rel_final_conc: dict = None, zero_start: list = None,
-                 abs_final_conc: dict = None, graphs: list = None, data_timesteps: dict = None,
+    def fit_kcat(self, parameters: dict = None, mets_to_track: list = None, rel_final_conc: dict = None,
+                 zero_start: list = None, abs_final_conc: dict = None, graphs: list = None, data_timesteps: dict = None,
                  export_zip_name: str = None, export_parameters: bool = True, requisite_biomass: dict = None,
-                 export_lp: str = f'solveKcat.lp', figures_zip_name:str=None, publishing=True, primals_export_path=None):
+                 export_lp:str = f'solveKcat.lp', figures_zip_name:str=None, publishing=True, primals_export_path=None):
         if export_zip_name and os.path.exists(export_zip_name):
             os.remove(export_zip_name)
         kcat_primal = None
-        if hasattr(self, "requisite_biomass"):
-            requisite_biomass = self.requisite_biomass
+        requisite_biomass = requisite_biomass or self.requisite_biomass
         for index, coefs in enumerate(biomass_partition_coefs):
             # solve for growth rate constants with the previously solved biomasses
-            new_simulation = MSCommPhitting(self.fluxes_tup, self.carbon_conc, self.media_conc,
-                                          self.msdb_path, self.growth_df, self.experimental_metadata)
-            new_simulation.define_problem(
-                parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
-                data_timesteps, export_zip_name, export_parameters, export_lp, kcat_primal, coefs, requisite_biomass)
-            # time1 = process_time()
-            primals_export_path = primals_export_path or re.sub(r"(.lp)", ".json", export_lp)
-            new_simulation.compute(graphs, export_zip_name, figures_zip_name, publishing, primals_export_path)
-            kcat_primal = parse_primals(new_simulation.values, "kcat", coefs, new_simulation.parameters["kcat"])
-            # time2 = process_time()
-            # print(f"Done simulating with the coefficients for biomass partitions: {index}"
-            #       f"\n{(time2-time1)/60} minutes")
+            newSim = MSCommPhitting(self.msdb_path, None, self.fluxes_df, self.growth_df, self.carbon_conc,
+                                    self.media_conc, self.experimental_metadata, None, self.solver, self.all_phenotypes,
+                                    self.data_paths, self.species_abundances, self.ignore_trials, self.ignore_timesteps,
+                                    self.species_identities_rows, self.significant_deviation, self.extract_zip_path)
+            newSim.define_problem(parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
+                                  data_timesteps, export_zip_name, export_parameters, export_lp,
+                                  kcat_primal, coefs, requisite_biomass)
+            time1 = process_time()
+            newSim.compute(graphs, export_zip_name, figures_zip_name, publishing,
+                           primals_export_path or re.sub(r"(.lp)", ".json", export_lp))
+            kcat_primal = parse_primals(newSim.values, "kcat", coefs, newSim.parameters["kcat"])
             pprint(kcat_primal)
-        return {k: val for k, val in new_simulation.values.items() if "kcat" in k}
+            time2 = process_time()
+            print(f"Done simulating with the coefficients for biomass partitions: {index}"
+                  f"\t{(time2-time1)/60} minutes")
+        return {k: val for k, val in newSim.values.items() if "kcat" in k}
 
     def fit(self, parameters:dict=None, mets_to_track: list = None, rel_final_conc:dict=None, zero_start:list=None,
             abs_final_conc:dict=None, graphs: list = None, data_timesteps: dict = None,
@@ -234,13 +238,8 @@ class MSCommPhitting:
         self.define_problem(parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
                             data_timesteps, export_zip_name, export_parameters, export_lp,
                             None, None, requisite_biomass)
-        primals_export_path = primals_export_path or re.sub(r"(.lp)", ".json", export_lp)
-        self.compute(graphs, export_zip_name, figures_zip_name, publishing, primals_export_path)
-
-    def _update_problem(self, contents: Iterable):
-        for content in contents:
-            self.problem.add(content)
-            self.problem.update()
+        self.compute(graphs, export_zip_name, figures_zip_name, publishing,
+                     primals_export_path or re.sub(r"(.lp)", ".json", export_lp))
 
     def define_b_vars(self, pheno, short_code, timestep, variables):
         self.variables['b_' + pheno][short_code][timestep] = tupVariable(
@@ -280,6 +279,7 @@ class MSCommPhitting:
     def define_b_cons(self, pheno, short_code, timestep, constraints, biomass_coefs):
         biomass_coefs = biomass_coefs or biomass_partition_coefs[-1]
         # define the partitioned biomass groups
+        ## b_n{pheno,t} <= coef*b_tot{pheno,t}
         self.constraints['b1c_' + pheno][short_code][timestep] = tupConstraint(
             _name("b1c_", pheno, short_code, timestep, self.names), Bounds(0, None), {
                 "elements": [
@@ -331,7 +331,8 @@ class MSCommPhitting:
                 "operation": "Add"
             })
 
-        ## define the comprehensive biomass constraints
+        # define the comprehensive biomass constraints
+        ## coef*b{pheno,t} - b_n{pheno,t} - 1000*bin_n{pheno} <= 0
         self.constraints['b1c_control_' + pheno][short_code][timestep] = tupConstraint(
             _name("b1c_control_", pheno, short_code, timestep, self.names), Bounds(None, 0), {
                 "elements": [
@@ -394,6 +395,7 @@ class MSCommPhitting:
             })
 
         # define the binary constraints
+        ## b_n{pheno,t} <= 1000 - 1000*bin_n{pheno}
         self.constraints['bin1c_' + pheno][short_code][timestep] = tupConstraint(
             _name("bin1c_", pheno, short_code, timestep, self.names), Bounds(0, None), {
                 "elements": [
@@ -549,13 +551,13 @@ class MSCommPhitting:
         default_carbon_sources = ["cpd00076", "cpd00179", "cpd00027"]  # sucrose, maltose, glucose
         self.rel_final_conc = rel_final_conc or {c:1 for c in default_carbon_sources}
         self.abs_final_conc = abs_final_conc or {}
+        zero_start = zero_start or self.default_excreta
         if mets_to_track:
             self.mets_to_track = mets_to_track
         elif not isinstance(rel_final_conc, dict):
             self.mets_to_track = self.fluxes_tup.index
         else:
-            self.mets_to_track = list(self.rel_final_conc.keys())
-        zero_start = zero_start or []
+            self.mets_to_track = list(self.rel_final_conc.keys()) + zero_start
 
         timesteps_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
         if data_timesteps:  # {short_code:[times]}
@@ -833,7 +835,7 @@ class MSCommPhitting:
                         self.constraints['dbc_' + pheno][short_code][timestep].expr["elements"].extend(biomass_term)
                         constraints.append(self.constraints['dbc_' + pheno][short_code][timestep])
 
-                    if timestep != timesteps[-2] or signal not in requisite_biomass[short_code]:
+                    if not requisite_biomass or any([timestep != timesteps[-2], signal not in requisite_biomass[short_code]]):
                         self.variables[signal + '|bio'][short_code][timestep] = tupVariable(
                             _name(signal, '|bio', short_code, timestep, self.names))
                     else:

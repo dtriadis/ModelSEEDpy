@@ -1,4 +1,4 @@
-from django import shortcuts
+# from django import shortcuts
 import numpy as np
 import jinja2
 import os, re, math, json

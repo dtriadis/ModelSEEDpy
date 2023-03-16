@@ -1,10 +1,26 @@
 from optlang import Objective
 
+from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
+from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
 from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
+from cobra.medium import minimal_medium
+from cobra.flux_analysis import pfba
+from collections import OrderedDict
+from optlang.symbolics import Zero
+from optlang import Constraint
+from math import inf, isclose
+from pandas import DataFrame
+from pprint import pprint
+from numpy import mean
 import re
+
+
+def strip_comp(ID):
+    ID = ID.replace("-", "~")
+    return re.sub("(\_\w\d)", "", ID)
 
 
 def build_from_species_models(org_models, model_id=None, name=None, names=None,
@@ -134,6 +150,192 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     if cobra_model:
         return newutl.model
     return newutl.model, names, abundances
+
+def phenotypes(community_members, all_phenotypes=True, phenotype_flux_threshold=.1, solver:str="glpk"):
+    # log information of each respective model
+    models = OrderedDict()
+    solutions = []
+    media_conc = set()
+    # calculate all phenotype profiles for all members
+    comm_members = community_members.copy()
+    # print(community_members)
+    for org_model, content in community_members.items():  # community_members excludes the stationary phenotype
+        print("\n", org_model.id)
+        org_model.solver = solver
+        model_util = MSModelUtil(org_model, True)
+        if "org_coef" not in locals():
+            org_coef = {model_util.model.reactions.get_by_id("EX_cpd00007_e0").reverse_variable: -1}
+        model_util.standard_exchanges()
+        models[org_model.id] = {"exchanges": model_util.exchange_list(), "solutions": {}, "name": content["name"]}
+        phenotypes = content.get("phenotypes", {
+            m.name: {"consumed":[m.id]} for m in model_util.carbon_exchange_list(include_unknown=False)})
+        # print(phenotypes)
+        if "phenotypes" in content:
+            models[org_model.id]["phenotypes"] = ["stationary"] + [
+                content["phenotypes"].keys() for member, content in comm_members.items()]
+            # phenoRXNs = [model_util.model.reactions.get_by_id("EX_"+pheno_cpd+"_e0")
+            #              for pheno, pheno_cpds in content['phenotypes'].items()
+            #              for pheno_cpd in pheno_cpds["consumed"]]
+        for name, phenoCPDs in phenotypes.items():
+            metID = phenoCPDs["consumed"][0]
+            try:
+                phenoRXN = model_util.model.reactions.get_by_id(f'EX_{metID}_e0')
+            except:
+                print(f'EX_{metID}_e0 is not in the model {org_model.id}')
+                continue
+            print(phenoRXN.id)
+            pheno_util = MSModelUtil(org_model, True)
+            pheno_util.model.solver = solver
+            media = {cpd: 100 for cpd, flux in pheno_util.model.medium.items()}
+            media.update({phenoRXN.id: 1000})
+            ### eliminate hydrogen absorption
+            media.update({"EX_cpd11640_e0": 0})
+            pheno_util.add_medium(media)
+            ### define an oxygen absorption relative to the phenotype carbon source
+            # O2_consumption: EX_cpd00007_e0 <= sum(primary carbon fluxes)    # formerly <= 2 * sum(primary carbon fluxes)
+            coef = org_coef.copy()
+            coef.update({phenoRXN.reverse_variable: 1})
+            pheno_util.create_constraint(Constraint(Zero, lb=0, ub=None, name="EX_cpd00007_e0_limitation"), coef=coef)
+
+            ## minimize the influx of all non-phenotype compounds at a fixed biomass growth
+            ### Penalization of only uptake.
+            min_growth = 1  # arbitrarily assigned minimal growth
+            pheno_util.add_minimal_objective_cons(min_growth)
+            pheno_util.add_objective(Zero, "min", coef={
+                ex.reverse_variable: 1000 if ex.id != phenoRXN.id else 1
+                for ex in pheno_util.carbon_exchange_list()})
+            # with open(f"minimize_cInFlux_{phenoRXN.id}.lp", 'w') as out:
+            #     out.write(pheno_util.model.solver.to_lp())
+            sol = pheno_util.model.optimize()
+            bioFlux_check(pheno_util.model, sol)
+            ### parameterize the optimization fluxes as lower bounds of the net flux, without exceeding the upper_bound
+            for ex in pheno_util.carbon_exchange_list():
+                # if ex.id != phenoRXN.id:
+                ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
+            # if phenoRXN.id == "EX_cpd00136_e0":
+            #     print(sol.status, sol.objective_value, [flux for id, flux in sol.fluxes.items() if "EX_" in id])
+                #[(ex.id, ex.bounds) for ex in pheno_util.exchange_list()])
+
+            ## optimize excretion of all potential carbon byproducts whose #C's < the phenotype carbon source
+            phenotype_source_carbons = FBAHelper.rxn_mets_list(phenoRXN)[0].elements["C"]
+            minimum_fluxes = {}
+            for carbon_source in pheno_util.carbon_exchange_list(include_unknown=False):
+                if 0 < FBAHelper.rxn_mets_list(carbon_source)[0].elements["C"] < phenotype_source_carbons:
+                    pheno_util.add_objective(carbon_source.flux_expression, "max")
+                    minObj = pheno_util.model.slim_optimize()
+                    # print(carbon_source.reaction, "\t", carbon_source.flux_expression, "\t", minObj)
+                    if minObj > phenotype_flux_threshold:
+                        minimum_fluxes[carbon_source.id] = minObj
+            excreted_compounds = list([ex for ex in minimum_fluxes.keys() if ex != "EX_cpd00011_e0"])
+            # minimum_fluxes_df = DataFrame(data=list(minimum_fluxes.values()),
+            #                               index=excreted_compounds, columns=["min_flux"])
+            # display(minimum_fluxes_df)
+            ### optimize the excretion of the discovered phenotype excreta
+            # max_excretion_cpd = minimum_fluxes_df["minimum"].idxmin()
+            if "excreted" in phenoCPDs:
+                phenoCPDs["excreted"] = [f"EX_{cpd}_e0" for cpd in phenoCPDs["excreted"]]
+                phenoCPDs["excreted"].extend(excreted_compounds)
+            else:
+                phenoCPDs["excreted"] = excreted_compounds
+
+            ## maximize the phenotype yield with the previously defined growth and constraints
+            pheno_util.add_objective(phenoRXN.reverse_variable, "min")
+            # with open(f"maximize_phenoYield_{phenoRXN.id}.lp", 'w') as out:
+            #     out.write(pheno_util.model.solver.to_lp())
+            sol = pheno_util.model.optimize()
+            bioFlux_check(pheno_util.model, sol)
+            pheno_influx = sol.fluxes[phenoRXN.id]
+            if pheno_influx >= 0:
+                if not all_phenotypes:
+                    pprint({rxn: flux for rxn, flux in sol.fluxes.items() if flux != 0})
+                    raise NoFluxError(f"The (+) net flux of {pheno_influx} for the {phenoRXN.id} phenotype"
+                                      f" indicates that it is an implausible phenotype.")
+                print(f"NoFluxError: The (+) net flux of {pheno_influx} for the {phenoRXN.id}"
+                      " phenotype indicates that it is an implausible phenotype.")
+            phenoRXN.lower_bound = phenoRXN.upper_bound = sol.fluxes[phenoRXN.id]
+
+            ## maximize excretion in phenotypes where the excreta is known
+            # met = list(phenoRXN.metabolites)[0]
+            if "excreted" in phenoCPDs:
+                obj = sum([pheno_util.model.reactions.get_by_id(excreta).flux_expression
+                           for excreta in phenoCPDs["excreted"]])
+                pheno_util.add_objective(direction="max", objective=obj)
+                # with open("maximize_excreta.lp", 'w') as out:
+                #     out.write(pheno_util.model.solver.to_lp())
+                sol = pheno_util.model.optimize()
+                bioFlux_check(pheno_util.model, sol)
+                for excreta in phenoCPDs["excreted"]:
+                    excretaEX = pheno_util.model.reactions.get_by_id(excreta)
+                    excretaEX.lower_bound = excretaEX.upper_bound = sol.fluxes[excreta]
+
+            ## minimize flux of the total simulation flux through pFBA
+            try:  # TODO discover why many phenotypes are infeasible with pFBA
+                sol = pfba(pheno_util.model)
+            except Exception as e:
+                print(f"The {phenoRXN.id} phenotype of the {pheno_util.model} model is "
+                      f"unable to be simulated with pFBA and yields a < {e} > error.")
+            sol_dict = FBAHelper.solution_to_variables_dict(sol, pheno_util.model)
+            simulated_growth = sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)])
+            if not isclose(simulated_growth, min_growth):
+                raise ObjectiveError(f"The assigned minimal_growth of {min_growth} was not optimized"
+                                     f" during the simulation, where the observed growth was {simulated_growth}.")
+
+            # sol.fluxes /= abs(pheno_influx)
+            met_name = strip_comp(name).replace(" ", "-")
+            col = content["name"] + '_' + met_name
+            models[pheno_util.model.id]["solutions"][col] = sol
+            solutions.append(models[pheno_util.model.id]["solutions"][col].objective_value)
+
+            ## update the community_members dictionary the defined phenotypes, being either all or a specified few
+            # print(community_members)
+            met_name = met_name.replace("_", "-").replace("~", "-")
+            if all_phenotypes:
+                if "phenotypes" not in comm_members[org_model]:
+                    comm_members[org_model]["phenotypes"] = {met_name: {"consumed": [strip_comp(metID)]}}
+                if met_name not in comm_members[org_model]["phenotypes"]:
+                    comm_members[org_model]["phenotypes"].update({met_name: {"consumed": [strip_comp(metID)]}})
+                else:
+                    comm_members[org_model]["phenotypes"][met_name]["consumed"] = [strip_comp(metID)]
+                met_pheno = content["phenotypes"][met_name]
+                if "excreted" in met_pheno and strip_comp(metID) in met_pheno["excreted"]:
+                    comm_members[org_model]["phenotypes"][met_name].update({"excreted": met_pheno})
+            # print(community_members)
+            # print(phenotypes)
+
+    # construct the parsed table of all exchange fluxes for each phenotype
+    cols = {}
+    ## biomass row
+    cols["rxn"] = ["bio"]
+    for content in models.values():
+        for col in content["solutions"]:
+            cols[col] = [0]
+            if col not in content["solutions"]:
+                continue
+            bio_rxns = [x for x in content["solutions"][col].fluxes.index if "bio" in x]
+            flux = mean([content["solutions"][col].fluxes[rxn] for rxn in bio_rxns
+                            if content["solutions"][col].fluxes[rxn] != 0])
+            cols[col] = [flux]
+    ## exchange reactions rows
+    looped_cols = cols.copy()
+    looped_cols.pop("rxn")
+    for content in models.values():
+        for ex_rxn in content["exchanges"]:
+            cols["rxn"].append(ex_rxn.id)
+            for col in looped_cols:
+                ### reactions that are not present in the columns are ignored
+                flux = 0 if (col not in content["solutions"] or
+                             ex_rxn.id not in list(content["solutions"][col].fluxes.index)
+                             ) else content["solutions"][col].fluxes[ex_rxn.id]
+                cols[col].append(flux)
+    ## construct the DataFrame
+    fluxes_df = DataFrame(data=cols)
+    fluxes_df.index = fluxes_df['rxn']
+    fluxes_df.drop('rxn', axis=1, inplace=True)
+    fluxes_df = fluxes_df.groupby(fluxes_df.index).sum()
+    fluxes_df = fluxes_df.loc[(fluxes_df != 0).any(axis=1)]
+    fluxes_df.astype(str)
+    fluxes_df.to_csv("fluxes.csv")
+    return fluxes_df, comm_members
 
 
 class CommHelper:

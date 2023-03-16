@@ -39,10 +39,11 @@ class MSSteadyCom:
             show_figure: bool = True,            # specifies whether the figure will be printed to the console
             ignore_mets=None                     # cross-fed exchanges that will not be displayed in the graphs
             ):
-        # # defining the models
-        # model = model if not models else build_from_species_models(
-        #     models, names=names, abundances=abundances, cobra_model=True)
-        #Check for solution
+        # verify that the model has a solution and parallelize where the solver is permissible
+        solver = mscommodel.util.model.solver
+        print(f"{solver} model loaded")
+        if "gurobi" in solver:
+            mscommodel.util.model.problem.Params.Threads = os.cpu_count()/2
         solution = solution or mscommodel.run(media)
         if not solution:
             raise ParameterError("A solution must be provided. Interactions are computed from a solution.")
