@@ -1,43 +1,3 @@
-# import commphitting
-
-# class MSCommPhitting:
-#
-#     def __init__(self, fluxes_df, carbon_conc, media_conc, msdb_path, growth_df=None, experimental_metadata=None):
-#         commphitting.__init__(fluxes_df, carbon_conc, media_conc, msdb_path, growth_df, experimental_metadata)
-#
-#     #################### FITTING PHASE METHODS ####################
-#     def fit_kcat(self, parameters: dict = None, mets_to_track: list = None, rel_final_conc: dict = None,
-#                  zero_start: list = None, abs_final_conc: dict = None, graphs: list = None, data_timesteps: dict = None,
-#                  export_zip_name: str = None, export_parameters: bool = True, requisite_biomass: dict = None,
-#                  export_lp: str = f'solveKcat.lp', publishing=True, primals_export_path=None):
-#         return commphitting.fit_kcat(self, parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc, graphs,
-#                                      data_timesteps, export_zip_name, export_parameters, requisite_biomass,
-#                                      export_lp, publishing, primals_export_path)
-#
-#     def fit(self, parameters:dict=None, mets_to_track: list = None, rel_final_conc:dict=None, zero_start:list=None,
-#             abs_final_conc:dict=None, graphs: list = None, data_timesteps: dict = None, msdb_path:str=None,
-#             export_zip_name: str = None, export_parameters: bool = True, export_lp: str = 'CommPhitting.lp',
-#             figures_zip_name:str=None, publishing:bool=False):
-#         commphitting.fit(self, parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc, graphs,
-#                          data_timesteps, msdb_path, export_zip_name, export_parameters, export_lp,
-#                          figures_zip_name, publishing)
-#
-#     def define_problem(self, parameters=None, mets_to_track=None, rel_final_conc=None, zero_start=None, abs_final_conc=None,
-#                        data_timesteps=None, export_zip_name: str=None, export_parameters: bool=True, export_lp: str='CommPhitting.lp',
-#                        primal_values=None, biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False):
-#         commphitting.define_problem(self, parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
-#                        data_timesteps, export_zip_name, export_parameters, export_lp,
-#                        primal_values, biomass_coefs, requisite_biomass, biolog_simulation)
-#
-#     def compute(self, graphs: list = None, export_zip_name=None, figures_zip_name=None, publishing=False,
-#                 primals_export_path:str = "primal_values.json", remove_empty_plots=False):
-#         commphitting.compute(self, graphs, export_zip_name, figures_zip_name,
-#                              publishing, primals_export_path, remove_empty_plots)
-
-
-
-
-
 # -*- coding: utf-8 -*-
 # from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.core.exceptions import FeasibilityError, ParameterError, ObjectAlreadyDefinedError, NoFluxError
@@ -844,6 +804,8 @@ class MSCommPhitting:
                         self.variables[signal + '|bio'][short_code][timestep] = tupVariable(
                             _name(signal, '|bio', short_code, timestep, self.names),
                             Bounds(estimated_biomass * 0.7, estimated_biomass * 1.3))
+                        print(short_code, timestep, biomass_flux, estimated_biomass,
+                              self.variables[signal + '|bio'][short_code][timestep].bounds)
                     self.variables[signal + '|diffpos'][short_code][timestep] = tupVariable(
                         _name(signal, '|diffpos', short_code, timestep, self.names), Bounds(0, 100))
                     self.variables[signal + '|diffneg'][short_code][timestep] = tupVariable(

@@ -292,4 +292,5 @@ class MSGapfill:
             blacklist,
         )
         gfresults = gapfiller.run_gapfilling(media, target_reaction)
-        return gapfiller.integrate_gapfill_solution(gfresults)
+        gapfiller.integrate_gapfill_solution(gfresults)
+        return gapfiller.mdlutl.model

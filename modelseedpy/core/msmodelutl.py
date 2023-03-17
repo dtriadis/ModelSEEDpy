@@ -216,6 +216,10 @@ class MSModelUtil:
             return [ex for ex in self.exchange_list() if "C" in ex.reactants[0].elements]
         return [ex for ex in self.exchange_list() if not ex.reactants[0].elements or "C" in ex.reactants[0].elements]
 
+    def carbon_exchange_mets_list(self, include_unknown=True):
+        exchanges = self.carbon_exchange_list(include_unknown)
+        return [met for ex_rxn in exchanges for met in ex_rxn.metabolites]
+
     def exchange_mets_list(self):
         return [met for ex_rxn in self.exchange_list() for met in ex_rxn.metabolites]
 
@@ -656,16 +660,6 @@ class MSModelUtil:
     def add_gapfilling(self, solution):
         self.integrated_gapfillings.append(solution)
 
-    def run(self, media=False, pfba=False, fva=False, fva_reactions=None):
-        from cobra import flux_analysis
-        if media:
-            self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
-        if pfba:
-            return flux_analysis.pfba(self.model)
-        if fva:
-            return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
-        return self.model.optimize()
-
     def create_kb_gapfilling_data(self, kbmodel, atpmedia_ws="94026"):
         gapfilling_hash = {}
         if "gapfillings" not in kbmodel:
@@ -723,6 +717,16 @@ class MSModelUtil:
     #################################################################################
     # Functions related to applying, running, and expanding with test conditions
     #################################################################################
+    def run(self, media=False, pfba=False, fva=False, fva_reactions=None):
+        from cobra import flux_analysis
+        if media:
+            self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
+        if pfba:
+            return flux_analysis.pfba(self.model)
+        if fva:
+            return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
+        return self.model.optimize()
+
     def apply_test_condition(self, condition, model=None):
         """Applies constraints and objective of specified condition to model
 

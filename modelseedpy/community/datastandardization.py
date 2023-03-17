@@ -552,14 +552,15 @@ class GrowthData:
             for dimension, content in food_gradient.items():
                 for met, conc_dict in content.items():
                     source_conc = conc_dict[row_letter if dimension == "rows" else int(col_number)]
+                    print(met, source_conc)
                     if source_conc == 0 or f"EX_{met}_e0" not in fluxes_df.index:
                         continue
                     for pheno, val in fluxes_df.loc[f"EX_{met}_e0"].items():
-                        # pheno = strip_comp(pheno)
-                        # species, phenotype = pheno.split("_", 1)
+                        print(pheno, val)
                         if val < 0:
                             utilized_phenos[pheno] = source_conc*0.9 / val
             total_consumed = sum(list(utilized_phenos.values()))
+            print(utilized_phenos)
 
             display(fluxes_df)
             short_code = trial_name_conversion[row_letter][col_number][0]
@@ -624,7 +625,7 @@ class GrowthData:
         df_data.update({df_name:vals for df_name, vals in values.items()})
         growth_df = DataFrame(df_data)
         growth_df.index = growth_df["short_codes"]
-        growth_df.drop(["short_codes"], axis=1)
+        growth_df = growth_df.drop(["short_codes"], axis=1)
         growth_df.to_csv("growth_spectra.csv")
         return growth_df
 
