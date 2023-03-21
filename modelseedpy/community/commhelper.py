@@ -22,6 +22,9 @@ def strip_comp(ID):
     ID = ID.replace("-", "~")
     return re.sub("(\_\w\d)", "", ID)
 
+def export_lp(model, name):
+    with open(f"{name}.lp", 'w') as out:
+        out.write(model.solver.to_lp())
 
 def build_from_species_models(org_models, model_id=None, name=None, names=None,
                               abundances=None, cobra_model=False, standardize=False, copy_models=True):
@@ -194,41 +197,44 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
                 continue
             media.update({phenoRXN.id: 100})
             pheno_util.add_medium(media)
-            print(phenoRXN.id, media)
+            # print(phenoRXN.id, media)
             pheno_util.model.solver = solver
             ### define an oxygen absorption relative to the phenotype carbon source
-            # O2_consumption: EX_cpd00007_e0 <= sum(primary carbon fluxes)    # formerly <= 2 * sum(primary carbon fluxes)
+            # O2_consumption: EX_cpd00007_e0 <= phenotype carbon source    # formerly <= 2 * sum(primary carbon fluxes)
             coef = org_coef.copy()
             coef.update({phenoRXN.reverse_variable: 1})
             pheno_util.create_constraint(Constraint(Zero, lb=0, ub=None, name="EX_cpd00007_e0_limitation"), coef=coef)
+            # print(coef)
 
             ## minimize the influx of all carbonaceous exchanges, mostly non-phenotype compounds, at a fixed biomass growth
             min_growth = float(1)  # arbitrarily assigned minimal growth
-            pheno_util.add_minimal_objective_cons()
+            pheno_util.add_minimal_objective_cons(min_growth)
             phenoRXN.upper_bound = 0
             for ex in pheno_util.carbon_exchange_list():
                 exMet = ex.id.replace("EX_", "").replace("_e0", "")
-                if exMet in phenoRXNs and exMet != metID:
-                    ex.lower_bound = 0
-                    print(f"The new bounds of {exMet} exchange are: {ex.bounds}")
+                if exMet in phenoRXNs and exMet != metID:   ex.lower_bound = 0
+                    # print(f"The new bounds of {exMet} exchange are: {ex.bounds}")
             pheno_util.add_objective(Zero, "min", coef={
                 ex.reverse_variable: 1000 if ex.id != phenoRXN.id else 1
                 for ex in pheno_util.carbon_exchange_list()})
                 # if ex.id != phenoRXN.id})
-            # with open(f"minimize_cInFlux_{phenoRXN.id}.lp", 'w') as out:
-            #     out.write(pheno_util.model.solver.to_lp())
+            # export_lp(pheno_util.model, f"minimize_cInFlux_{phenoRXN.id}")
             sol = pheno_util.model.optimize()
+            if sol.status != "optimal":
+                pheno_util.model.remove_cons_vars(["EX_cpd00007_e0_limitation"])
+                coef.update({phenoRXN.reverse_variable: 5})
+                pheno_util.create_constraint(
+                    Constraint(Zero, lb=0, ub=None, name="EX_cpd00007_e0_limitation"), coef=coef)
+                sol = pheno_util.model.optimize()
             bioFlux_check(pheno_util.model, sol)
             ### limit maximum consumption to the values from the previous minimization
             for ex in pheno_util.carbon_exchange_list():
-                if ex.id != phenoRXN.id:
-                    #### limiting the reverse_variable is more restrictive than the net flux variable
-                    ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
+                #### (limiting the reverse_variable is more restrictive than the net flux variable)
+                if ex.id != phenoRXN.id:    ex.reverse_variable.ub = abs(min(0, sol.fluxes[ex.id]))
 
             ## maximize the phenotype yield with the previously defined growth and constraints
             pheno_util.add_objective(phenoRXN.reverse_variable, "min")
-            # with open(f"maximize_phenoYield_{phenoRXN.id}.lp", 'w') as out:
-            #     out.write(pheno_util.model.solver.to_lp())
+            # export_lp(pheno_util.model, f"maximize_phenoYield_{phenoRXN.id}")
             pheno_sol = pheno_util.model.optimize()
             print(pheno_sol.fluxes[phenoRXN.id])
             bioFlux_check(pheno_util.model, pheno_sol)
@@ -244,7 +250,7 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
                 continue
             phenoRXN.lower_bound = phenoRXN.upper_bound = pheno_influx
 
-            ## optimize excretion of all potential carbon byproducts whose #C's < the phenotype carbon source
+            ## maximize excretion of all potential carbon byproducts whose #C's < phenotype source #C's
             phenotype_source_carbons = FBAHelper.rxn_mets_list(phenoRXN)[0].elements["C"]
             minimum_fluxes = {}
             for carbon_source in pheno_util.carbon_exchange_list(include_unknown=False):
@@ -254,29 +260,27 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
                     # print(carbon_source.reaction, "\t", carbon_source.flux_expression, "\t", minObj)
                     if minObj > phenotype_flux_threshold:
                         minimum_fluxes[carbon_source.id] = minObj
-            # TODO limit the possible excreted compounds to only those that are defined in the fluxes_df
-            excreted_compounds = list([ex for ex in minimum_fluxes.keys() if ex != "EX_cpd00011_e0"])
+            # TODO limit the possible excreted compounds to only those that are defined in the media
+            excreted_compounds = list([exID for exID in minimum_fluxes.keys() if exID != "EX_cpd00011_e0"])
             # minimum_fluxes_df = DataFrame(data=list(minimum_fluxes.values()), index=excreted_compounds, columns=["min_flux"])
             # max_excretion_cpd = minimum_fluxes_df["minimum"].idxmin()
             ### optimize the excretion of the discovered phenotype excreta
             if "excreted" in phenoCPDs:
                 phenoCPDs["excreted"] = [f"EX_{cpd}_e0" for cpd in phenoCPDs["excreted"]]
                 phenoCPDs["excreted"].extend(excreted_compounds)
-            else:
-                phenoCPDs["excreted"] = excreted_compounds
+            else:   phenoCPDs["excreted"] = excreted_compounds
             pheno_excreta = [pheno_util.model.reactions.get_by_id(excreta)
                              for excreta in phenoCPDs["excreted"]]
             pheno_util.add_objective(sum([ex.flux_expression for ex in pheno_excreta]), "max")
-            # with open("maximize_excreta.lp", 'w') as out:
-            #     out.write(pheno_util.model.solver.to_lp())
+            # export_lp(pheno_util.model, "maximize_excreta")
             sol = pheno_util.model.optimize()
             bioFlux_check(pheno_util.model, sol)
             for ex in pheno_excreta:
                 ex.lower_bound = ex.upper_bound = sol.fluxes[ex.id]
 
             ## minimize flux of the total simulation flux through pFBA
-            try:  # TODO discover why some phenotypes are infeasible with pFBA
-                pheno_sol = pfba(pheno_util.model)
+            # TODO discover why some phenotypes are infeasible with pFBA
+            try:    pheno_sol = pfba(pheno_util.model)
                 # pheno_util.add_objective(sum([rxn.flux_expression for rxn in pheno_util.e]), "min")
                 # pheno_sol = pheno_util.model.optimize()
             except Exception as e:
@@ -300,8 +304,7 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
                     comm_members[org_model]["phenotypes"] = {met_name: {"consumed": [strip_comp(metID)]}}
                 if met_name not in comm_members[org_model]["phenotypes"]:
                     comm_members[org_model]["phenotypes"].update({met_name: {"consumed": [strip_comp(metID)]}})
-                else:
-                    comm_members[org_model]["phenotypes"][met_name]["consumed"] = [strip_comp(metID)]
+                else:   comm_members[org_model]["phenotypes"][met_name]["consumed"] = [strip_comp(metID)]
                 met_pheno = content["phenotypes"][met_name]
                 if "excreted" in met_pheno and strip_comp(metID) in met_pheno["excreted"]:
                     comm_members[org_model]["phenotypes"][met_name].update({"excreted": met_pheno})
@@ -314,11 +317,10 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
     for content in models.values():
         for col in content["solutions"]:
             cols[col] = [0]
-            if col not in content["solutions"]:
-                continue
+            if col not in content["solutions"]: continue
             bio_rxns = [x for x in content["solutions"][col].fluxes.index if "bio" in x]
             flux = mean([content["solutions"][col].fluxes[rxn] for rxn in bio_rxns
-                            if content["solutions"][col].fluxes[rxn] != 0])
+                         if content["solutions"][col].fluxes[rxn] != 0])
             cols[col] = [flux]
     ## exchange reactions rows
     looped_cols = cols.copy()
@@ -343,5 +345,5 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
     return fluxes_df, comm_members
 
 
-class CommHelper:
-    pass
+# class CommHelper:
+#     pass

@@ -553,12 +553,10 @@ class GrowthData:
                 for met, conc_dict in content.items():
                     source_conc = conc_dict[row_letter if dimension == "rows" else int(col_number)]
                     print(met, source_conc)
-                    if source_conc == 0 or f"EX_{met}_e0" not in fluxes_df.index:
-                        continue
+                    if source_conc == 0 or f"EX_{met}_e0" not in fluxes_df.index:  continue
                     for pheno, val in fluxes_df.loc[f"EX_{met}_e0"].items():
                         print(pheno, val)
-                        if val < 0:
-                            utilized_phenos[pheno] = source_conc*0.9 / val
+                        if val < 0:  utilized_phenos[pheno] = source_conc*0.9 / val
             total_consumed = sum(list(utilized_phenos.values()))
             print(utilized_phenos)
 
@@ -566,9 +564,9 @@ class GrowthData:
             short_code = trial_name_conversion[row_letter][col_number][0]
             requisite_fluxes[short_code] = {}
             excreta = {}
-            for pheno, absorption in utilized_phenos.items():
+            for pheno, flux_conversion in utilized_phenos.items():
                 species, phenotype = pheno.split("_", 1)
-                fluxes = fluxes_df.loc[:, pheno]*abs(absorption) * abs(absorption/total_consumed)
+                fluxes = fluxes_df.loc[:, pheno]*abs(flux_conversion) * abs(flux_conversion/total_consumed)
                 requisite_fluxes[short_code][f"{species}|{name_signal[species]}"] = fluxes[fluxes != 0]
                 pheno = reverse_strip_comp(pheno)
                 if "excreted" in pheno_info[pheno]:
@@ -578,12 +576,10 @@ class GrowthData:
             participated_species = []
             for pheno, mets in pheno_info.items():
                 species, phenotype = pheno.split("_", 1)
-                if any([species in ph for ph in utilized_phenos]) or species in participated_species:
-                    continue
+                if any([species in ph for ph in utilized_phenos]) or species in participated_species:  continue
                 for met in mets["consumed"]:
                     exMet = f"EX_{met}_e0"
-                    if exMet not in excreta:
-                        continue
+                    if exMet not in excreta:  continue
                     fluxes = abs(excreta[exMet] * 0.99 / fluxes_df.loc[exMet, pheno]) * fluxes_df.loc[:, pheno]
                     requisite_fluxes[short_code][f"{species}|{name_signal[species]}"] = fluxes[fluxes != 0]
                     participated_species.append(species)

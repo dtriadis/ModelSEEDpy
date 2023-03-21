@@ -97,17 +97,13 @@ def parse_primals(primal_values, entity_labels, coefs=None, kcat_vals=None):
         kcat_primal = {}
         for trial, content in primal_values.items():
             for primal, value in content.items():
-                if "bin" not in primal:
-                    continue
+                if "bin" not in primal:  continue
                 name, trial = primal.split("-")
                 number = re.search(r"(\d)", name).group()
                 species, pheno = re.sub(r"(bin\d_)", "", name).split("_")
-                if "stationary" in pheno:
-                    continue
-                if species not in kcat_primal:
-                    kcat_primal[species] = {}
-                if pheno not in kcat_primal[species]:
-                    kcat_primal[species][pheno] = 0
+                if "stationary" in pheno:  continue
+                if species not in kcat_primal:  kcat_primal[species] = {}
+                if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = 0
                 print(name, kcat_primal[species][pheno], value)
                 if value == 0:
                     kcat_primal[species][pheno] += coefs[int(number)-1]*kcat_vals[species][pheno]
@@ -166,8 +162,7 @@ class MSCommPhitting:
                  zero_start: list = None, abs_final_conc: dict = None, graphs: list = None, data_timesteps: dict = None,
                  export_zip_name: str = None, export_parameters: bool = True, requisite_biomass: dict = None,
                  export_lp:str = f'solveKcat.lp', figures_zip_name:str=None, publishing=True, primals_export_path=None):
-        if export_zip_name and os.path.exists(export_zip_name):
-            os.remove(export_zip_name)
+        if export_zip_name and os.path.exists(export_zip_name):  os.remove(export_zip_name)
         kcat_primal = None
         requisite_biomass = requisite_biomass or self.requisite_biomass
         for index, coefs in enumerate(biomass_partition_coefs):
@@ -800,10 +795,10 @@ class MSCommPhitting:
                             _name(signal, '|bio', short_code, timestep, self.names))
                     else:
                         biomass_flux = requisite_biomass[short_code][signal]["bio"]
-                        estimated_biomass = biomass_flux * int(timestep)*self.parameters['data_timestep_hr']
+                        estimated_biomass = biomass_flux #* int(timestep)*self.parameters['data_timestep_hr']
                         self.variables[signal + '|bio'][short_code][timestep] = tupVariable(
                             _name(signal, '|bio', short_code, timestep, self.names),
-                            Bounds(estimated_biomass * 0.7, estimated_biomass * 1.3))
+                            Bounds(estimated_biomass, None))
                         print(short_code, timestep, biomass_flux, estimated_biomass,
                               self.variables[signal + '|bio'][short_code][timestep].bounds)
                     self.variables[signal + '|diffpos'][short_code][timestep] = tupVariable(

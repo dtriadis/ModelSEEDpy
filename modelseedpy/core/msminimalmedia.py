@@ -53,6 +53,8 @@ def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
     if simulated_growth < min_growth*0.9999:
         raise ObjectiveError(f"The assigned minimal_growth of {min_growth} was not maintained during the simulation,"
                              f" where the observed growth value was {simulated_growth}.")
+    if sol.status != "optimal":
+        display(sol)
     return sol_dict
 
 def minimizeFlux_withGrowth(model_util, min_growth, obj):

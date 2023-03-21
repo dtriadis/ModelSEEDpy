@@ -54,6 +54,7 @@ def _x_axis_determination(total_time):
 
 class dFBAPkg(BaseFBAPkg):
     # TODO code conventionally defined dFBA (only exchange kinetics) or make this is a special case of the same package as the Kinetics model
+    pass
 
 
 
