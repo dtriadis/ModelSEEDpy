@@ -62,6 +62,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
             for model in model_s_:
                 members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
                     model, minimization_method, min_growth, environment, interacting, printing)}
+            print(members_media)
             if not com_model:
                 return members_media
     else:
@@ -110,19 +111,23 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(models:iter=None, pairs:dict=None,
+    def kbase_output(all_models:iter=None, pairs:dict=None, models_media:dict=None,
                      environment:Union[dict]=None):  # environment can also be a KBase media object
         from pandas import Series, concat
         series, mets = [], []
-        model_pairs = combinations(models, 2) if not pairs else unique([
+        model_pairs = combinations(all_models, 2) if not pairs else unique([
             {model1, model2} for model1, models in pairs.items() for model2 in models])
+        all_models = all_models or list(chain(*[list(values) for values in pairs.values()]))+list(pairs.keys())
+        models_media = models_media or _get_media(model_s_=all_models)
+        print(f"Examining the {len(model_pairs)} model pairs")
         for models in model_pairs:
             # initiate the KBase output
             modelIDs = [model.id for model in models]
+            print(modelIDs, end="\r")
             community_model = build_from_species_models(models, cobra_model=True)
             kbase_dic = {f"model{index+1}": model.id for index, model in enumerate(models)}
             # define the MRO content
-            mro_values = MSSmetana.mro(models, None, raw_content=True, environment=environment)
+            mro_values = MSSmetana.mro(models, models_media, raw_content=True, environment=environment)
             kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
                               f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                               for models_string, (intersection, memMedia) in mro_values.items()})
@@ -132,7 +137,7 @@ class MSSmetana:
             # determine the optimized growths
             kbase_dic.update({f"model{index+1}_biomass yield": model.slim_optimize()
                               for index, model in enumerate(models)})
-            kbase_dic.update({"comm_biomass_yield": community_model.slim_optimize()})
+            kbase_dic.update({"comm_biomass yield": community_model.slim_optimize()})
 
             # return the content as a pandas Series, which can be easily aggregated with other
             ## community values as a DataFrame row

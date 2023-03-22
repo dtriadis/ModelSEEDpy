@@ -142,7 +142,7 @@ class MSCommPhitting:
         self.community_members = community_members
         if community_members is not None or any([x is None for x in [fluxes_df, growth_df]]):
             (self.experimental_metadata, growth_df, fluxes_df, carbon_conc, self.requisite_biomass,
-             trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
+             self.trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
              ) = GrowthData.process(community_members, base_media, solver, all_phenotypes, data_paths,
                                     species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
                                     species_identities_rows, significant_deviation, extract_zip_path,

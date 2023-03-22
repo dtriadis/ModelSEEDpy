@@ -49,10 +49,8 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     """
     # construct the new model
     names = names or []
-    if standardize:
-        models = MSCompatibility.standardize(org_models, conflicts_file_name='exchanges_conflicts.json', model_names=names)
-    else:
-        models = MSCompatibility.align_exchanges(org_models, 'exchanges_conflicts.json', names)
+    models = MSCompatibility.standardize(
+        org_models, exchanges=standardize,conflicts_file_name='exchanges_conflicts.json', model_names=names)
     biomass_compounds, biomass_indices = [], []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()

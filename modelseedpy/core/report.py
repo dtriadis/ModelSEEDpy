@@ -173,7 +173,7 @@ def build_report(model, fba_sol, fva_sol,
     # Return string of html
     return env.get_template('template.html').render(context)
 
-def steadycom_report(flux_df, exMets_df):
+def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html"):
     total_table = flux_df.iloc[-len(flux_df.columns):]
     total_table.index = [i.replace("zz_", "") for i in total_table.index]
     flux_df = flux_df.iloc[:-len(flux_df.columns)]
@@ -184,9 +184,12 @@ def steadycom_report(flux_df, exMets_df):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    return env.get_template("/".join(["community", "steadycom_output.html"])).render(content)
+    html_report = env.get_template("/".join(["community", "steadycom_report.html"])).render(content)
+    with open(export_html_path, "w") as out:
+        out.writelines(html_report)
+    return html_report
 
-def smetana_report(df, mets):
+def smetana_report(df, mets, export_html_path="smetana_report.html"):
     # refine the DataFrame into a heatmap
     def quantify_MRO(element):
         return float(re.sub("(\s\(.+\))", "", element))
@@ -198,7 +201,7 @@ def smetana_report(df, mets):
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
     heatmap_df = heatmap_df.astype(float)
-
+    heatmap_df["mip"] = heatmap_df["mip"].astype(int)
     # df.to_csv(sep="\t")
 
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
@@ -209,4 +212,7 @@ def smetana_report(df, mets):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    return env.get_template("/".join(["community", "smetana_output.html"])).render(content)
+    html_report = env.get_template("/".join(["community", "smetana_report.html"])).render(content)
+    with open(export_html_path, "w") as out:
+        out.writelines(html_report)
+    return html_report
