@@ -10,6 +10,6 @@ from modelseedpy.community.datastandardization import *
 from modelseedpy.community.mssteadycom import MSSteadyCom
 from modelseedpy.community.mscommphitting import MSCommPhitting
 from modelseedpy.community.mscompatibility import MSCompatibility
-from modelseedpy.community.commhelper import CommHelper, build_from_species_models
+from modelseedpy.community.commhelper import build_from_species_models, phenotypes
 from modelseedpy.community.mskineticsfba import dFBAPkg
 

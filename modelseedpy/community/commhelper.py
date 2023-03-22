@@ -192,19 +192,17 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
                 if past_phenoRXNs:
                     del media[past_phenoRXNs[-1]]
             except Exception as e:
-                print(e)
-                print(f'EX_{metID}_e0 is not in the model {org_model.id}')
+                print(e, f'\nEX_{metID}_e0 is not in the model {org_model.id}')
                 continue
             media.update({phenoRXN.id: 100})
             pheno_util.add_medium(media)
-            # print(phenoRXN.id, media)
+            print(phenoRXN.id)
             pheno_util.model.solver = solver
             ### define an oxygen absorption relative to the phenotype carbon source
             # O2_consumption: EX_cpd00007_e0 <= phenotype carbon source    # formerly <= 2 * sum(primary carbon fluxes)
             coef = org_coef.copy()
             coef.update({phenoRXN.reverse_variable: 1})
             pheno_util.create_constraint(Constraint(Zero, lb=0, ub=None, name="EX_cpd00007_e0_limitation"), coef=coef)
-            # print(coef)
 
             ## minimize the influx of all carbonaceous exchanges, mostly non-phenotype compounds, at a fixed biomass growth
             min_growth = float(1)  # arbitrarily assigned minimal growth
@@ -236,11 +234,11 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
             pheno_util.add_objective(phenoRXN.reverse_variable, "min")
             # export_lp(pheno_util.model, f"maximize_phenoYield_{phenoRXN.id}")
             pheno_sol = pheno_util.model.optimize()
-            print(pheno_sol.fluxes[phenoRXN.id])
             bioFlux_check(pheno_util.model, pheno_sol)
             pheno_influx = pheno_sol.fluxes[phenoRXN.id]
             if pheno_influx >= 0:
                 if not all_phenotypes:
+                    print(f"The phenotype carbon source has a flux of {pheno_sol.fluxes[phenoRXN.id]}.")
                     pprint({rxn: flux for rxn, flux in pheno_sol.fluxes.items() if flux != 0})
                     # TODO gapfill the model in media the non-functioning carbon source
                     raise NoFluxError(f"The (+) net flux of {pheno_influx} for the {phenoRXN.id} phenotype"

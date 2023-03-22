@@ -9,9 +9,9 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 from cobra.medium import minimal_medium
 from collections import Counter
 from deepdiff import DeepDiff  # (old, new)
-from typing import Iterable
+from typing import Iterable, Union
 from pprint import pprint
-from numpy import array
+from numpy import array, unique
 from icecream import ic
 from numpy import mean
 # from math import prod
@@ -110,10 +110,13 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(models, environment=None):
+    def kbase_output(models:iter=None, pairs:dict=None,
+                     environment:Union[dict]=None):  # environment can also be a KBase media object
         from pandas import Series, concat
         series, mets = [], []
-        for models in permutations(models, 2):   # all permutations of 2 models from the total set of models
+        model_pairs = combinations(models, 2) if not pairs else unique([
+            {model1, model2} for model1, models in pairs.items() for model2 in models])
+        for models in model_pairs:
             # initiate the KBase output
             modelIDs = [model.id for model in models]
             community_model = build_from_species_models(models, cobra_model=True)

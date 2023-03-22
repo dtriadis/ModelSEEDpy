@@ -191,13 +191,15 @@ def smetana_report(df, mets):
     def quantify_MRO(element):
         return float(re.sub("(\s\(.+\))", "", element))
 
-    heatmap_df = df.copy(deep=True)
+    heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
     heatmap_df = heatmap_df.astype(float)
+
+    # df.to_csv(sep="\t")
 
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(),

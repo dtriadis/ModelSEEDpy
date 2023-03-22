@@ -552,13 +552,13 @@ class GrowthData:
             for dimension, content in food_gradient.items():
                 for met, conc_dict in content.items():
                     source_conc = conc_dict[row_letter if dimension == "rows" else int(col_number)]
-                    print(met, source_conc)
+                    # print(met, source_conc)
                     if source_conc == 0 or f"EX_{met}_e0" not in fluxes_df.index:  continue
                     for pheno, val in fluxes_df.loc[f"EX_{met}_e0"].items():
-                        print(pheno, val)
+                        # print(pheno, val)
                         if val < 0:  utilized_phenos[pheno] = source_conc*0.9 / val
             total_consumed = sum(list(utilized_phenos.values()))
-            print(utilized_phenos)
+            # print(utilized_phenos)
 
             display(fluxes_df)
             short_code = trial_name_conversion[row_letter][col_number][0]
@@ -583,7 +583,7 @@ class GrowthData:
                     fluxes = abs(excreta[exMet] * 0.99 / fluxes_df.loc[exMet, pheno]) * fluxes_df.loc[:, pheno]
                     requisite_fluxes[short_code][f"{species}|{name_signal[species]}"] = fluxes[fluxes != 0]
                     participated_species.append(species)
-        print(requisite_fluxes)
+        # print(requisite_fluxes)
         return requisite_fluxes
 
     @staticmethod

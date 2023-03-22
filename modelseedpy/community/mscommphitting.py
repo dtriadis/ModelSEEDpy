@@ -104,7 +104,7 @@ def parse_primals(primal_values, entity_labels, coefs=None, kcat_vals=None):
                 if "stationary" in pheno:  continue
                 if species not in kcat_primal:  kcat_primal[species] = {}
                 if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = 0
-                print(name, kcat_primal[species][pheno], value)
+                # print(name, kcat_primal[species][pheno], value)
                 if value == 0:
                     kcat_primal[species][pheno] += coefs[int(number)-1]*kcat_vals[species][pheno]
 
@@ -141,13 +141,14 @@ class MSCommPhitting:
 
         self.community_members = community_members
         if community_members is not None or any([x is None for x in [fluxes_df, growth_df]]):
-            (self.experimental_metadata, self.growth_df, fluxes_df, carbon_conc, self.requisite_biomass,
+            (self.experimental_metadata, growth_df, fluxes_df, carbon_conc, self.requisite_biomass,
              trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
              ) = GrowthData.process(community_members, base_media, solver, all_phenotypes, data_paths,
                                     species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
                                     species_identities_rows, significant_deviation, extract_zip_path,
                                     determine_requisite_biomass)
-        self.fluxes_tup = FBAHelper.parse_df(fluxes_df) ; self.fluxes_df = fluxes_df
+        self.fluxes_tup = FBAHelper.parse_df(fluxes_df)
+        self.fluxes_df = fluxes_df ; self.growth_df = growth_df
         self.default_excreta = [index for index, row in fluxes_df.iterrows() if any(row > 1)]
 
         self.parameters, self.variables, self.constraints = {}, {}, {}
@@ -486,11 +487,11 @@ class MSCommPhitting:
         self.parameters.update({
             "timestep_hr": self.parameters['data_timestep_hr'],
             "cvct": 0.01, "cvcf": 0.01,
-            "bcv": 0.1,
-            "cvmin": 0,
+            "bcv": 0.01,
+            "cvmin": 0.01,
             "kcat": 0.33,
             'diffpos': 1, 'diffneg': 1,  # coefficients that weight difference between experimental and predicted biomass
-            "stationary": 0.075,  # the penalty coefficient for the stationary phenotype
+            "stationary": 10,  # the penalty coefficient for the stationary phenotype
         })
         self.parameters.update(parameters)
         # define the appropriate kcat values
@@ -569,7 +570,6 @@ class MSCommPhitting:
                             conc_var = conc_var._replace(bounds=Bounds(final_bound, final_bound))
                     self.variables[concID][short_code][timestep] = conc_var
                     variables.append(self.variables[concID][short_code][timestep])
-                    # print(variables[-1])
         for pheno in self.phenotypes:
             self.constraints['dbc_' + pheno] = {short_code: {} for short_code in unique_short_codes}
 
@@ -786,7 +786,6 @@ class MSCommPhitting:
                             "operation": "Mul"}]
                         # else:
                         #     biomass_term = [b_values[pheno][short_code][timestep]-b_values[pheno][short_code][next_timestep]]
-                        # print(biomass_term)
                         self.constraints['dbc_' + pheno][short_code][timestep].expr["elements"].extend(biomass_term)
                         constraints.append(self.constraints['dbc_' + pheno][short_code][timestep])
 
@@ -799,8 +798,6 @@ class MSCommPhitting:
                         self.variables[signal + '|bio'][short_code][timestep] = tupVariable(
                             _name(signal, '|bio', short_code, timestep, self.names),
                             Bounds(estimated_biomass, None))
-                        print(short_code, timestep, biomass_flux, estimated_biomass,
-                              self.variables[signal + '|bio'][short_code][timestep].bounds)
                     self.variables[signal + '|diffpos'][short_code][timestep] = tupVariable(
                         _name(signal, '|diffpos', short_code, timestep, self.names), Bounds(0, 100))
                     self.variables[signal + '|diffneg'][short_code][timestep] = tupVariable(
@@ -859,11 +856,10 @@ class MSCommPhitting:
 
         # construct the problem
         self.problem = OptlangHelper.define_model("CommPhitting model", variables, constraints, objective, True)
-        print("Solver:", type(self.problem))
         time_5 = process_time()
-        print(f'Done with loading the variables, constraints, and objective: {(time_5 - time_4) / 60} min')
+        print(f'Done with constructing the {type(self.problem)} model: {(time_5 - time_4) / 60} min')
 
-        # print contents
+        # export contents
         if export_parameters:
             self.zipped_output.append('parameters.csv')
             DataFrame(data=list(self.parameters.values()), index=list(self.parameters.keys()),
@@ -906,7 +902,6 @@ class MSCommPhitting:
                     warnings.warn(f"The conversion factor {value} optimized to a bound, which may be "
                                   f"indicative of an error, such as improper kinetic rates.")
             else:
-                # print(variable, value)
                 basename, short_code, timestep = variable.split('-')
                 time_hr = int(timestep) * self.parameters['data_timestep_hr']
                 self.values[short_code] = self.values.get(short_code, {})
