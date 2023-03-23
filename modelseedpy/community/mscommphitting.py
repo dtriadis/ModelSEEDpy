@@ -129,33 +129,36 @@ biomass_partition_coefs = [_partition_coefs(100, 10), _partition_coefs(4, 2), _p
 
 class MSCommPhitting:
 
-    def __init__(self, msdb_path, community_members: dict=None, fluxes_df=None, growth_df=None, carbon_conc=None,
+    def __init__(self, msdb_path, community_members: dict=None, fluxes_df=None, data_df=None, carbon_conc=None,
                  media_conc=None, experimental_metadata=None, base_media=None, solver: str = 'glpk', all_phenotypes=True,
                  data_paths: dict = None, species_abundances: str = None, ignore_trials: Union[dict, list] = None,
                  ignore_timesteps: list = None, species_identities_rows=None, significant_deviation: float = 2,
-                 extract_zip_path: str = None, determine_requisite_biomass:bool = True):
+                 extract_zip_path: str = None, determine_requisite_biomass:bool = True, consumed_mets:iter=None):
+        self.msdb = from_local(msdb_path) ; self.msdb_path = msdb_path
         self.solver = solver ; self.all_phenotypes = all_phenotypes ; self.data_paths = data_paths
         self.species_abundances = species_abundances ; self.ignore_trials = ignore_trials
         self.ignore_timesteps = ignore_timesteps ; self.species_identities_rows = species_identities_rows
         self.significant_deviation = significant_deviation ; self.extract_zip_path = extract_zip_path
 
         self.community_members = community_members
-        if community_members is not None or any([x is None for x in [fluxes_df, growth_df]]):
-            (self.experimental_metadata, growth_df, fluxes_df, carbon_conc, self.requisite_biomass,
+        self.consumed_mets = consumed_mets or [met for content in community_members.values()
+                                               for met in content["phenotypes"]]
+        if community_members is not None or any([x is None for x in [fluxes_df, data_df]]):
+            (self.experimental_metadata, data_df, fluxes_df, carbon_conc, self.requisite_biomass,
              self.trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
              ) = GrowthData.process(community_members, base_media, solver, all_phenotypes, data_paths,
                                     species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
                                     species_identities_rows, significant_deviation, extract_zip_path,
                                     determine_requisite_biomass)
+            # self.consumed_mets = [self.msdb.compounds.get_by_any(met).id
+            #                       for content in community_members.values() for met in content["phenotypes"]]
         self.fluxes_tup = FBAHelper.parse_df(fluxes_df)
-        self.fluxes_df = fluxes_df ; self.growth_df = growth_df
+        self.fluxes_df = fluxes_df ; self.data_df = data_df
         self.default_excreta = [index for index, row in fluxes_df.iterrows() if any(row > 1)]
-
         self.parameters, self.variables, self.constraints = {}, {}, {}
         self.zipped_output, self.plots, self.names = [], [], []
         self.experimental_metadata = experimental_metadata
         self.carbon_conc = carbon_conc; self.media_conc = media_conc
-        self.msdb = from_local(msdb_path) ; self.msdb_path = msdb_path
 
     #################### FITTING PHASE METHODS ####################
 
@@ -168,21 +171,19 @@ class MSCommPhitting:
         requisite_biomass = requisite_biomass or self.requisite_biomass
         for index, coefs in enumerate(biomass_partition_coefs):
             # solve for growth rate constants with the previously solved biomasses
-            newSim = MSCommPhitting(self.msdb_path, None, self.fluxes_df, self.growth_df, self.carbon_conc,
+            newSim = MSCommPhitting(self.msdb_path, None, self.fluxes_df, self.data_df, self.carbon_conc,
                                     self.media_conc, self.experimental_metadata, None, self.solver, self.all_phenotypes,
                                     self.data_paths, self.species_abundances, self.ignore_trials, self.ignore_timesteps,
-                                    self.species_identities_rows, self.significant_deviation, self.extract_zip_path)
+                                    self.species_identities_rows, self.significant_deviation, self.extract_zip_path,
+                                    True, self.consumed_mets)
             newSim.define_problem(parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
                                   data_timesteps, export_zip_name, export_parameters, export_lp,
                                   kcat_primal, coefs, requisite_biomass)
-            time1 = process_time()
             newSim.compute(graphs, export_zip_name, figures_zip_name, publishing,
                            primals_export_path or re.sub(r"(.lp)", ".json", export_lp))
             kcat_primal = parse_primals(newSim.values, "kcat", coefs, newSim.parameters["kcat"])
             pprint(kcat_primal)
-            time2 = process_time()
-            print(f"Done simulating with the coefficients for biomass partitions: {index}"
-                  f"\t{(time2-time1)/60} minutes")
+            print(f"Interation {index+1} is complete\n")
         return {k: val for k, val in newSim.values.items() if "kcat" in k}
 
     def fit(self, parameters:dict=None, mets_to_track: list = None, rel_final_conc:dict=None, zero_start:list=None,
@@ -466,7 +467,7 @@ class MSCommPhitting:
                        data_timesteps=None, export_zip_name: str=None, export_parameters: bool=True, export_lp: str='CommPhitting.lp',
                        primal_values=None, biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False):
         # parse the growth data
-        growth_tup = FBAHelper.parse_df(self.growth_df, False)
+        growth_tup = FBAHelper.parse_df(self.data_df, False)
         self.phenotypes = list(self.fluxes_tup.columns)
         self.phenotypes.extend([signal_species(signal)+"_stationary" for signal in growth_tup.columns if (
                 ":" in signal and "OD" not in signal)])
@@ -480,7 +481,6 @@ class MSCommPhitting:
 
         # define default values
         # TODO render bcv and cvmin dependent upon temperature, and possibly trained on Carlson's data
-        # TODO find the lowest cvmin and bcv that fit the experimental data
         parameters, data_timesteps = parameters or {}, data_timesteps or {}
         self.parameters["data_timestep_hr"] = np.mean(np.diff(np.array(list(
             self.times.values())).flatten()))/hour if not hasattr(self, "data_timestep_hr") else self.data_timestep_hr
@@ -504,16 +504,17 @@ class MSCommPhitting:
                     if pheno not in primal_values[species]:
                         continue
                     self.parameters["kcat"][species][pheno] = primal_values[species][pheno]
-        default_carbon_sources = ["cpd00076", "cpd00179", "cpd00027"]  # sucrose, maltose, glucose
-        self.rel_final_conc = rel_final_conc or {c:1 for c in default_carbon_sources}
+        # define the metabolites that are tracked, exchanged, and not available in the media
+        self.zero_start = zero_start or [met for met in self.consumed_mets
+                                         if met not in self.carbon_conc or self.carbon_conc[met] == 0]
+        self.rel_final_conc = rel_final_conc or {
+            met:0.1 for met, concs in self.carbon_conc.items() if any(
+                [concs[short_code] > 0 for short_code in self.data_df.index.unique()]
+            ) and met not in self.zero_start}
         self.abs_final_conc = abs_final_conc or {}
-        zero_start = zero_start or self.default_excreta
-        if mets_to_track:
-            self.mets_to_track = mets_to_track
-        elif not isinstance(rel_final_conc, dict):
-            self.mets_to_track = self.fluxes_tup.index
-        else:
-            self.mets_to_track = list(self.rel_final_conc.keys()) + zero_start
+        if mets_to_track:  self.mets_to_track = mets_to_track
+        elif not isinstance(rel_final_conc, dict):  self.mets_to_track = self.fluxes_tup.index
+        else:  self.mets_to_track = list(self.rel_final_conc.keys()) + self.zero_start
 
         timesteps_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
         if data_timesteps:  # {short_code:[times]}
@@ -526,12 +527,10 @@ class MSCommPhitting:
         constraints, variables, simulated_mets = [], [], []
         time_1 = process_time()
         for exID in self.fluxes_tup.index:
-            if exID == "bio":
-                continue
+            if exID == "bio":  continue
             met_id = re.search(r"(cpd\d{5})", exID).group()
             met = self.msdb.compounds.get_by_id(met_id)
-            if "C" not in met.elements:
-                continue
+            if "C" not in met.elements:  continue
             concID = f"c_{met_id}_e0"
             simulated_mets.append(met_id)
             self.variables[concID] = {}; self.constraints['dcc_' + met_id] = {}
@@ -549,10 +548,8 @@ class MSCommPhitting:
                     ## constrain initial time concentrations to the media or a large default
                     if timestep == timesteps[0]:
                         initial_val = None
-                        if met_id in self.media_conc:
-                            initial_val = self.media_conc[met_id]
-                        if met_id in zero_start:
-                            initial_val = 0
+                        if met_id in self.media_conc:  initial_val = self.media_conc[met_id]
+                        if met_id in self.zero_start:  initial_val = 0
                         if dict_keys_exists(self.carbon_conc, met_id, short_code):
                             initial_val = self.carbon_conc[met_id][short_code]
                         if initial_val is not None:
@@ -566,7 +563,7 @@ class MSCommPhitting:
                         if met_id in self.abs_final_conc:  # this intentionally overwrites rel_final_conc
                             final_bound = self.abs_final_conc[met_id]
                         conc_var = conc_var._replace(bounds=Bounds(0, final_bound))
-                        if met_id in zero_start:
+                        if met_id in self.zero_start:
                             conc_var = conc_var._replace(bounds=Bounds(final_bound, final_bound))
                     self.variables[concID][short_code][timestep] = conc_var
                     variables.append(self.variables[concID][short_code][timestep])
@@ -757,8 +754,7 @@ class MSCommPhitting:
                                     -1, self.variables["cvf_" + pheno][short_code][timestep].name]})
                                 to_sum.append(self.variables["cvt_" + pheno][short_code][timestep].name)
                     for pheno in species_phenos[species]:
-                        if "OD" in signal:
-                            continue
+                        if "OD" in signal:  continue
                         # print(pheno, timestep, b_values[pheno][short_code][timestep], b_values[pheno][short_code][next_timestep])
                         if "stationary" in pheno:
                             # b_{phenotype} - sum_k^K(es_k*cvf) + sum_k^K(pheno_bool*cvt) = b+1_{phenotype}
@@ -894,8 +890,7 @@ class MSCommPhitting:
         if all(np.array(list(self.problem.primal_values.values())) == 0):
             raise NoFluxError("The simulation lacks any flux.")
         for variable, value in self.problem.primal_values.items():
-            if "v_" in variable:
-                self.values[variable] = value
+            if "v_" in variable:  self.values[variable] = value
             elif 'conversion' in variable or re.search(r"(bin\d)", variable):
                 self.values[short_code].update({variable: value})
                 if value in self.conversion_bounds:
@@ -911,9 +906,8 @@ class MSCommPhitting:
         # export the processed primal values for graphing
         with open(primals_export_path, 'w') as out:
             json.dump(self.values, out, indent=3)
-        if not export_zip_name:
-            if hasattr(self, 'zip_name'):
-                export_zip_name = self.zip_name
+        if not export_zip_name and hasattr(self, 'zip_name'):
+            export_zip_name = self.zip_name
         if export_zip_name:
             with ZipFile(export_zip_name, 'a', compression=ZIP_LZMA) as zp:
                 zp.write(primals_export_path)
@@ -950,12 +944,9 @@ class MSCommPhitting:
             next_dimension = {}
             for organism in self.fluxes_tup.columns:
                 species, pheno = organism.split("_")
-                if pheno in exclude:
-                    continue
-                if species in next_dimension:
-                    next_dimension[species].append(pheno)
-                else:
-                    next_dimension[species] = [pheno]
+                if pheno in exclude:  continue
+                if species in next_dimension:  next_dimension[species].append(pheno)
+                else:  next_dimension[species] = [pheno]
         if isnumber(param):
             return MSCommPhitting.assign_values(param, var, next_dimension)
         elif isnumber(param[var]):
@@ -981,11 +972,9 @@ class MSCommPhitting:
         >> lighten_color((.3,.55,.1), 0.5)
         """
         import colorsys
-        try:
-            import matplotlib.colors as mc
-            c = mc.cnames[color]
-        except:
-            c = color
+        import matplotlib.colors as mc
+        try:  c = mc.cnames[color]
+        except:  c = color
         c = colorsys.rgb_to_hls(*mc.to_rgb(c))
         return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
 
@@ -994,10 +983,8 @@ class MSCommPhitting:
         labels.append(label or basename.split('-')[-1])
         xs = xs if xs is not None else list(map(float, self.values[trial][basename].keys()))
         ys = ys if ys is not None else list(map(float, self.values[trial][basename].values()))
-        if scatter:
-            ax.scatter(xs, ys, s=10, label=labels[-1], color=color or None)
-        else:
-            ax.plot(xs, ys, label=labels[-1], linestyle=linestyle, color=color or None)
+        if scatter:  ax.scatter(xs, ys, s=10, label=labels[-1], color=color or None)
+        else:  ax.plot(xs, ys, label=labels[-1], linestyle=linestyle, color=color or None)
         ax.set_xticks(list(map(int, xs))[::x_axis_split])
         return ax, labels
 

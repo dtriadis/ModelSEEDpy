@@ -41,20 +41,16 @@ class CommunityModelSpecies:
                  index=None         # the index of the species
                  ):
         self.community, self.biomass_cpd = community, biomass_cpd
-        print(self.biomass_cpd.compartment)
         self.index = int(self.biomass_cpd.compartment[1:]) # if index is None else index
         self.abundance = 0
+        print(community, biomass_cpd)
         if self.biomass_cpd in self.community.primary_biomass.metabolites:
             self.abundance = abs(self.community.primary_biomass.metabolites[self.biomass_cpd])
-        if name:
-            self.id = name
-        elif names and self.index < len(names):
-            self.id = names[self.index-1]
-        else:
-            if "species_name" in self.biomass_cpd.annotation:
-                self.id = self.biomass_cpd.annotation["species_name"]
-            else:
-                self.id = "Species"+str(self.index)
+        if name:  self.id = name
+        elif names and self.index < len(names):  self.id = names[self.index-1]
+        elif "species_name" in self.biomass_cpd.annotation:
+            self.id = self.biomass_cpd.annotation["species_name"]
+        else:  self.id = "Species"+str(self.index)
 
         logger.info("Making atp hydrolysis reaction for species: "+self.id)
         atp_rxn = self.community.util.add_atp_hydrolysis("c"+str(self.index))
@@ -136,8 +132,7 @@ class MSCommunity:
             print(self.biomass_cpd)
             if self.biomass_cpd.compartment == "c0":
                 for reaction in self.util.model.reactions:
-                    if self.biomass_cpd not in reaction.metabolites:
-                        continue
+                    if self.biomass_cpd not in reaction.metabolites:  continue
                     print(reaction)
                     if reaction.metabolites[self.biomass_cpd] == 1 and len(reaction.metabolites) > 1:
                         if self.primary_biomass:
@@ -152,9 +147,8 @@ class MSCommunity:
                 other_biomass_cpds.append(self.biomass_cpd)
         for biomass_cpd in other_biomass_cpds:
             print(biomass_cpd)
-            self.species.append(CommunityModelSpecies(self, biomass_cpd, names))
-        if abundances:
-            self.set_abundance(abundances)
+            self.species.append(CommunityModelSpecies(community=self, biomass_cpd=biomass_cpd, names=names))
+        if abundances:  self.set_abundance(abundances)
 
     #Manipulation functions
     def set_abundance(self, abundances):

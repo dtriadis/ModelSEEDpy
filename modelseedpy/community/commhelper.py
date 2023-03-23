@@ -49,8 +49,8 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     """
     # construct the new model
     names = names or []
-    models = MSCompatibility.standardize(
-        org_models, exchanges=standardize,conflicts_file_name='exchanges_conflicts.json', model_names=names)
+    models = org_models if not standardize else MSCompatibility.standardize(
+        org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json', model_names=names)
     biomass_compounds, biomass_indices = [], []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
@@ -69,7 +69,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                 met.compartment = met.compartment[0] + str(index)
                 if "_" in met.id:
                     # print(met.id)
-                    met.id = met.id.split("_")[:-1] + met.compartment
+                    met.id = "_".join([met.id.split("_")[:-1], met.compartment])
             else:
                 name, compartment, out_index = output
                 index = 0 if compartment == "e" else model_index

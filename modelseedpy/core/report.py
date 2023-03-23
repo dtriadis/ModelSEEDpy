@@ -1,5 +1,5 @@
 # from django import shortcuts
-import numpy as np
+from numpy import nan, isnan, unique
 import jinja2
 import os, re, math, json
 
@@ -28,7 +28,7 @@ def round_float_str(s, precision=6):
 
 # Helper functions for formating
 missing_format = lambda x: x if x else '-'
-nan_format = lambda x: '-' if np.isnan(x) else x
+nan_format = lambda x: '-' if isnan(x) else x
 round_format = lambda x: nan_format(round(x, 6))
 equation_format = lambda rxn: round_float_str(rxn.build_reaction_string(use_metabolite_names=True))
 
@@ -74,7 +74,7 @@ def reaction_formater(model, fba_sol, fva_sol, ex):
 # Helper function for formatting model summary
 def model_summary(model):
     def rxn_name(rxnID):
-        if rxnID is np.nan:
+        if rxnID is nan:
             return '-'
 
         try:
@@ -196,7 +196,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
 
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
-    heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
+    heatmap_df.index = unique([" ++ ".join(index) for index in heatmap_df_index])
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
