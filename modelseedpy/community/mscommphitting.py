@@ -124,7 +124,7 @@ def _partition_coefs(initial_val, divisor):
     return (initial_val, initial_val/divisor, initial_val/divisor**2, initial_val/divisor**3, initial_val/divisor**4)
 
 
-biomass_partition_coefs = [_partition_coefs(100, 10), _partition_coefs(4, 2), _partition_coefs(1, 2)]
+biomass_partition_coefs = [_partition_coefs(10, 10), _partition_coefs(2, 2), _partition_coefs(1, 3)]
 
 
 class MSCommPhitting:

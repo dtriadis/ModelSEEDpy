@@ -134,15 +134,16 @@ def essential_genes_formatter(model, essential_genes):
                         'essential': 'Yes' if gene in essential_genes else 'No'}
                       for gene in model.genes])
 
-# Call this function to build the report
-# TODO The arguments that are specific for executing FBA models can be removed, to leave only rendering-specific arguments and logic
-def build_report(model, fba_sol, fva_sol,
-                 essential_genes, model_id, media_id):
+
+######################## REPORT FUNCTIONS ########################
+
+def fba_report(model, fba_sol, fva_sol, essential_genes, model_id,
+               media_id, export_html_path="steadycom_report.html"):
     """Build output report and return string of html."""
 
     atp_summary, is_atp_summary = atp_summary_formatter(model)
     # these key-value pairs are the variables-values that are substituted into the HTML report
-    context = {'summary':     model_summary(model),
+    content = {'summary':     model_summary(model),
                'atp_summary': {'is_atp_summary': is_atp_summary, 'summary': atp_summary},
                'overview':    [{'name': 'Model',                    'value': model_id},
                                {'name': 'Media',                    'value': media_id},
@@ -166,12 +167,14 @@ def build_report(model, fba_sol, fva_sol,
                     'help': 'Select simulate all single KO to produce results.'
                 }
            }
-
+    package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(os.path.dirname(os.path.realpath(__file__))),
+        loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    # Return string of html
-    return env.get_template('template.html').render(context)
+    html_report = env.get_template("/".join(["core", "fba_template.html"])).render(content)
+    with open(export_html_path, "w") as out:
+        out.writelines(html_report)
+    return html_report
 
 def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html"):
     total_table = flux_df.iloc[-len(flux_df.columns):]
@@ -184,7 +187,7 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template("/".join(["community", "steadycom_report.html"])).render(content)
+    html_report = env.get_template("/".join(["community", "steadycom_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -212,7 +215,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(package_dir),
         autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template("/".join(["community", "smetana_report.html"])).render(content)
+    html_report = env.get_template("/".join(["community", "smetana_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report

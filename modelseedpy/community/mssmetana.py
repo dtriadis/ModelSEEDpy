@@ -299,7 +299,7 @@ class MSSmetana:
             interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
-        print(interact_diff)
+        # print(interact_diff)
         if "dictionary_item_removed" in interact_diff:
             return interact_diff["dictionary_item_removed"], len(interact_diff["dictionary_item_removed"])
         return None, 0
