@@ -505,6 +505,7 @@ class MSCommPhitting:
                         continue
                     self.parameters["kcat"][species][pheno] = primal_values[species][pheno]
         # define the metabolites that are tracked, exchanged, and not available in the media
+        # TODO the default zero_start logic appears to be incorrect
         self.zero_start = zero_start or [met for met in self.consumed_mets
                                          if met not in self.carbon_conc or self.carbon_conc[met] == 0]
         self.rel_final_conc = rel_final_conc or {
@@ -515,6 +516,7 @@ class MSCommPhitting:
         if mets_to_track:  self.mets_to_track = mets_to_track
         elif not isinstance(rel_final_conc, dict):  self.mets_to_track = self.fluxes_tup.index
         else:  self.mets_to_track = list(self.rel_final_conc.keys()) + self.zero_start
+        print(self.mets_to_track)
 
         timesteps_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
         if data_timesteps:  # {short_code:[times]}
@@ -1046,6 +1048,7 @@ class MSCommPhitting:
             if 'species' in graph and graph['species'] == '*':   # TODO - a species-resolved option must be developed for the paper figure
                 graph['species'] = self.species_list
             elif content == "c_" and 'mets' not in graph:
+                print(self.mets_to_track)
                 graph["mets"] = self.mets_to_track
             elif not any(["species" in graph, "mets" in graph]):
                 raise ValueError(f"The specified graph {graph} must define species for which data will be plotted.")
