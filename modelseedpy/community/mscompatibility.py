@@ -89,6 +89,7 @@ class MSCompatibility:
                         if all(['cpd' not in met.id, results.new_met_id not in ex_mets, results.unknown_met_id]):
                             unknown_mets.append(met.id)
                             logger.warning(f'CodeError: The metabolite {met.id} | {met.name} was not corrected to a ModelSEED metabolite.')
+
                         changed_rxns.extend(results.changed_rxns) ; changed_mets.extend(results.changed_mets)
                     ex_rxn.id = new_rxn_id
             else:
@@ -210,8 +211,6 @@ class MSCompatibility:
                         export_met_conflicts[met_id][key] = val
                     else:
                         export_met_conflicts[met_id][key.replace('_met','_formula')] = val.formula
-                        
-            model_names = model_names or [model.id for model in models]
             MSCompatibility._export(new_models, export_met_conflicts, conflicts_file_name, model_names, export_directory)
 
         print(f'\n\n{len(changed_rxns)} exchange reactions were substituted and '
@@ -265,9 +264,7 @@ class MSCompatibility:
                 path = os.path.join(export_directory,f'{model_names[index]}.json')
                 file_paths.append(os.path.relpath(path, export_directory))
                 save_json_model(model, path)
-        with ZipFile(
-            "_".join(model_names[:4]) + ".zip", "w", compression=ZIP_LZMA
-        ) as zip:
+        with ZipFile("_".join(model_names[:4]) + ".zip", "w", compression=ZIP_LZMA) as zip:
             for file in file_paths:
                 zip.write(file)
                 os.remove(file)

@@ -886,6 +886,11 @@ class MSCommPhitting:
         time1 = process_time()
         self.values = {}
         solution = self.problem.optimize()
+
+        # TODO normalize the objective value by the number of timesteps as a quantitative metric of the fit
+        ## and then approximate a threshold of good fits. Bad fits can trigger a black box optimization
+        ## adjust the parameters and iteratively improve the fit until the metric reaches the ideal range.
+
         # categorize the primal values by trial and time
         if "optimal" not in solution:
             raise FeasibilityError(f'The solution is sub-optimal, with a(n) {solution} status.')

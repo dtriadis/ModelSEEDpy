@@ -161,7 +161,7 @@ def fba_report(model, fba_sol, fva_sol, essential_genes, model_id,
                    'reactions': reaction_formater(model, fba_sol, fva_sol, ex=True),
                    'help': 'Select FVA setting and rerun to produce results.'
                 },
-                'essential_genes_tab': {
+               'essential_genes_tab': {
                     'is_essential_genes': len(essential_genes) > 0,
                     'essential_genes': essential_genes_formatter(model, essential_genes),
                     'help': 'Select simulate all single KO to produce results.'
@@ -197,16 +197,17 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     def quantify_MRO(element):
         return float(re.sub("(\s\(.+\))", "", element))
 
+    # construct the Heatmap
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
-    heatmap_df.index = unique([" ++ ".join(index) for index in heatmap_df_index])
+    heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
+    heatmap_df.index.name = "model1 ++ model2"
+    heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
     heatmap_df = heatmap_df.astype(float)
     heatmap_df["mip"] = heatmap_df["mip"].astype(int)
-    # df.to_csv(sep="\t")
-
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(),
                "heatmap": heatmap_df.style.background_gradient().to_html(),

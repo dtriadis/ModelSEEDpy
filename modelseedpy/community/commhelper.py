@@ -50,7 +50,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # construct the new model
     names = names or []
     models = org_models if not standardize else MSCompatibility.standardize(
-        org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json', model_names=names)
+        org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
     biomass_compounds, biomass_indices = [], []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
@@ -143,7 +143,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # update model components
     newutl = MSModelUtil(newmodel)
     msid_cobraid_hash = newutl.msid_hash()
-    print(msid_cobraid_hash["cpd11416"])
+    # print(msid_cobraid_hash["cpd11416"])
     newutl.add_objective(comm_biorxn.flux_expression)
     # newmodel.remove_reactions(newmodel.sinks)
     newmodel.add_boundary(comm_biomass, "sink")

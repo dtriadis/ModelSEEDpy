@@ -11,9 +11,11 @@ from collections import Counter
 from deepdiff import DeepDiff  # (old, new)
 from typing import Iterable, Union
 from pprint import pprint
-from numpy import array, unique
+from numpy import array, unique, ndarray
+from numpy.random import shuffle
 from icecream import ic
 from numpy import mean
+import re
 # from math import prod
 
 # silence deprecation warnings from DeepDiff parsing the
@@ -42,29 +44,28 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
 def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, environment=None,
                interacting=True, printing=False, minimization_method="minFlux"):
     # ic(media, com_model, model_s_)
-    if not com_model and not model_s_:
+    if com_model is None and model_s_ is None:
         raise TypeError("Either the com_model or model_s_ arguments must be parameterized.")
-    if media:
-        if model_s_ and not isinstance(model_s_, (list,set,tuple)):
+    if media is not None:
+        if model_s_ is not None and not isinstance(model_s_, (list,set,tuple)):
             return media["members"][model_s_.id]["media"]
-        elif com_model:
+        elif com_model is not None:
             return media["community_media"]
         return media
     # model_s_ is either a singular model or a list of models
-    if com_model:
+    if com_model is not None:
         com_media = MSMinimalMedia.determine_min_media(
             com_model, minimization_method, min_growth, None, interacting, 5, printing)
-    if model_s_:
-        if not isinstance(model_s_, (list,set,tuple)):
+    if model_s_ is not None:
+        if not isinstance(model_s_, (list,set,tuple,ndarray)):
             return MSMinimalMedia.determine_min_media(model_s_, minimization_method, min_growth, interacting, printing)
-        if isinstance(model_s_, (list,set,tuple)):
-            members_media = {}
-            for model in model_s_:
-                members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
-                    model, minimization_method, min_growth, environment, interacting, printing)}
-            print(members_media)
-            if not com_model:
-                return members_media
+        members_media = {}
+        for model in model_s_:
+            members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
+                model, minimization_method, min_growth, environment, interacting, printing)}
+        # print(members_media)
+        if com_model is None:
+            return members_media
     else:
         return com_media
     return {"community_media":com_media, "members":members_media}
@@ -111,21 +112,28 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(all_models:iter=None, pairs:dict=None, models_media:dict=None,
-                     environment:Union[dict]=None):  # environment can also be a KBase media object
+    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+                     see_media:bool=True, environment:Union[dict]=None):  # environment can also be a KBase media object
         from pandas import Series, concat
+        if pairs:
+            model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
+            all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
+        elif all_models is not None:  model_pairs = list(combinations(all_models, 2))
+        else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
+        if pair_limit is not None:
+            model_pairs = list(model_pairs)[:pair_limit]
+            shuffle(model_pairs)
+        models_media = mem_media or _get_media(model_s_=all_models)
+        if see_media and not mem_media:
+            print(models_media)
+        print(f"Examining the {len(list(model_pairs))} model pairs")
         series, mets = [], []
-        model_pairs = combinations(all_models, 2) if not pairs else unique([
-            {model1, model2} for model1, models in pairs.items() for model2 in models])
-        all_models = all_models or list(chain(*[list(values) for values in pairs.values()]))+list(pairs.keys())
-        models_media = models_media or _get_media(model_s_=all_models)
-        print(f"Examining the {len(model_pairs)} model pairs")
         for models in model_pairs:
             # initiate the KBase output
             modelIDs = [model.id for model in models]
             print(modelIDs, end="\r")
             community_model = build_from_species_models(models, cobra_model=True)
-            kbase_dic = {f"model{index+1}": model.id for index, model in enumerate(models)}
+            kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
             # define the MRO content
             mro_values = MSSmetana.mro(models, models_media, raw_content=True, environment=environment)
             kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
@@ -142,7 +150,8 @@ class MSSmetana:
             # return the content as a pandas Series, which can be easily aggregated with other
             ## community values as a DataFrame row
             series.append(Series(kbase_dic))
-            mets.append({"mip_mets":mip_values[0], "mro_mets":list(mro_values.values())})
+            mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]],
+                         "mro_mets": list(mro_values.values())})
         return concat(series, axis=1).T, mets
 
     def mro_score(self):
