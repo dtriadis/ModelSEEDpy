@@ -126,12 +126,14 @@ class MSSmetana:
         models_media = mem_media or _get_media(model_s_=all_models)
         if see_media and not mem_media:
             print(models_media)
-        print(f"Examining the {len(list(model_pairs))} model pairs")
+        numPairs = len(list(model_pairs))
+        print(f"Examining the {numPairs} model pairs")
         series, mets = [], []
+        count = 0
         for models in model_pairs:
             # initiate the KBase output
             modelIDs = [model.id for model in models]
-            print(modelIDs, end="\r")
+            print(modelIDs, f"\t{count}/{numPairs}", end="\r")
             community_model = build_from_species_models(models, cobra_model=True)
             kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
             # define the MRO content
@@ -145,7 +147,7 @@ class MSSmetana:
             # determine the optimized growths
             kbase_dic.update({f"model{index+1}_biomass yield": model.slim_optimize()
                               for index, model in enumerate(models)})
-            kbase_dic.update({"comm_biomass yield": community_model.slim_optimize()})
+            # kbase_dic.update({"comm_biomass yield": community_model.slim_optimize()})
 
             # return the content as a pandas Series, which can be easily aggregated with other
             ## community values as a DataFrame row

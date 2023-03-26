@@ -18,6 +18,7 @@ from deepdiff import DeepDiff
 from pandas import DataFrame
 from itertools import chain
 from pprint import pprint
+from h5py import File
 from icecream import ic
 import numpy as np
 import cobra.io
@@ -45,8 +46,7 @@ def dict_keys_exists(dic, *keys):
 
 def find_dic_number(dic):
     for k, v in dic.items():
-        if isnumber(v):
-            return v
+        if isnumber(v):  return v
         num = find_dic_number(dic[k])
     return num
 
@@ -92,8 +92,8 @@ def _michaelis_menten(conc, vmax, km):
     return (conc*vmax)/(km+conc)
 
 # parse primal values for use in the optimization loops
-def parse_primals(primal_values, entity_labels, coefs=None, kcat_vals=None):
-    if entity_labels == "kcat":
+def parse_primals(primal_values, entity_labels=None, coefs=None, kcat_vals=None):
+    if kcat_vals:
         kcat_primal = {}
         for trial, content in primal_values.items():
             for primal, value in content.items():
@@ -104,10 +104,11 @@ def parse_primals(primal_values, entity_labels, coefs=None, kcat_vals=None):
                 if "stationary" in pheno:  continue
                 if species not in kcat_primal:  kcat_primal[species] = {}
                 if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = 0
-                # print(name, kcat_primal[species][pheno], value)
-                if value == 0:
+                # kcat_(k,new) = sum_z^Z ( kcat_z * bin_k^z ) * kcat_(k,old) < 10
+                if value == 0 and kcat_primal[species][pheno] < 10:
                     kcat_primal[species][pheno] += coefs[int(number)-1]*kcat_vals[species][pheno]
-
+                elif kcat_primal[species][pheno] > 10:
+                    kcat_primal[species][pheno] = min(10, kcat_primal[species][pheno])
         return kcat_primal
     distinguished_primals = {}
     for trial, entities in primal_values.items():
@@ -181,7 +182,7 @@ class MSCommPhitting:
                                   kcat_primal, coefs, requisite_biomass)
             newSim.compute(graphs, export_zip_name, figures_zip_name, publishing,
                            primals_export_path or re.sub(r"(.lp)", ".json", export_lp))
-            kcat_primal = parse_primals(newSim.values, "kcat", coefs, newSim.parameters["kcat"])
+            kcat_primal = parse_primals(newSim.values, coefs=coefs, kcat_vals=newSim.parameters["kcat"])
             pprint(kcat_primal)
             print(f"Interation {index+1} is complete\n")
         return {k: val for k, val in newSim.values.items() if "kcat" in k}
@@ -477,7 +478,8 @@ class MSCommPhitting:
         unique_short_codes = [f"{growth_tup.index[0][0]}{num}" for num in map(str, num_sorted)]
         time_column_index = growth_tup.columns.index("Time (s)")
         full_times = growth_tup.values[:, time_column_index]
-        self.times = {short_code: trial_contents(short_code, growth_tup.index, full_times) for short_code in unique_short_codes}
+        self.times = {short_code: trial_contents(short_code, growth_tup.index, full_times)
+                      for short_code in unique_short_codes}
 
         # define default values
         # TODO render bcv and cvmin dependent upon temperature, and possibly trained on Carlson's data
@@ -494,15 +496,13 @@ class MSCommPhitting:
             "stationary": 10,  # the penalty coefficient for the stationary phenotype
         })
         self.parameters.update(parameters)
-        # define the appropriate kcat values
+        # distribute kcat values to all phenotypes of all species and update from previous simulations where necessary
         self.parameters.update(self._universalize(self.parameters, "kcat", exclude=["stationary"]))
         if primal_values:
             for species, content in self.parameters["kcat"].items():
-                if species not in primal_values:
-                    continue
+                if species not in primal_values:  continue
                 for pheno in content:
-                    if pheno not in primal_values[species]:
-                        continue
+                    if pheno not in primal_values[species]:  continue
                     self.parameters["kcat"][species][pheno] = primal_values[species][pheno]
         # define the metabolites that are tracked, exchanged, and not available in the media
         # TODO the default zero_start logic appears to be incorrect
@@ -662,8 +662,7 @@ class MSCommPhitting:
         print(f'Done with concentrations and biomass loops: {(time_2 - time_1) / 60} min')
         for r_index, met in enumerate(self.fluxes_tup.index):
             met_id = _met_id_parser(met)
-            if met_id not in simulated_mets:
-                continue
+            if met_id not in simulated_mets:  continue
             concID = f"c_{met_id}_e0"
             for short_code in unique_short_codes:
                 timesteps = list(range(1, len(self.times[short_code]) + 1))
@@ -680,8 +679,8 @@ class MSCommPhitting:
                                 self.variables[concID][short_code][timestep].name,
                                 {"elements": [-1, self.variables[concID][short_code][next_timestep].name],
                                  "operation": "Mul"},
-                                *OptlangHelper.dot_product(growth_phenos,
-                                                           heuns_coefs=half_dt * self.fluxes_tup.values[r_index])],
+                                *OptlangHelper.dot_product(
+                                    growth_phenos, heuns_coefs=half_dt * self.fluxes_tup.values[r_index])],
                             "operation": "Add"
                         })
                     constraints.append(self.constraints['dcc_' + met_id][short_code][timestep])
@@ -732,7 +731,7 @@ class MSCommPhitting:
                 timesteps = list(range(1, len(values_slice) + 1))
                 for timestep in timesteps[:-1]:
                     ## the user timestep and data timestep must be synchronized
-                    if int(timestep) * self.parameters['timestep_hr'] < data_timestep * self.parameters['data_timestep_hr']:
+                    if int(timestep)*self.parameters['timestep_hr'] < data_timestep*self.parameters['data_timestep_hr']:
                         continue
                     data_timestep += 1
                     if data_timestep > int(self.times[short_code][-1] / self.parameters["data_timestep_hr"]):
@@ -854,6 +853,10 @@ class MSCommPhitting:
 
         # construct the problem
         self.problem = OptlangHelper.define_model("CommPhitting model", variables, constraints, objective, True)
+        self.hdf5_file = File(export_lp.replace(".lp", ".h5"), 'w')
+        self.hdf5_file.create_dataset(f'model/variables', data=variables)
+        self.hdf5_file.create_dataset(f'model/constraints', data=constraints)
+        self.hdf5_file.create_dataset(f'model/objective', data=objective)
         time_5 = process_time()
         print(f'Done with constructing the {type(self.problem)} model: {(time_5 - time_4) / 60} min')
 
@@ -867,6 +870,7 @@ class MSCommPhitting:
                 os.makedirs(os.path.dirname(export_lp), exist_ok=True)
             with open(export_lp, 'w') as lp:
                 lp.write(self.problem.to_lp())
+                self.hdf5_file.create_dataset(f'model/lp', data=self.problem.to_lp())
             _export_model_json(self.problem.to_json(), 'CommPhitting.json')
             self.zipped_output.extend([export_lp, 'CommPhitting.json'])
         if export_zip_name:
@@ -925,6 +929,8 @@ class MSCommPhitting:
         if graphs:
             self.graph(graphs, export_zip_name=figures_zip_name or export_zip_name, publishing=publishing,
                        remove_empty_plots=remove_empty_plots)
+        self.hdf5_file.create_dataset(f'results/primals', data=self.values)
+        self.hdf5_file.close()
         time3 = process_time()
         print(f"Optimization completed in {(time2-time1)/60} minutes")
         print(f"Graphing completed in {(time3-time2)/60} minutes")
@@ -959,10 +965,8 @@ class MSCommPhitting:
         elif isnumber(param[var]):
             return MSCommPhitting.assign_values(param[var], var, next_dimension)
         elif isinstance(param[var], dict):
-            dic = {var:{}}
-            for dim1, dim2_list in next_dimension.items():
-                dic[var][dim1] = {dim2: param[var][dim1] for dim2 in dim2_list}
-            return dic
+            return {var: {dim1: {dim2: param[var][dim1] for dim2 in dim2_list}
+                          for dim1, dim2_list in next_dimension.items()}}
         else:
             logger.critical(f"The param (with keys {dic_keys(param)}) and var {var} are not amenable"
                             f" with the parameterizing a universal value.")
@@ -1069,14 +1073,12 @@ class MSCommPhitting:
                 parsed_graphs = {}
                 for species in graph["species"]:
                     parsed_graphs[species] = pyplot.subplots(dpi=200, figsize=(11, 7))
-            else:
-                fig, ax = pyplot.subplots(dpi=200, figsize=(11, 7))
+            else:  fig, ax = pyplot.subplots(dpi=200, figsize=(11, 7))
             yscale = "linear"
 
             # populate the figures
             for trial, basenames in self.values.items():
-                if trial not in graph['trial']:
-                    continue
+                if trial not in graph['trial']:  continue
                 labels = []
                 for basename, values in basenames.items():
                     # graph experimental and total simulated biomasses
@@ -1112,22 +1114,19 @@ class MSCommPhitting:
                             ax, labels = self._add_plot(ax, labels, label, basename, trial, x_axis_split, scatter=True,
                                                         color=self.adjust_color(graph["painting"][species]["color"], 1.5))
 
-                    if content not in basename:
-                        continue
+                    if content not in basename:  continue
                     # graph individual phenotypes
                     if "phenotype" in graph:
                         # print(graph['phenotype'])
                         for specie in graph["species"]:
-                            if specie not in basename:
-                                continue
+                            if specie not in basename:  continue
                             if not any([p in basename for p in graph['phenotype']]):
                                 print(f"{basename} data with unknown phenotype.")
                                 continue
                             if remove_empty_plots and all(self.values[trial][basename].values() == 0):
                                 print(f"The {specie} is empty and thus is removed.")
                                 continue
-                            if graph["parsed"]:
-                                fig, ax = parsed_graphs[specie]
+                            if graph["parsed"]:  fig, ax = parsed_graphs[specie]
                             ## define graph characteristics
                             label = basename.split("_")[-1]
                             style = "solid"
@@ -1135,14 +1134,11 @@ class MSCommPhitting:
                                 label = re.sub(r"(^[a-b]+\_)", "", basename)
                                 style = graph["painting"][specie]["linestyle"]
                             ax, labels = self._add_plot(ax, labels, label, basename, trial, x_axis_split, style)
-                            if graph["parsed"]:
-                                parsed_graphs[specie] = (fig, ax)
+                            if graph["parsed"]:  parsed_graphs[specie] = (fig, ax)
                     # graph media concentration plots
                     elif "mets" in graph and all([any([x in basename for x in graph["mets"]]), 'c_cpd' in basename]):
-                        if not any(np.array(list(self.values[trial][basename].values())) > mM_threshold):
-                            continue
-                        if remove_empty_plots and all(self.values[trial][basename].values() == 0):
-                            continue
+                        if not any(np.array(list(self.values[trial][basename].values())) > mM_threshold):  continue
+                        if remove_empty_plots and all(self.values[trial][basename].values() == 0):  continue
                         label=self.msdb.compounds.get_by_id(re.search(r"(cpd\d+)", basename).group()).name
                         ax, labels = self._add_plot(ax, labels, label, basename, trial, x_axis_split)
                         yscale = "log"
@@ -1154,8 +1150,7 @@ class MSCommPhitting:
                         labeled_species = [label for label in labels if isinstance(label, dict)]
                         for name, vals in total_biomasses.items():
                             # ic(name)
-                            if not vals or (len(total_biomasses) == 2 and "OD" not in name):
-                                continue
+                            if not vals or (len(total_biomasses) == 2 and "OD" not in name):  continue
                             if len(total_biomasses) == 2:
                                 specie_label = [graph["painting"][name]["name"] for name in total_biomasses
                                                 if "OD" not in name][0]
@@ -1174,8 +1169,7 @@ class MSCommPhitting:
                                                 or "total" in graph["content"]) else style
                             total_biomass = sum(np.array(vals))[:-1]
                             xs = list(map(float, values.keys()))
-                            if graph["parsed"]:
-                                fig, ax = parsed_graphs[name]
+                            if graph["parsed"]:  fig, ax = parsed_graphs[name]
                             self._add_plot(ax, labels, label, None, None, x_axis_split, style, False,
                                            graph["painting"][name]["color"], xs, total_biomass)
                             if graph["parsed"]:
@@ -1189,8 +1183,7 @@ class MSCommPhitting:
                                 fig.savefig(fig_name, bbox_inches="tight", transparent=True)
                                 self.plots.add(fig_name)
 
-                    if graph["parsed"]:
-                        continue
+                    if graph["parsed"]:  continue
                     ## process and export the non-parsed figures
                     phenotype_id = graph.get('phenotype', "")
                     if "phenotype" in graph and not isinstance(graph['phenotype'], str):
@@ -1207,13 +1200,10 @@ class MSCommPhitting:
                             phenotype_id = ','.join(graph['species'])
 
                     ax.set_xlabel(x_label) ; ax.set_ylabel(y_label)
-                    if "mets" in graph:
-                        ax.set_ylim(mM_threshold)
+                    if "mets" in graph:  ax.set_ylim(mM_threshold)
                     ax.grid(axis="y")
-                    if len(labels) > 1:
-                        ax.legend()
-                    else:
-                        yscale = "linear"
+                    if len(labels) > 1:  ax.legend()
+                    else:  yscale = "linear"
                     ax.set_yscale(yscale)
                     if not publishing:
                         if not title:
@@ -1223,11 +1213,9 @@ class MSCommPhitting:
                             if content == "c_":
                                 this_title = f"{org_content} in the {trial} trial"
                             ax.set_title(this_title)
-                        else:
-                            ax.set_title(title)
+                        else:  ax.set_title(title)
                     fig_name = f'{"_".join([trial, species_id, phenotype_id, content])}.jpg'
-                    if "mets" in graph:
-                        fig_name = f"{trial}_{','.join(graph['mets'])}_c.jpg"
+                    if "mets" in graph:  fig_name = f"{trial}_{','.join(graph['mets'])}_c.jpg"
                     fig.savefig(fig_name, bbox_inches="tight", transparent=True)
 
                     self.plots.add(fig_name)
@@ -1244,7 +1232,7 @@ class MSCommPhitting:
 
     def engineering(self):
         if not hasattr(self, "problem"):
-            self.fit() # TODO - accommodate both fitting a new model and loading an existing model
+            self.fit()  # TODO - accommodate both fitting a new model and loading an existing model
 
         # This will capture biomass variables at all times and trials, which seems undesirable
         self.problem.objective = Objective(sum([x for x in self.problem.variables if "bio" in x.name]))
@@ -1338,7 +1326,8 @@ class BIOLOGPhitting(MSCommPhitting):
                     new_simulation.compute(graphs, export_zip_name, None, publishing, primals_export_path, True)
                 except (NoFluxError) as e:
                     print(e)
-                kcat_primal = parse_primals(new_simulation.values, "kcat", coefs, new_simulation.parameters["kcat"])
+                kcat_primal = parse_primals(new_simulation.values, coefs=coefs,
+                                            kcat_vals=new_simulation.parameters["kcat"])
                 time2 = process_time()
                 print(f"Done simulating with the coefficients for biomass partitions: {coef_index}"
                       f"\n{(time2 - time1) / 60} minutes")

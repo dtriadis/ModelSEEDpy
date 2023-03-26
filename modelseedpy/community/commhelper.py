@@ -142,7 +142,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
 
     # update model components
     newutl = MSModelUtil(newmodel)
-    msid_cobraid_hash = newutl.msid_hash()
+    # msid_cobraid_hash = newutl.msid_hash()
     # print(msid_cobraid_hash["cpd11416"])
     newutl.add_objective(comm_biorxn.flux_expression)
     # newmodel.remove_reactions(newmodel.sinks)
