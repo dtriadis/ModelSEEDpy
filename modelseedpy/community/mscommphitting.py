@@ -29,11 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 def isnumber(string):
-    try:
-        float(string)
-    except:
-        return False
-    return True
+    try:  float(string)  ;  return True
+    except:  return False
 
 def dict_keys_exists(dic, *keys):
     result = keys[0] in dic
@@ -853,24 +850,60 @@ class MSCommPhitting:
 
         # construct the problem
         self.problem = OptlangHelper.define_model("CommPhitting model", variables, constraints, objective, True)
-        self.hdf5_file = File(export_lp.replace(".lp", ".h5"), 'w')
-        self.hdf5_file.create_dataset(f'model/variables', data=variables)
-        self.hdf5_file.create_dataset(f'model/constraints', data=constraints)
-        self.hdf5_file.create_dataset(f'model/objective', data=objective)
+        hdf5_name = export_lp.replace(".lp", ".h5")
+        self.hdf5_file = File(hdf5_name, 'w')
+        self.zipped_output.append(hdf5_name)
+        # self.hdf5_file.create_dataset(f'model/variables', data=[
+        #     list(map(str, [var.name, var.bounds.lb, var.bounds.ub, var.type])) for var in variables])
+        # for index, cons in enumerate(constraints):
+        #     self.hdf5_file.create_dataset(f'model/constraints/{cons.name}/content', data=[
+        #         list(map(str, [cons.name, cons.bounds[0], cons.bounds[1]])) for cons in constraints])
+        #     if any([isinstance(x, dict) for x in cons.expr["elements"]]):
+        #         for ele_index, ele in enumerate(cons.expr["elements"]):
+        #             if not isinstance(ele,dict):
+        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}", data=[ele])
+        #             else:
+        #                 # str(x) if not isnumber(x) else float(x)
+        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/elements",
+        #                                               data=list(map(str, ele["elements"])))
+        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/operation",
+        #                                               data=[ele["operation"]])
+        #     else:
+        #         self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements", data=cons.expr["elements"])
+        #     self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/operation", data=[cons.expr["operation"]])
+        #
+        # self.hdf5_file.create_dataset(f'model/objective/content', data=[str(objective.name), str(objective.direction)])
+        # self.hdf5_file.create_dataset(f'model/objective/expr/operation', data=["Add"])
+        # for ele_index, ele in enumerate(objective.expr):
+        #     print(ele_index, ele, end="\r")
+        #     if not isinstance(ele, dict):
+        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}", data=[ele])
+        #     else:
+        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}/elements",
+        #                                       data=list(map(str, ele["elements"])))
+        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}/operation", data=[ele["operation"]])
+
         time_5 = process_time()
         print(f'Done with constructing the {type(self.problem)} model: {(time_5 - time_4) / 60} min')
 
         # export contents
+        # dtypes = {"exchange":str}.update({col: "<f8" for col in self.fluxes_df.columns})
+        # self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=np.array(list(self.fluxes_df.items()), dtype=dtypes))
+        self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=self.fluxes_df.to_numpy())
+        self.hdf5_file["model/phenotype_profiles"].attrs["index"] = self.fluxes_df.index.to_numpy()
+        self.hdf5_file["model/phenotype_profiles"].attrs["columns"] = list(map(str, self.fluxes_df.columns))
         if export_parameters:
-            self.zipped_output.append('parameters.csv')
+            # self.zipped_output.append('parameters.csv')
             DataFrame(data=list(self.parameters.values()), index=list(self.parameters.keys()),
                       columns=['values']).to_csv('parameters.csv')
+            self.hdf5_file.create_dataset(f'model/parameters', data=list(map(str, self.parameters.values())))
+            self.hdf5_file['model/parameters'].attrs["index"] = list(map(str, self.parameters.keys()))
         if export_lp:
             if re.search(r"(\\\\/)", export_lp):
                 os.makedirs(os.path.dirname(export_lp), exist_ok=True)
             with open(export_lp, 'w') as lp:
                 lp.write(self.problem.to_lp())
-                self.hdf5_file.create_dataset(f'model/lp', data=self.problem.to_lp())
+            # self.hdf5_file.create_dataset(f'model/lp', data=self.problem.to_lp())
             _export_model_json(self.problem.to_json(), 'CommPhitting.json')
             self.zipped_output.extend([export_lp, 'CommPhitting.json'])
         if export_zip_name:
@@ -929,7 +962,12 @@ class MSCommPhitting:
         if graphs:
             self.graph(graphs, export_zip_name=figures_zip_name or export_zip_name, publishing=publishing,
                        remove_empty_plots=remove_empty_plots)
-        self.hdf5_file.create_dataset(f'results/primals', data=self.values)
+        values_df = DataFrame(self.values)
+        display(values_df)
+        display(values_df.to_numpy())
+        self.hdf5_file.create_dataset(f'results/primals', data=list(map(float, values_df.to_numpy())))
+        self.hdf5_file["results/primals"].attrs["index"] = values_df.index.to_numpy()
+        self.hdf5_file["results/primals"].attrs["columns"] = list(map(str, values_df.columns))
         self.hdf5_file.close()
         time3 = process_time()
         print(f"Optimization completed in {(time2-time1)/60} minutes")

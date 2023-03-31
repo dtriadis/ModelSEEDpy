@@ -1,5 +1,5 @@
 from modelseedpy.core.optlanghelper import OptlangHelper, Bounds, tupVariable, tupConstraint, tupObjective
-from modelseedpy.core.exceptions import FeasibilityError
+from modelseedpy.core.exceptions import FeasibilityError, ObjectAlreadyDefinedError
 from modelseedpy.biochem import from_local
 from time import process_time
 import re
@@ -19,6 +19,8 @@ def parse_primals(primal_values):
     return values
 
 def _check_names(name, names):
+    if name in names:
+        raise ObjectAlreadyDefinedError(f"The {name} is already defined in the model.")
     names.append(name)
     return name
 
@@ -33,23 +35,36 @@ def justifyDB(msdb_path:str, primals_path:str=None):
         rxn_element_counts = combine_elements(*[met.elements for met in rxn.metabolites])
         mass_variables[rxn.id], mass_constraints[rxn.id] = {}, {}
         charge_variables[rxn.id], charge_constraints[rxn.id] = {}, {}
-        print(rxn.reaction, end="\r")
+        print(f"{rxn.id}\t{rxn.reaction}\t\t\t\t\t\t\t\t\t\t", end="\r")
         for met in rxn.metabolites:
-            metID = re.sub("(\_\w?\d+)", "", met.id)
+            mass_variables[rxn.id][met.id] = {}
             # mass balance
-            mass_variables[rxn.id][met.id] = {ele: tupVariable(_check_names(f"{rxn.id}_{metID}_{ele}", names))
-                                              for ele in met.elements if f"{rxn.id}_{metID}_{ele}" not in names}
+            for ele in met.elements:
+                # print(met.id, ele)
+                name = f"{rxn.id}_{met.id}~{ele}"
+                if name not in names:  # blocks reactions that contain duplicates of the same metabolite, e.g. phosphate
+                    mass_variables[rxn.id][met.id][ele] = tupVariable(_check_names(name, names))
+                else:
+                    print(f"\nomitted\t{name}")
+                    if met.id not in mass_variables[rxn.id]:
+                        print(f"The {met.id} is not in mass_variables[rxn.id] object.")
+                    elif ele not in mass_variables[rxn.id][met.id]:
+                        print(f"The {ele} is not in mass_variables[rxn.id][met.id] object.")
+
             objective.expr.extend([{"elements": [mass_variables[rxn.id][met.id][ele].name, -met.elements[ele]],
-                                    "operation": "Add"} for ele in met.elements])
+                                    "operation": "Add"} for ele in mass_variables[rxn.id][met.id]])
             # else:  print(rxn.reaction, end="\r")
             # charge balance
+            metID = re.sub("(\_\w?\d+)", "", met.id)
             charge_variables[rxn.id][met.id] = tupVariable(f"{rxn.id}_{metID}_charge")
             objective.expr.extend([{"elements": [charge_variables[rxn.id][met.id].name, -met.charge],
                                     "operation": "Add"}])
             # add the variables
             variables.extend([*mass_variables[rxn.id][met.id].values(), charge_variables[rxn.id][met.id]])
         # add the constraints
+        # print(mass_variables)
         for ele in rxn_element_counts:
+            # print(ele)
             mass_constraints[rxn.id][ele] = tupConstraint(f"{rxn.id}_{ele}", expr={
                 "elements": [{"elements": [mass_variables[rxn.id][met.id][ele].name, met.elements[ele]],
                               "operation": "Mul"} for met in rxn.metabolites if ele in met.elements],
@@ -84,8 +99,8 @@ if __name__ == "__main__":
     from pathlib import Path
 
     parser = ArgumentParser()
-    parser.add_argument("--msdb_path", type=Path, required=True)
-    parser.add_argument("--primals_path", type=Path, required=False)
+    parser.add_argument("--msdb_path", type=Path, default=".")
+    parser.add_argument("--primals_path", type=Path, default="MSDB_justification_primals.json")
     args = parser.parse_args()
 
     # execute the optimization

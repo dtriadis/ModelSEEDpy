@@ -111,6 +111,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                             # print(rxn.id, '3')
                     biomass_index += 1
                 else:
+                    print(rxn.id, end="\t")
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if "e" not in rxn.compartment.id and not rxn.compartment.id[-1].isnumeric():
@@ -124,6 +125,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                                 rxn.id += str(model_index)
                             else:
                                 rxn.id = rxn_id + str(model_index)
+                    print(output, rxn.id)
             new_reactions.add(rxn)
         # print(biomass_indices)
     # adds only unique reactions and metabolites to the community model
@@ -337,7 +339,7 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
     fluxes_df = fluxes_df.groupby(fluxes_df.index).sum()
     fluxes_df = fluxes_df.loc[(fluxes_df != 0).any(axis=1)]
     fluxes_df.astype(str)
-    fluxes_df.to_csv("fluxes.csv")
+    # fluxes_df.to_csv("fluxes.csv")
     return fluxes_df, comm_members
 
 
