@@ -182,7 +182,9 @@ class MSCommPhitting:
             kcat_primal = parse_primals(newSim.values, coefs=coefs, kcat_vals=newSim.parameters["kcat"])
             pprint(kcat_primal)
             print(f"Interation {index+1} is complete\n")
-        return {k: val for k, val in newSim.values.items() if "kcat" in k}
+        kcats = {k: val for k, val in newSim.values.items() if "kcat" in k}
+        DataFrame(kcats).T.to_csv("pheno_growth_kcat.tsv", sep="\t")
+        return kcats
 
     def fit(self, parameters:dict=None, mets_to_track: list = None, rel_final_conc:dict=None, zero_start:list=None,
             abs_final_conc:dict=None, graphs: list = None, data_timesteps: dict = None,
@@ -463,7 +465,8 @@ class MSCommPhitting:
 
     def define_problem(self, parameters=None, mets_to_track=None, rel_final_conc=None, zero_start=None, abs_final_conc=None,
                        data_timesteps=None, export_zip_name: str=None, export_parameters: bool=True, export_lp: str='CommPhitting.lp',
-                       primal_values=None, biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False):
+                       primal_values=None, biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False,
+                       export_phenotype_profiles=True):
         # parse the growth data
         growth_tup = FBAHelper.parse_df(self.data_df, False)
         self.phenotypes = list(self.fluxes_tup.columns)
@@ -515,11 +518,11 @@ class MSCommPhitting:
         else:  self.mets_to_track = list(self.rel_final_conc.keys()) + self.zero_start
         print(self.mets_to_track)
 
-        timesteps_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
+        timesteps_indices_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
         if data_timesteps:  # {short_code:[times]}
             for short_code, times in data_timesteps.items():
-                timesteps_to_delete[short_code] = set(list(range(len(full_times)))) - set(times)
-                self.times[short_code] = np.delete(self.times[short_code], list(timesteps_to_delete[short_code]))
+                timesteps_indices_to_delete[short_code] = set(list(range(len(full_times)))) - set(times)
+                self.times[short_code] = np.delete(self.times[short_code], list(timesteps_indices_to_delete[short_code]))
 
         # construct the problem
         objective = tupObjective("minimize variance and phenotypic transitions", [], "min")
@@ -723,13 +726,16 @@ class MSCommPhitting:
                 # self.constraints[signal + '|bio_finalc'][short_code] = {}
                 # the value entries are matched to only the timesteps that are condoned by data_timesteps
                 values_slice = trial_contents(short_code, growth_tup.index, growth_tup.values)
-                if timesteps_to_delete:
-                    values_slice = np.delete(values_slice, list(timesteps_to_delete[short_code]), axis=0)
+                if timesteps_indices_to_delete:
+                    values_slice = np.delete(values_slice, list(timesteps_indices_to_delete[short_code]), axis=0)
                 timesteps = list(range(1, len(values_slice) + 1))
+                print(timesteps)
+                # the last timestep is omitted since Heun's method in the modelled biomass
+                ## requires a future timestep, which does not exist for the last timestep
                 for timestep in timesteps[:-1]:
                     ## the user timestep and data timestep must be synchronized
                     if int(timestep)*self.parameters['timestep_hr'] < data_timestep*self.parameters['data_timestep_hr']:
-                        continue
+                        print(f"Skipping timestep {timestep} that does not align with the user's timestep") ; continue
                     data_timestep += 1
                     if data_timestep > int(self.times[short_code][-1] / self.parameters["data_timestep_hr"]):
                         print(f"The time from the user-defined exceeds the simulation time, so the DBC & diff loop os terminating.")
@@ -850,9 +856,8 @@ class MSCommPhitting:
 
         # construct the problem
         self.problem = OptlangHelper.define_model("CommPhitting model", variables, constraints, objective, True)
-        hdf5_name = export_lp.replace(".lp", ".h5")
-        self.hdf5_file = File(hdf5_name, 'w')
-        self.zipped_output.append(hdf5_name)
+        self.hdf5_name = export_lp.replace(".lp", ".h5")
+        self.hdf5_file = File(self.hdf5_name, 'w')
         # self.hdf5_file.create_dataset(f'model/variables', data=[
         #     list(map(str, [var.name, var.bounds.lb, var.bounds.ub, var.type])) for var in variables])
         # for index, cons in enumerate(constraints):
@@ -889,23 +894,29 @@ class MSCommPhitting:
         # export contents
         # dtypes = {"exchange":str}.update({col: "<f8" for col in self.fluxes_df.columns})
         # self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=np.array(list(self.fluxes_df.items()), dtype=dtypes))
-        self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=self.fluxes_df.to_numpy())
-        self.hdf5_file["model/phenotype_profiles"].attrs["index"] = self.fluxes_df.index.to_numpy()
-        self.hdf5_file["model/phenotype_profiles"].attrs["columns"] = list(map(str, self.fluxes_df.columns))
+        # self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=self.fluxes_df.to_numpy())
+        # self.hdf5_file["model/phenotype_profiles"].attrs["index"] = self.fluxes_df.index.to_numpy()
+        # self.hdf5_file["model/phenotype_profiles"].attrs["columns"] = list(map(str, self.fluxes_df.columns))
+        if export_phenotype_profiles:
+            phenotype_profiles_name = 'phenotype_profiles.tsv'
+            self.fluxes_df.to_csv(phenotype_profiles_name, sep="\t")
+            self.zipped_output.append(phenotype_profiles_name)
         if export_parameters:
-            # self.zipped_output.append('parameters.csv')
+            parameter_name = 'parameters.tsv'
             DataFrame(data=list(self.parameters.values()), index=list(self.parameters.keys()),
-                      columns=['values']).to_csv('parameters.csv')
-            self.hdf5_file.create_dataset(f'model/parameters', data=list(map(str, self.parameters.values())))
-            self.hdf5_file['model/parameters'].attrs["index"] = list(map(str, self.parameters.keys()))
+                      columns=['values']).to_csv(parameter_name, sep="\t")
+            self.zipped_output.append(parameter_name)
+            # self.hdf5_file.create_dataset(f'model/parameters', data=list(map(str, self.parameters.values())))
+            # self.hdf5_file['model/parameters'].attrs["index"] = list(map(str, self.parameters.keys()))
         if export_lp:
             if re.search(r"(\\\\/)", export_lp):
                 os.makedirs(os.path.dirname(export_lp), exist_ok=True)
             with open(export_lp, 'w') as lp:
                 lp.write(self.problem.to_lp())
             # self.hdf5_file.create_dataset(f'model/lp', data=self.problem.to_lp())
-            _export_model_json(self.problem.to_json(), 'CommPhitting.json')
-            self.zipped_output.extend([export_lp, 'CommPhitting.json'])
+            model_name = 'CommPhitting.json'
+            _export_model_json(self.problem.to_json(), model_name)
+            self.zipped_output.extend([export_lp, model_name])
         if export_zip_name:
             self.zip_name = export_zip_name
             sleep(2)
@@ -948,27 +959,48 @@ class MSCommPhitting:
                 self.values[short_code][basename][time_hr] = value
 
         # export the processed primal values for graphing
-        with open(primals_export_path, 'w') as out:
-            json.dump(self.values, out, indent=3)
-        if not export_zip_name and hasattr(self, 'zip_name'):
-            export_zip_name = self.zip_name
-        if export_zip_name:
-            with ZipFile(export_zip_name, 'a', compression=ZIP_LZMA) as zp:
-                zp.write(primals_export_path)
-                os.remove(primals_export_path)
-
+        # with open(primals_export_path, 'w') as out:
+        #     json.dump(self.values, out, indent=3)
+        # if not export_zip_name and hasattr(self, 'zip_name'):
+        #     export_zip_name = self.zip_name
+        # if export_zip_name:
+        #     with ZipFile(export_zip_name, 'a', compression=ZIP_LZMA) as zp:
+        #         zp.write(primals_export_path)
+        #         os.remove(primals_export_path)
         # visualize the specified information
         time2 = process_time()
         if graphs:
             self.graph(graphs, export_zip_name=figures_zip_name or export_zip_name, publishing=publishing,
                        remove_empty_plots=remove_empty_plots)
+
+        # parse the primal values
         values_df = DataFrame(self.values)
         display(values_df)
-        display(values_df.to_numpy())
-        self.hdf5_file.create_dataset(f'results/primals', data=list(map(float, values_df.to_numpy())))
-        self.hdf5_file["results/primals"].attrs["index"] = values_df.index.to_numpy()
-        self.hdf5_file["results/primals"].attrs["columns"] = list(map(str, values_df.columns))
+        values_index = values_df.index.tolist()
+        # values_cols = list(map(str, values_df.columns))
+        for col in values_df.columns:
+            trial_values = values_df[col].tolist()
+            ## process the times
+            times = [list(ele.keys()) for ele in trial_values if isinstance(ele, dict)]
+            max_time = max(list(map(len, times)))
+            for max_time_series in times:
+                if len(max_time_series) == max_time:  break
+            trial_path = f'results/primals/{col}/'
+            self.hdf5_file.create_dataset(f'{trial_path}/times', data=max_time_series)
+            ## process the data values
+            for index, ele in enumerate(trial_values):
+                dataset_name = f'{trial_path}/{values_index[index]}'
+                if isnumber(ele):
+                    self.hdf5_file.create_dataset(dataset_name, data=[float(ele)])
+                elif isinstance(ele, dict):
+                    self.hdf5_file.create_dataset(dataset_name, data=list(map(float, ele.values())))
+                    self.hdf5_file[dataset_name].attrs["full_time"] = (len(ele.values()) == max_time)
+
         self.hdf5_file.close()
+        with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
+            zp.write(self.hdf5_name)
+            os.remove(self.hdf5_name)
+
         time3 = process_time()
         print(f"Optimization completed in {(time2-time1)/60} minutes")
         print(f"Graphing completed in {(time3-time2)/60} minutes")

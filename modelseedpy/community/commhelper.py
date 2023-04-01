@@ -3,6 +3,7 @@ from optlang import Objective
 from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
 from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
 from modelseedpy.community.mscompatibility import MSCompatibility
+from modelseedpy.community.mscommphitting import isnumber
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
@@ -88,6 +89,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
             if rxn.id[0:3] != "EX_":
+                ## biomass reactions
                 if re.search('^(bio)(\d+)$', rxn.id):
                     index = int(rxn.id.removeprefix('bio'))
                     if biomass_index == 2:
@@ -110,8 +112,9 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                             biomass_indices.append(index)
                             # print(rxn.id, '3')
                     biomass_index += 1
+                ## non-biomass reactions
                 else:
-                    print(rxn.id, end="\t")
+                    initialID = str(rxn.id)
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if "e" not in rxn.compartment.id and not rxn.compartment.id[-1].isnumeric():
@@ -121,11 +124,11 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                         if compartment != "e":
                             rxn.name = name + "_" + compartment + str(model_index)
                             rxn_id = re.search(r"(.+\_\w)(?=\d+)", rxn.id).group()
-                            if index == "":
-                                rxn.id += str(model_index)
-                            else:
-                                rxn.id = rxn_id + str(model_index)
-                    print(output, rxn.id)
+                            if index == "":  rxn.id += str(model_index)
+                            else:  rxn.id = rxn_id + str(model_index)
+                    finalID = str(rxn.id)
+                    string_diff = set(initialID).symmetric_difference(set(finalID))
+                    if string_diff and not all(isnumber(x) for x in string_diff):  print(initialID, string_diff)
             new_reactions.add(rxn)
         # print(biomass_indices)
     # adds only unique reactions and metabolites to the community model

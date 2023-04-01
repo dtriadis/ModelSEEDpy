@@ -279,12 +279,12 @@ class GrowthData:
             base_media, community_members, species_abundances, carbon_conc_series,
             species_identities_rows, row_num, _findDate(data_paths["path"])
         )
-        growth_dfs = GrowthData.data_process(dataframes, trial_name_conversion)
+        data_df = GrowthData.data_process(dataframes, trial_name_conversion)
         # display(fluxes_df)
         requisite_biomass = {} if not determine_requisite_biomass else GrowthData.biomass_growth(
-            carbon_conc_series, fluxes_df, growth_dfs.index.unique(), trial_name_conversion,
+            carbon_conc_series, fluxes_df, data_df.index.unique(), trial_name_conversion,
             data_paths, community_members if all_phenotypes else None)
-        return (experimental_metadata, growth_dfs, fluxes_df, standardized_carbon_conc, requisite_biomass,
+        return (experimental_metadata, data_df, fluxes_df, standardized_carbon_conc, requisite_biomass,
                 trial_name_conversion, np.mean(data_timestep_hr), simulation_time, media_conc)
 
     @staticmethod
@@ -343,13 +343,13 @@ class GrowthData:
                 max_timestep_cols.append(drop_timestep_range)
             ## timesteps that must be dropped for the most restrictive dataset is acquired
             max_cols = max(list(map(len, max_timestep_cols)))
-            ignore_timesteps = [x for x in max_timestep_cols if len(x) == max_cols][0]
+            for ignore_timesteps in max_timestep_cols:
+                if len(ignore_timesteps) == max_cols:  break
 
         # remove trials for which the OD has plateaued
         # TODO - this somehow seems to break when the requisite_biomass is ignored
         for org_sheet, name in data_paths.items():
-            if "OD" not in name:
-                continue
+            if "OD" not in name:  continue
             ## load the OD DataFrame
             sheet = org_sheet.replace(' ', '_')
             df_name = f"{name}:{sheet}"
@@ -363,17 +363,14 @@ class GrowthData:
             plateaued_times = _check_plateau(data_values_df, name, name, significant_deviation, 3)
             ## define and store the final DataFrames
             for col in plateaued_times:
-                if col in data_times_df.columns:
-                    data_times_df.drop(col, axis=1, inplace=True)
-                if col in data_values_df.columns:
-                    data_values_df.drop(col, axis=1, inplace=True)
+                if col in data_times_df.columns:    data_times_df.drop(col, axis=1, inplace=True)
+                if col in data_values_df.columns:   data_values_df.drop(col, axis=1, inplace=True)
             dataframes[df_name] = (data_times_df, data_values_df)
             break
 
         # refine the non-OD signals
         for org_sheet, name in data_paths.items():
-            if org_sheet == 'path' or "OD" in name:
-                continue
+            if org_sheet == 'path' or "OD" in name:  continue
             sheet = org_sheet.replace(' ', '_')
             df_name = f"{name}:{sheet}"
             if df_name not in dataframes:
@@ -530,7 +527,7 @@ class GrowthData:
         return constructed_experiments, standardized_carbon_conc, trial_name_conversion
 
     @staticmethod
-    def biomass_growth(carbon_conc, fluxes_df, growth_df_trials, trial_name_conversion,
+    def biomass_growth(carbon_conc, fluxes_df, data_df_trials, trial_name_conversion,
                        data_paths, community_members=None, pheno_info=None):
         # TODO - leverage cFBA to partition metabolite consumption between the defined phenotypes
         pheno_info = pheno_info or {f"{content['name']}_{pheno}": mets
@@ -544,7 +541,7 @@ class GrowthData:
 
         # calculate the 90% concentration for each carbon source
         requisite_fluxes = {}
-        for trial in [short_code_trials[ID] for ID in growth_df_trials]:
+        for trial in [short_code_trials[ID] for ID in data_df_trials]:
             row_letter = trial[0] ; col_number = trial[1:]
             ## add rows where the initial concentration in the first trial is non-zero
             utilized_phenos = {}
@@ -610,6 +607,7 @@ class GrowthData:
             first = False
         # process the data to the smallest dataset, to accommodate heterogeneous data sizes
         minVal = min(list(map(len, values.values())))
+        print(minVal)
         for df_name, data in values.items():
             values[df_name] = data[:minVal]
         times2 = times.copy()
@@ -619,11 +617,11 @@ class GrowthData:
         df_data = {"trial_IDs": trials_list[:minVal], "short_codes": short_codes[:minVal]}
         df_data.update({"Time (s)": np.mean(list(times.values()), axis=0)})  # element-wise average
         df_data.update({df_name:vals for df_name, vals in values.items()})
-        growth_df = DataFrame(df_data)
-        growth_df.index = growth_df["short_codes"]
-        growth_df = growth_df.drop(["short_codes"], axis=1)
-        growth_df.to_csv("growth_spectra.csv")
-        return growth_df
+        data_df = DataFrame(df_data)
+        data_df.index = data_df["short_codes"]
+        data_df = data_df.drop(["short_codes"], axis=1)
+        data_df.to_csv("growth_spectra.csv")
+        return data_df
 
 
 class BiologData:
