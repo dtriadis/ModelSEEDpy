@@ -7,7 +7,6 @@ import sys
 from cobra import Model, Reaction, Metabolite
 from cobra.io.json import from_json, to_json
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
 from modelseedpy.core.exceptions import *
 from modelseedpy.core.fbahelper import FBAHelper
 from optlang.symbolics import Zero
@@ -160,21 +159,17 @@ class MSModelUtil:
         if self.metabolite_hash == None:
             self.build_metabolite_hash()
         if name in self.metabolite_hash:
-            if not compartment:
-                return self.metabolite_hash[name]
+            if not compartment:  return self.metabolite_hash[name]
             for met in self.metabolite_hash[name]:
                 array = met.id.split("_")
-                if array[1] == compartment or met.compartment == compartment:
-                    return [met]
+                if array[1] == compartment or met.compartment == compartment:  return [met]
             return None
         sname = MSModelUtil.search_name(name)
         if sname in self.search_metabolite_hash:
-            if not compartment:
-                return self.search_metabolite_hash[sname]
+            if not compartment:  return self.search_metabolite_hash[sname]
             for met in self.search_metabolite_hash[sname]:
                 array = met.id.split("_")
-                if array[1] == compartment or met.compartment == compartment:
-                    return [met]
+                if array[1] == compartment or met.compartment == compartment:  return [met]
             return None
         logger.info(name + " not found in model!")
         return []
@@ -200,8 +195,7 @@ class MSModelUtil:
         for cpd in self.model.metabolites:
             msid = MSModelUtil.metabolite_msid(cpd)
             if msid != None:
-                if msid not in output:
-                    output[msid] = []
+                if msid not in output:  output[msid] = []
                 output[msid].append(cpd)
         return output
 
@@ -217,14 +211,18 @@ class MSModelUtil:
         return [ex for ex in self.exchange_list() if not ex.reactants[0].elements or "C" in ex.reactants[0].elements]
 
     def carbon_exchange_mets_list(self, include_unknown=True):
-        exchanges = self.carbon_exchange_list(include_unknown)
-        return [met for ex_rxn in exchanges for met in ex_rxn.metabolites]
+        return self.metabolites_set(self.carbon_exchange_list(include_unknown))
 
     def exchange_mets_list(self):
-        return [met for ex_rxn in self.exchange_list() for met in ex_rxn.metabolites]
+        return self.metabolites_set(self.exchange_list())
 
     def media_exchanges_list(self):
         return [exRXN for exRXN in self.exchange_list() if exRXN.id in self.model.medium]
+
+    def metabolites_set(self, reactions_set=None, ids=False):
+        rxns = reactions_set or self.model.reactions
+        if ids:  return {met.id for rxn in rxns for met in rxn.metabolites}
+        return {met for rxn in rxns for met in rxn.metabolites}
 
     def bio_rxns_list(self):
         return [rxn for rxn in self.model.reactions if re.search(r"(^bio\d+)", rxn.id)]
@@ -322,41 +320,36 @@ class MSModelUtil:
     #################################################################################
     # Functions related to editing the model
     #################################################################################
-    def add_ms_reaction(self, rxn_dict, compartment_trans=["c0", "e0"]):
-        modelseed = ModelSEEDBiochem.get()
+    def add_ms_reaction(self, rxn_dict, msdb_path=None, msdb_object=None, comp_trans=["c0", "e0"]):
+        if msdb_object:  modelseed = msdb_object
+        else:
+            # from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
+            from modelseedpy.biochem import from_local
+            # modelseed = ModelSEEDBiochem.get()
+            modelseed = from_local(msdb_path)
         output = []
-        for rxnid, compartment in rxn_dict.items():
-            fullid = rxnid + "_" + compartment
-            modelseed_reaction = modelseed.get_seed_reaction(rxnid)
-            reaction_stoich = modelseed_reaction.cstoichiometry
-            cobra_reaction = Reaction(fullid)
-            output.append(cobra_reaction)
-            cobra_reaction.name = modelseed_reaction.data["name"] + "_" + compartment
+        model_mets = self.metabolites_set(ids=True)
+        for rxnid, comp in rxn_dict.items():
+            fullid = f"{rxnid}_{comp}"
+            rxn = modelseed.reactions.get_by_id(rxnid)
+            new_reaction = Reaction(id=fullid, name=f"{rxn.name}_{comp}")
             metabolites_to_add = {}
-            for metabolite, stoich in reaction_stoich.items():
-                id = metabolite[0]
-                compound = modelseed.get_seed_compound(id).data
-                compartment_number = int(metabolite[1])
-                if compartment_number > len(compartment_trans):
-                    logger.critical(
-                        "Compartment index " + str(compartment_number) + " out of range"
-                    )
-                compartment_string = compartment_trans[compartment_number]
-                met_output = self.find_met(id, compartment_string)
-                if met_output:
-                    cobramet = met_output[0]
-                else:
-                    cobramet = Metabolite(
-                        id + "_" + compartment_string,
-                        name=compound["name"] + "_" + compartment_string,
-                        compartment=compartment_string,
-                    )
-                metabolites_to_add[cobramet] = stoich
-            cobra_reaction.add_metabolites(metabolites_to_add)
-            cobra_reaction.reaction
-            print(cobra_reaction.id)
-        print(len(output))
+            for met, stoich in rxn.metabolites.items():
+                comp_num = FBAHelper.compartment_id(met.id)
+                if comp_num > len(comp_trans):
+                    logger.critical(f"The compartment index {comp_num} is out of range")
+                comp_str = comp_trans[comp_num]
+                met_output = self.find_met(met.id, comp_str)
+                new_met = Metabolite(f"{met.id}_{comp_str}", name=f"{met.name}_{comp_str}",
+                                     compartment=comp_str) if not met_output else met_output[0]
+                metabolites_to_add[new_met] = stoich
+                if new_met.id not in model_mets:  self.model.add_metabolites([new_met])
+            new_reaction.add_metabolites(metabolites_to_add)
+            output.append(new_reaction)
+            print(f"The {new_reaction.id} reaction is defined.")
         self.model.add_reactions(output)
+        print(f"{len(output)} reactions and {len(self.model.metabolites)-len(model_mets)} metabolites"
+              f" were added to the model.")
         return output
 
     def create_constraint(self, constraint, coef=None, sloppy=False):

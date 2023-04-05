@@ -33,7 +33,7 @@ def _compatibilize(member_models: Iterable, printing=False):
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
     # ic(member_models, com_model, compatibilize)
     if not com_model and member_models:
-        model, names, abundances = build_from_species_models(member_models, name="SMETANA_example")
+        model = build_from_species_models(member_models, name="SMETANA_pair", cobra_model=True)
         return member_models, model  # (model, names=names, abundances=abundances)
     # models = PARSING_FUNCTION(community_model) # TODO the individual models of a community model can be parsed
     if compatibilize:
@@ -121,39 +121,46 @@ class MSSmetana:
         elif all_models is not None:  model_pairs = list(combinations(all_models, 2))
         else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
         if pair_limit is not None:
-            model_pairs = list(model_pairs)[:pair_limit]
             shuffle(model_pairs)
-        models_media = mem_media or _get_media(model_s_=all_models)
-        if see_media and not mem_media:
-            print(models_media)
-        numPairs = len(list(model_pairs))
-        print(f"Examining the {numPairs} model pairs")
+            model_pairs = list(model_pairs)[:pair_limit]
+        if not mem_media:
+            models_media = _get_media(model_s_=all_models)
+        else:
+            missing_models = [m for m in all_models if m.id not in mem_media]
+            models_media = mem_media.copy()
+            if missing_models != []:
+                print(missing_models)
+                models_media.update(_get_media(model_s_=missing_models))
+        if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
+        print(f"\nExamining the {len(list(model_pairs))} model pairs")
         series, mets = [], []
         count = 0
+        # print(all_models)
         for models in model_pairs:
             # initiate the KBase output
             modelIDs = [model.id for model in models]
-            print(modelIDs, f"\t{count}/{numPairs}", end="\r")
-            community_model = build_from_species_models(models, cobra_model=True)
+            print(f"\n{count}\t{modelIDs}", end="\t")
             kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
             # define the MRO content
             mro_values = MSSmetana.mro(models, models_media, raw_content=True, environment=environment)
             kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
                               f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                               for models_string, (intersection, memMedia) in mro_values.items()})
-            # define the MIP score
-            mip_values = MSSmetana.mip(community_model, models, environment=environment, compatibilized=True)
+            print("MRO done", end="\t")
+            # define the MIP content
+            mip_values = MSSmetana.mip(None, models, environment=environment, compatibilized=True)
             kbase_dic.update({"mip": mip_values[1]})
-            # determine the optimized growths
-            kbase_dic.update({f"model{index+1}_biomass yield": model.slim_optimize()
-                              for index, model in enumerate(models)})
-            # kbase_dic.update({"comm_biomass yield": community_model.slim_optimize()})
+            print("MIP done", end="\t")
+            # determine the growth diff content
+            kbase_dic.update({"growth_diff": list(MSSmetana.growth_diff(models, environment).values())[0]})
+            print("Growth_diff done\t\t", end="\r")
 
-            # return the content as a pandas Series, which can be easily aggregated with other
-            ## community values as a DataFrame row
+            # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
             series.append(Series(kbase_dic))
-            mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]],
-                         "mro_mets": list(mro_values.values())})
+            mets.append({"mro_mets": list(mro_values.values())})
+            if mip_values[0] is not None:
+                mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
+            count += 1
         return concat(series, axis=1).T, mets
 
     def mro_score(self):
@@ -218,6 +225,9 @@ class MSSmetana:
         print("\nSC score:\t\t\tThe fraction of community members who syntrophically contribute to each species:\n")
         pprint(self.sc_val)
         return self.sc_val
+
+    def growth_score(self):
+        self.growth_diff = MSSmetana
 
     def smetana_score(self):
         if not hasattr(self, "sc_val"):
@@ -466,6 +476,43 @@ class MSSmetana:
                 donors_counter = Counter(chain(*donors_list))
                 scores[model.id] = {o.id: donors_counter[o] / len(donors_list) for o in other_members}
         return scores
+
+    @staticmethod
+    def growth_diff(member_models:Iterable, environment=None):
+        diffs = {}
+        for combination in combinations(member_models, 2):
+            model1_util = MSModelUtil(combination[0]) ; model2_util = MSModelUtil(combination[1])
+            if environment:
+                model1_util.add_medium(environment) ; model2_util.add_medium(environment)
+            model1_growth = model1_util.model.slim_optimize()
+            model2_growth = model2_util.model.slim_optimize()
+            diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = abs(
+                model1_growth - model2_growth) / min([model1_growth, model2_growth])
+        return diffs
+
+    @staticmethod
+    def _calculate_jaccard_score(set1, set2):
+        return len(set1.intersection(set2)) / len(set1.union(set2))
+    @staticmethod
+    def RAST_functionality(ws_id):
+        def get_sso_terms(upa):
+            genome = ws.get_objects2({'objects': [{'ref': upa}]})["data"][0]['data']
+            term_data = list()
+            for j in genome['cdss']:
+                for sso in j['ontology_terms']['SSO'].keys():
+                    term_data.append(sso)
+            sso_terms = set(term_data)
+            return (sso_terms)
+
+        ws = biokbase.narrative.clients.get('workspace')
+        genome_list = ws.list_objects(
+            {"ids": [ws_id], "type": 'KBaseGenomes.Genome', 'minObjectID': 0, 'maxObjectID': 10000})
+        genomes = [g[1] for g in genome_list if g[1].endswith("RAST")]
+        genome_terms_dict = {genome_name: get_sso_terms(str(ws_id) + "/" + genome_name) for genome_name in genomes}
+        genome_pair_similarities = {f"{g1}--{g2}": MSSmetana._calculate_jaccard_score(
+            genome_terms_dict[g1], genome_terms_dict[g2]
+        ) for g1 in genome_terms_dict for g2 in genome_terms_dict if g1 != g2}
+        return genome_pair_similarities
 
     @staticmethod
     def smetana(member_models: Iterable, environment, com_model=None, min_growth=0.1, n_solutions=100, abstol=1e-6,

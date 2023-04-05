@@ -3,7 +3,6 @@ from optlang import Objective
 from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
 from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
 from modelseedpy.community.mscompatibility import MSCompatibility
-from modelseedpy.community.mscommphitting import isnumber
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
@@ -49,7 +48,6 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     ------
     """
     # construct the new model
-    names = names or []
     models = org_models if not standardize else MSCompatibility.standardize(
         org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
     biomass_compounds, biomass_indices = [], []
@@ -128,7 +126,8 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                             else:  rxn.id = rxn_id + str(model_index)
                     finalID = str(rxn.id)
                     string_diff = set(initialID).symmetric_difference(set(finalID))
-                    if string_diff and not all(isnumber(x) for x in string_diff):  print(initialID, string_diff)
+                    if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
+                        print(initialID, string_diff)
             new_reactions.add(rxn)
         # print(biomass_indices)
     # adds only unique reactions and metabolites to the community model
@@ -155,7 +154,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
     if cobra_model:
         return newutl.model
-    return newutl.model, names, abundances
+    return newutl.model, names or [], abundances
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):
     # log information of each respective model

@@ -2,6 +2,7 @@ from modelseedpy.core.optlanghelper import OptlangHelper, Bounds, tupVariable, t
 from modelseedpy.core.exceptions import FeasibilityError, ObjectAlreadyDefinedError
 from modelseedpy.biochem import from_local
 from time import process_time
+from json import dump
 import re
 
 def combine_elements(*ele_dics):
@@ -13,18 +14,12 @@ def combine_elements(*ele_dics):
             else:  ele_dic[ele] = count
     return ele_dic
 
-def parse_primals(primal_values):
-    # TODO implement some refining logic for the primal values
-    values = {var: val for var, val in primal_values.items()}
-    return values
-
 def _check_names(name, names):
-    if name in names:
-        raise ObjectAlreadyDefinedError(f"The {name} is already defined in the model.")
+    if name in names:  raise ObjectAlreadyDefinedError(f"The {name} is already defined in the model.")
     names.append(name)
     return name
 
-def justifyDB(msdb_path:str, primals_path:str=None):
+def justifyDB(msdb_path:str, changes_path:str=None):
     # db_element_counts = combine_elements([met.elements for rxn in msdb.reactions for met in rxn.metabolites])
     msdb = from_local(msdb_path)
 
@@ -42,7 +37,7 @@ def justifyDB(msdb_path:str, primals_path:str=None):
             # mass balance
             for ele in met.elements:
                 # print(met.id, ele)
-                permissible_range = (met.elements[ele]*0.5, met.elements[ele]*1.5)
+                permissible_range = tuple(sorted((met.elements[ele]*0.5, met.elements[ele]*1.5)))
                 name = f"{rxn.id}_{met.id}~{ele}"
                 if name not in names:  # blocks reactions that contain duplicates of the same metabolite, e.g. phosphate
                     mass_variables[rxn.id][met.id][ele] = tupVariable(_check_names(name, names), permissible_range)
@@ -58,7 +53,7 @@ def justifyDB(msdb_path:str, primals_path:str=None):
             # else:  print(rxn.reaction, end="\r")
             # charge balance
             # metID = re.sub("(\_\w?\d+)", "", met.id)
-            permissible_range = (met.charge*0.5, met.charge*1.5) if met.charge != 0 else (-3, 3)
+            permissible_range = tuple(sorted((met.charge*0.5, met.charge*1.5))) if met.charge != 0 else (-3, 3)
             charge_variables[rxn.id][met.id] = tupVariable(f"{rxn.id}_{met.id}~charge", permissible_range)
             objective.expr.extend([{"elements": [charge_variables[rxn.id][met.id].name, -met.charge],
                                     "operation": "Add"}])
@@ -82,6 +77,7 @@ def justifyDB(msdb_path:str, primals_path:str=None):
     # construct the model
     optlang_model = OptlangHelper.define_model("Correct_MSDB", variables, constraints, objective, True)
     with open("Correct_MSDB.lp", 'w') as lp:  lp.write(optlang_model.to_lp())
+    with open("Correct_MSDB.json", 'w') as jsonOut:  dump(optlang_model.to_json(), jsonOut, indent=3)
 
     # acquire the optimized minimum from the model
     print("Starting optimization.")
@@ -90,10 +86,22 @@ def justifyDB(msdb_path:str, primals_path:str=None):
     after = process_time()
     print(f"The optimization concluded:\t{(after-before)/60} minutes")
     if solution != "optimal":  FeasibilityError(f"The optimization is {solution}.")
-    if primals_path is not None:
-        from json import dump
-        with open(primals_path, "w") as out:
-            dump(optlang_model.primal_values, out, indent=3)
+    # export the changes
+    if changes_path is not None:
+        # evaluate proposed changes from the optimization
+        proposed_changes = {}
+        for rxn in optlang_model.reactions:
+            for met in rxn.metabolites:
+                for ele in met.elements:
+                    varName = f"{rxn.id}_{met.id}~{ele}"
+                    original_stoich = met.elements[ele]
+                    proposed_stoich = optlang_model.primal_values[varName]
+                    if original_stoich == proposed_stoich:  continue
+                    proposed_changes[varName] = {"Original": original_stoich, "Proposed": proposed_stoich}
+        # export the proposed changes
+        with open(changes_path, "w") as out:
+            dump(proposed_changes, out, indent=3)
+        return optlang_model, proposed_changes
     return optlang_model
 
 if __name__ == "__main__":
@@ -103,8 +111,6 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--msdb_path", type=Path, default=".")
-    parser.add_argument("--primals_path", type=Path, default="MSDB_justification_primals.json")
+    parser.add_argument("--changes_path", type=Path, default="MSDB_corrections.json")
     args = parser.parse_args()
-
-    # execute the optimization
-    justifyDB(args.msdb_path, args.primals_path)
+    justifyDB(args.msdb_path, args.changes_path)

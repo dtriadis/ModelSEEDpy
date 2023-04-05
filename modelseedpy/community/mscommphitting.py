@@ -27,11 +27,6 @@ import warnings, logging, json, os, re
 
 logger = logging.getLogger(__name__)
 
-
-def isnumber(string):
-    try:  float(string)  ;  return True
-    except:  return False
-
 def dict_keys_exists(dic, *keys):
     result = keys[0] in dic
     if keys[0] in dic:
@@ -43,7 +38,7 @@ def dict_keys_exists(dic, *keys):
 
 def find_dic_number(dic):
     for k, v in dic.items():
-        if isnumber(v):  return v
+        if FBAHelper.isnumber(v):  return v
         num = find_dic_number(dic[k])
     return num
 
@@ -578,8 +573,9 @@ class MSCommPhitting:
             for short_code in unique_short_codes:
                 self.initialize_vars_cons(pheno, short_code)
                 timesteps = list(range(1, len(self.times[short_code]) + 1))
-                ninetieth_percentile_timestep = timesteps[int(0.9*len(timesteps))]
-                penalty_range = np.linspace(self.parameters['stationary'], 0, len(timesteps[ninetieth_percentile_timestep:]))
+                nth_percentile_timestep = timesteps[int(0.90*len(timesteps))]
+                penalty_range = np.linspace(self.parameters['stationary'], self.parameters['stationary']/10,
+                                            len(timesteps[nth_percentile_timestep:]))
                 timestep_excess_count = 0
                 for timestep in timesteps:
                     timestep = int(timestep)
@@ -605,7 +601,7 @@ class MSCommPhitting:
 
                     if 'stationary' in pheno:
                         weight = self.parameters['stationary']
-                        if timestep > ninetieth_percentile_timestep:
+                        if timestep > nth_percentile_timestep:
                             weight = penalty_range[timestep_excess_count]
                             timestep_excess_count += 1
                         objective.expr.extend([{
@@ -632,7 +628,7 @@ class MSCommPhitting:
                                     "operation": "Mul"}],
                             "operation": "Add"
                         })
-                    # biomass_term = [self.parameters['bcv']*b_value + self.parameters['cvmin']] if isnumber(b_value) else [
+                    # biomass_term = [self.parameters['bcv']*b_value + self.parameters['cvmin']] if FBAHelper.isnumber(b_value) else [
                     biomass_term = [self.parameters['cvmin'],
                                     {"elements": [self.parameters['bcv'],
                                                   self.variables["b_"+pheno][short_code][timestep].name],
@@ -746,7 +742,7 @@ class MSCommPhitting:
                     for pheno_index, pheno in enumerate(self.phenotypes):
                         ### define the collections of signal and pheno terms
                         if species in pheno or "OD" in signal:
-                            # if not isnumber(b_values[pheno][short_code][timestep]):
+                            # if not FBAHelper.isnumber(b_values[pheno][short_code][timestep]):
                             signal_sum.append({"operation": "Mul", "elements": [
                                 -1, self.variables['b_' + pheno][short_code][timestep].name]})
                             # else:
@@ -780,7 +776,7 @@ class MSCommPhitting:
                                          "operation": "Mul"}],
                                     "operation": "Add"
                                 })
-                        # if not isnumber(self.variables['b_' + pheno][short_code][timestep]):
+                        # if not FBAHelper.isnumber(self.variables['b_' + pheno][short_code][timestep]):
                         biomass_term = [self.variables['b_' + pheno][short_code][timestep].name, {
                             "elements": [-1, self.variables['b_' + pheno][short_code][next_timestep].name],
                             "operation": "Mul"}]
@@ -834,8 +830,8 @@ class MSCommPhitting:
                         })
                     if all([isinstance(val, dict) for val in signal_sum]):
                         self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].extend(signal_sum)
-                    elif all([isnumber(val) for val in signal_sum]):
-                        self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].append(sum(signal_sum))
+                    # elif all([FBAHelper.isnumber(val) for val in signal_sum]):
+                    #     self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].append(sum(signal_sum))
                     else:
                         raise ValueError(f"The {signal_sum} value has unexpected contents.")
                     constraints.append(self.constraints[signal + '|diffc'][short_code][timestep])
@@ -868,7 +864,7 @@ class MSCommPhitting:
         #             if not isinstance(ele,dict):
         #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}", data=[ele])
         #             else:
-        #                 # str(x) if not isnumber(x) else float(x)
+        #                 # str(x) if not FBAHelper.isnumber(x) else float(x)
         #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/elements",
         #                                               data=list(map(str, ele["elements"])))
         #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/operation",
@@ -975,7 +971,7 @@ class MSCommPhitting:
 
         # parse the primal values
         values_df = DataFrame(self.values)
-        display(values_df)
+        # display(values_df)
         values_index = values_df.index.tolist()
         # values_cols = list(map(str, values_df.columns))
         for col in values_df.columns:
@@ -990,8 +986,7 @@ class MSCommPhitting:
             ## process the data values
             for index, ele in enumerate(trial_values):
                 dataset_name = f'{trial_path}/{values_index[index]}'
-                if isnumber(ele):
-                    self.hdf5_file.create_dataset(dataset_name, data=[float(ele)])
+                if FBAHelper.isnumber(ele):  self.hdf5_file.create_dataset(dataset_name, data=[float(ele)])
                 elif isinstance(ele, dict):
                     self.hdf5_file.create_dataset(dataset_name, data=list(map(float, ele.values())))
                     self.hdf5_file[dataset_name].attrs["full_time"] = (len(ele.values()) == max_time)
@@ -1012,8 +1007,7 @@ class MSCommPhitting:
         if mscomfit_json_path:
             with open(mscomfit_json_path, 'r') as mscmft:
                 return json.load(mscmft)
-        if model_to_load:
-            self.problem = Model.from_json(model_to_load)
+        if model_to_load:  self.problem = Model.from_json(model_to_load)
 
     @staticmethod
     def assign_values(param, var, next_dimension):
@@ -1030,16 +1024,13 @@ class MSCommPhitting:
                 if pheno in exclude:  continue
                 if species in next_dimension:  next_dimension[species].append(pheno)
                 else:  next_dimension[species] = [pheno]
-        if isnumber(param):
-            return MSCommPhitting.assign_values(param, var, next_dimension)
-        elif isnumber(param[var]):
-            return MSCommPhitting.assign_values(param[var], var, next_dimension)
+        if FBAHelper.isnumber(param):  return MSCommPhitting.assign_values(param, var, next_dimension)
+        elif FBAHelper.isnumber(param[var]):  return MSCommPhitting.assign_values(param[var], var, next_dimension)
         elif isinstance(param[var], dict):
             return {var: {dim1: {dim2: param[var][dim1] for dim2 in dim2_list}
                           for dim1, dim2_list in next_dimension.items()}}
-        else:
-            logger.critical(f"The param (with keys {dic_keys(param)}) and var {var} are not amenable"
-                            f" with the parameterizing a universal value.")
+        else:  logger.critical(f"The param (with keys {dic_keys(param)}) and var {var} are not amenable"
+                               " with the parameterizing a universal value.")
                     # {short_code: {list(timestep_info.keys())[0]: find_dic_number(param)} for short_code, timestep_info in variable.items()}}
 
     def adjust_color(self, color, amount=0.5):

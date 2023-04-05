@@ -135,6 +135,12 @@ class FBAHelper:
         # TODO: check for SBO
         return reaction.id[0:3] == "bio"
 
+    def isnumber(string):
+        try:
+            float(string);  return True
+        except:
+            return False
+
     @staticmethod
     def rxn_mets_list(rxn):
         return [met for met in rxn.reactants+rxn.products]
@@ -160,7 +166,11 @@ class FBAHelper:
             elif comp[0:1] != "e":
                 return comp
         return cytosol
-    
+
+    @staticmethod
+    def compartment_id(string):
+        return int(re.search(r"(?<=\_|\w)(\d+)(?=$)", string).group())
+
     @staticmethod
     def id_from_ref(ref):
         array = ref.split("/")
