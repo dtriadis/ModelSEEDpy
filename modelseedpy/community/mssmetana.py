@@ -493,26 +493,33 @@ class MSSmetana:
     @staticmethod
     def _calculate_jaccard_score(set1, set2):
         return len(set1.intersection(set2)) / len(set1.union(set2))
-    @staticmethod
-    def RAST_functionality(ws_id):
-        def get_sso_terms(upa):
-            genome = ws.get_objects2({'objects': [{'ref': upa}]})["data"][0]['data']
-            term_data = list()
-            for j in genome['cdss']:
-                for sso in j['ontology_terms']['SSO'].keys():
-                    term_data.append(sso)
-            sso_terms = set(term_data)
-            return (sso_terms)
 
-        ws = biokbase.narrative.clients.get('workspace')
-        genome_list = ws.list_objects(
+    @staticmethod
+    def get_all_genomes_from_ws(ws_id, kbase_object=None, cobrakbase_repo_path:str=None, kbase_token_path:str=None):
+        def get_genome(genome_name):
+            return kbase_object.ws_client.get_objects2({'objects': [{'ref': f"{ws_id}/{genome_name}"}]}
+                                                       )["data"][0]['data']
+
+        # load the kbase client instance
+        if not kbase_object:
+            import os
+            os.environ["HOME"] = cobrakbase_repo_path
+            import cobrakbase
+            with open(kbase_token_path) as token_file:
+                kbase_object = cobrakbase.KBaseAPI(token_file.readline())
+
+        # calculate the complementarity
+        genome_list = kbase_object.ws_client.list_objects(
             {"ids": [ws_id], "type": 'KBaseGenomes.Genome', 'minObjectID': 0, 'maxObjectID': 10000})
-        genomes = [g[1] for g in genome_list if g[1].endswith("RAST")]
-        genome_terms_dict = {genome_name: get_sso_terms(str(ws_id) + "/" + genome_name) for genome_name in genomes}
-        genome_pair_similarities = {f"{g1}--{g2}": MSSmetana._calculate_jaccard_score(
-            genome_terms_dict[g1], genome_terms_dict[g2]
-        ) for g1 in genome_terms_dict for g2 in genome_terms_dict if g1 != g2}
-        return genome_pair_similarities
+        genome_names = [g[1] for g in genome_list if g[1].endswith("RAST")]
+        return {genome_name: set([sso for j in get_genome(genome_name)['cdss']
+                                  for sso in j['ontology_terms']['SSO'].keys()])
+                for genome_name in genome_names}
+
+    @staticmethod
+    def RAST_functionality(RAST_genomes:Iterable,):
+        return {f"{g1}--{g2}": MSSmetana._calculate_jaccard_score(
+            RAST_genomes[g1], RAST_genomes[g2]) for g1, g2 in combinations(RAST_genomes.keys(), 2)}
 
     @staticmethod
     def smetana(member_models: Iterable, environment, com_model=None, min_growth=0.1, n_solutions=100, abstol=1e-6,

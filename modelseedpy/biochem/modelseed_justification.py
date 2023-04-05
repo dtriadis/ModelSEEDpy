@@ -33,34 +33,22 @@ def justifyDB(msdb_path:str, changes_path:str=None):
         charge_variables[rxn.id], charge_constraints[rxn.id] = {}, {}
         # print(f"{rxn.id}\t{rxn.reaction}\t\t\t\t\t\t\t\t\t\t", end="\r")
         for met in rxn.metabolites:
-            mass_variables[rxn.id][met.id] = {}
             # mass balance
-            for ele in met.elements:
-                # print(met.id, ele)
-                permissible_range = tuple(sorted((met.elements[ele]*0.5, met.elements[ele]*1.5)))
-                name = f"{rxn.id}_{met.id}~{ele}"
-                if name not in names:  # blocks reactions that contain duplicates of the same metabolite, e.g. phosphate
-                    mass_variables[rxn.id][met.id][ele] = tupVariable(_check_names(name, names), permissible_range)
-                else:
-                    print(f"\nomitted\t{name}")
-                    if met.id not in mass_variables[rxn.id]:
-                        print(f"The {met.id} is not in mass_variables[rxn.id] object.")
-                    elif ele not in mass_variables[rxn.id][met.id]:
-                        print(f"The {ele} is not in mass_variables[rxn.id][met.id] object.")
-
+            mass_variables[rxn.id][met.id] = {ele: tupVariable(
+                _check_names(f"{rxn.id}_{met.id}~{ele}", names),
+                tuple(sorted((met.elements[ele]*0.5, met.elements[ele]*1.5)))
+            ) for ele in met.elements}
             objective.expr.extend([{"elements": [mass_variables[rxn.id][met.id][ele].name, -met.elements[ele]],
                                     "operation": "Add"} for ele in mass_variables[rxn.id][met.id]])
-            # else:  print(rxn.reaction, end="\r")
             # charge balance
-            # metID = re.sub("(\_\w?\d+)", "", met.id)
-            permissible_range = tuple(sorted((met.charge*0.5, met.charge*1.5))) if met.charge != 0 else (-3, 3)
-            charge_variables[rxn.id][met.id] = tupVariable(f"{rxn.id}_{met.id}~charge", permissible_range)
+            charge_variables[rxn.id][met.id] = tupVariable(
+                f"{rxn.id}_{met.id}~charge", tuple(sorted((met.charge*0.5, met.charge*1.5))))
             objective.expr.extend([{"elements": [charge_variables[rxn.id][met.id].name, -met.charge],
                                     "operation": "Add"}])
             # add the variables
             variables.extend([*mass_variables[rxn.id][met.id].values(), charge_variables[rxn.id][met.id]])
         # add the constraints
-        # print(mass_variables)
+        # TODO possibly constrain all compartment versions of a compound to be equivalent
         for ele in rxn_element_counts:
             # sum_m^M( Ele_(met,rxn) * n_(met,rxn) ) = 0 , for a given reaction rxn
             mass_constraints[rxn.id][ele] = tupConstraint(f"{rxn.id}_{ele}", expr={
@@ -92,12 +80,16 @@ def justifyDB(msdb_path:str, changes_path:str=None):
         proposed_changes = {}
         for rxn in optlang_model.reactions:
             for met in rxn.metabolites:
+                varName = f"{rxn.id}_{met.id}~charge"
+                proposed = optlang_model.primal_values[varName]
+                if met.charge != proposed:
+                    proposed_changes[varName] = {"Original": met.charge, "Proposed": proposed}
                 for ele in met.elements:
                     varName = f"{rxn.id}_{met.id}~{ele}"
-                    original_stoich = met.elements[ele]
-                    proposed_stoich = optlang_model.primal_values[varName]
-                    if original_stoich == proposed_stoich:  continue
-                    proposed_changes[varName] = {"Original": original_stoich, "Proposed": proposed_stoich}
+                    original = met.elements[ele]
+                    proposed = optlang_model.primal_values[varName]
+                    if original == proposed:  continue
+                    proposed_changes[varName] = {"Original": original, "Proposed": proposed}
         # export the proposed changes
         with open(changes_path, "w") as out:
             dump(proposed_changes, out, indent=3)
