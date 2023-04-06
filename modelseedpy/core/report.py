@@ -171,8 +171,7 @@ def fba_report(model, fba_sol, fva_sol, essential_genes, model_id,
            }
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.abspath(f"{os.path.dirname(__file__)}/../core/fba_template.html")
-                                   ).render(content)
+    html_report = env.get_template(os.path.join(["core", "fba_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -186,8 +185,7 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
                "exchanged_mets": exMets_df.to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.abspath(f"{os.path.dirname(__file__)}/../community/steadycom_template.html")
-                                   ).render(content)
+    html_report = env.get_template(os.path.join(["community", "steadycom_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -214,8 +212,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
                "mets": mets}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.abspath(f"{os.path.dirname(__file__)}/../community/smetana_template.html")
-                                   ).render(content)
+    html_report = env.get_template(os.path.join(["community", "smetana_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -232,8 +229,7 @@ def msdb_justification_report(proposed_changes, export_html_path="msdb_correctio
     content = {"table": proposed_changes_df, "heatmap": heatmap_changes.style.background_gradient().to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.abspath(f"{os.path.dirname(__file__)}/../biochem/msdb_template.html")
-                                   ).render(content)
+    html_report = env.get_template(os.path.join(["biochem", "msdb_template.html"])).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
