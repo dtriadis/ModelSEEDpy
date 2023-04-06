@@ -213,8 +213,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template("/".join([os.path.dirname(__file__), "..", "community", "smetana_template.html"])
-                                   ).render(content)
+    html_report = env.get_template(os.path.abspath("../community/smetana_template.html")).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -232,7 +231,7 @@ def msdb_justification_report(proposed_changes, export_html_path="msdb_correctio
     package_dir = "/".join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[:-1])
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template("/".join(["biochem", "msdb_template.html"])).render(content)
+    html_report = env.get_template(os.path.abspath("../biochem/msdb_template.html")).render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report

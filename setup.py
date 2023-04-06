@@ -44,7 +44,8 @@ setup(
         "pyeda",
         "icecream",
         "deepdiff",
-        "openpyxl"
+        "openpyxl",
+        "jinja2"
     ],
     tests_require=[
         "pytest",
