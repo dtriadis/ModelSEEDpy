@@ -270,7 +270,7 @@ class GrowthData:
         if "rows" in carbon_conc_series and carbon_conc_series["rows"]:
             row_num = len(list(carbon_conc_series["rows"].values())[0])
         # load and parse data and metadata
-        (media_conc, zipped_output, data_timestep_hr, simulation_time, dataframes, trials, fluxes_df
+        (media_conc, data_timestep_hr, simulation_time, dataframes, trials, fluxes_df
          ) = GrowthData.load_data(
             base_media, community_members, solver, data_paths, ignore_trials, all_phenotypes,
             ignore_timesteps, significant_deviation, row_num, extract_zip_path
@@ -307,14 +307,12 @@ class GrowthData:
             end = int(end or df.columns[-1])
             break
         ignore_timesteps = list(range(start, end+1)) if start != end else None
-        zipped_output = []
         if extract_zip_path:
             with ZipFile(extract_zip_path, 'r') as zp:
                 zp.extractall()
 
         # define only species for which data is defined
         fluxes_df, comm_members = phenotypes(community_members, all_phenotypes, solver=solver)
-        zipped_output.append("fluxes.csv")
         modeled_species = list(v for v in data_paths.values() if ("OD" not in v and " " not in v))
         removed_phenotypes = [col for col in fluxes_df if not any([species in col for species in modeled_species])]
         fluxes_df.drop(removed_phenotypes, axis=1, inplace=True)
@@ -325,12 +323,10 @@ class GrowthData:
         # determine the time range in which all datasets are significant
         data_timestep_hr = []
         dataframes = {}
-        zipped_output.append(data_paths['path'])
         max_timestep_cols = []
         if min_timesteps:
             for org_sheet, name in data_paths.items():
-                if org_sheet == 'path' or "OD" in sheet:
-                    continue
+                if org_sheet == 'path' or "OD" in sheet:  continue
                 ## define the DataFrame
                 sheet = org_sheet.replace(' ', '_')
                 df_name = f"{name}:{sheet}"
@@ -387,16 +383,14 @@ class GrowthData:
                 dataframes[df_name], row_num)
             # display(data_times_df) ; display(data_values_df)
             for col in plateaued_times:
-                if col in data_times_df.columns:
-                    data_times_df.drop(col, axis=1, inplace=True)
-                if col in data_values_df.columns:
-                    data_values_df.drop(col, axis=1, inplace=True)
+                if col in data_times_df.columns:  data_times_df.drop(col, axis=1, inplace=True)
+                if col in data_values_df.columns:  data_values_df.drop(col, axis=1, inplace=True)
             dataframes[df_name] = (data_times_df, data_values_df)
 
         # differentiate the phenotypes for each species
         trials = set(chain.from_iterable([list(times.index) for times, values in dataframes.values()]))
         media_conc = {} if not base_media else {cpd.id: cpd.concentration for cpd in base_media.mediacompounds}
-        return (media_conc, zipped_output, data_timestep_hr, simulation_time, dataframes, trials, fluxes_df)
+        return (media_conc, data_timestep_hr, simulation_time, dataframes, trials, fluxes_df)
 
     @staticmethod
     def _min_significant_timesteps(full_df, ignore_timesteps, significant_deviation, ignore_trials, df_name, name):
@@ -523,7 +517,7 @@ class GrowthData:
         constructed_experiments["additional_compounds"] = additional_compounds
         constructed_experiments["strains"] = strains
         constructed_experiments["date"] = [date] * (column_num*row_num)
-        constructed_experiments.to_csv("growth_metadata.csv")
+        constructed_experiments.to_csv("growth_metadata.tsv", sep="\t")
         return constructed_experiments, standardized_carbon_conc, trial_name_conversion
 
     @staticmethod
@@ -620,7 +614,7 @@ class GrowthData:
         data_df = DataFrame(df_data)
         data_df.index = data_df["short_codes"]
         data_df = data_df.drop(["short_codes"], axis=1)
-        data_df.to_csv("growth_spectra.csv")
+        data_df.to_csv("growth_spectra.tsv", sep="\t")
         return data_df
 
 
@@ -643,7 +637,7 @@ class BiologData:
     @staticmethod
     def load_data(data_paths, significant_deviation, community_members, col_row_num,
                   row_num, culture, date, solver):
-        zipped_output = [data_paths['path'], "fluxes.csv"]
+        zipped_output = [data_paths['path'], "fluxes.tsv"]
         # determine the metabolic fluxes for each member and phenotype
         # import and parse the raw CSV data
         # TODO - this may be capable of emulating leveraged functions from the GrowthData object
@@ -721,7 +715,7 @@ class BiologData:
         constructed_experiments.insert(0, "condition", trial_names)
         constructed_experiments["strain"] = [culture] * (column_num*row_num)
         constructed_experiments["date"] = [date] * (column_num*row_num)
-        constructed_experiments.to_csv("growth_metadata.csv")
+        constructed_experiments.to_csv("growth_metadata.tsv", sep="\t")
         return constructed_experiments, trial_mets, trial_name_conversion
 
     @staticmethod
@@ -764,7 +758,7 @@ class BiologData:
         biolog_df = DataFrame(df_data)
         biolog_df.index = biolog_df["short_codes"]
         del biolog_df["short_codes"]
-        biolog_df.to_csv("growth_spectra.csv")
+        biolog_df.to_csv("growth_spectra.tsv", sep="\t")
 
         return biolog_df
 

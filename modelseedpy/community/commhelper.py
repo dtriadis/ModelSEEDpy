@@ -89,7 +89,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
             if rxn.id[0:3] != "EX_":
                 ## biomass reactions
                 if re.search('^(bio)(\d+)$', rxn.id):
-                    index = int(rxn.id.removeprefix('bio'))
+                    index = int(re.sub(r"(^bio)", "", rxn.id))
                     if biomass_index == 2:
                         while f"bio{biomass_index}" in model_reaction_ids:
                             biomass_index += 1

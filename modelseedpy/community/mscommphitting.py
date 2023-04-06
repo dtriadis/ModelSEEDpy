@@ -551,8 +551,7 @@ class MSCommPhitting:
                             initial_val = self.carbon_conc[met_id][short_code]
                         if initial_val is not None:
                             conc_var = conc_var._replace(bounds=Bounds(initial_val, initial_val))
-                            if biolog_simulation:
-                                conc_var = conc_var._replace(bounds=Bounds(1, None))
+                            if biolog_simulation:  conc_var = conc_var._replace(bounds=Bounds(1, None))
                     ## mandate complete carbon consumption
                     elif timestep == timesteps[-1] and (met_id in self.rel_final_conc or met_id in self.abs_final_conc):
                         if met_id in self.rel_final_conc:
@@ -568,7 +567,6 @@ class MSCommPhitting:
             self.constraints['dbc_' + pheno] = {short_code: {} for short_code in unique_short_codes}
 
         # define growth and biomass variables and constraints
-        # self.parameters["kcat"] = {met_id:{species:_michaelis_menten()}}
         for pheno in self.phenotypes:
             for short_code in unique_short_codes:
                 self.initialize_vars_cons(pheno, short_code)
@@ -699,7 +697,6 @@ class MSCommPhitting:
             species_phenos[species] = {None if "OD" in species else f"{species}_stationary"}
             signal_column_index = index + 2
             data_timestep = 1
-            # TODO - The conversion must be defined per phenotype
             self.variables[signal + '|conversion'] = tupVariable(
                 signal + '|conversion', bounds=Bounds(*self.conversion_bounds))
             variables.append(self.variables[signal + '|conversion'])
@@ -734,7 +731,7 @@ class MSCommPhitting:
                         print(f"Skipping timestep {timestep} that does not align with the user's timestep") ; continue
                     data_timestep += 1
                     if data_timestep > int(self.times[short_code][-1] / self.parameters["data_timestep_hr"]):
-                        print(f"The time from the user-defined exceeds the simulation time, so the DBC & diff loop os terminating.")
+                        print(f"The user-defined time exceeds the simulation time, so the DBC & diff loop is broken.")
                         break
                     next_timestep = int(timestep) + 1
                     ## the phenotype transition terms are aggregated
@@ -803,7 +800,7 @@ class MSCommPhitting:
                                       self.variables[signal + '|diffneg'][short_code][timestep]])
 
                     # {signal}__conversion*datum = {signal}__bio
-                    # TODO - the conversion variable must be flexible for a constant for BIOLOG conditions
+                    # TODO - the conversion variable must be a constant for BIOLOG conditions
                     self.constraints[signal + '|bioc'][short_code][timestep] = tupConstraint(
                         name=_name(signal, '|bioc', short_code, timestep, self.names),
                         expr={
@@ -830,10 +827,7 @@ class MSCommPhitting:
                         })
                     if all([isinstance(val, dict) for val in signal_sum]):
                         self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].extend(signal_sum)
-                    # elif all([FBAHelper.isnumber(val) for val in signal_sum]):
-                    #     self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].append(sum(signal_sum))
-                    else:
-                        raise ValueError(f"The {signal_sum} value has unexpected contents.")
+                    else:  raise ValueError(f"The {signal_sum} value has unexpected contents.")
                     constraints.append(self.constraints[signal + '|diffc'][short_code][timestep])
 
                     objective.expr.extend([{
@@ -854,45 +848,10 @@ class MSCommPhitting:
         self.problem = OptlangHelper.define_model("CommPhitting model", variables, constraints, objective, True)
         self.hdf5_name = export_lp.replace(".lp", ".h5")
         self.hdf5_file = File(self.hdf5_name, 'w')
-        # self.hdf5_file.create_dataset(f'model/variables', data=[
-        #     list(map(str, [var.name, var.bounds.lb, var.bounds.ub, var.type])) for var in variables])
-        # for index, cons in enumerate(constraints):
-        #     self.hdf5_file.create_dataset(f'model/constraints/{cons.name}/content', data=[
-        #         list(map(str, [cons.name, cons.bounds[0], cons.bounds[1]])) for cons in constraints])
-        #     if any([isinstance(x, dict) for x in cons.expr["elements"]]):
-        #         for ele_index, ele in enumerate(cons.expr["elements"]):
-        #             if not isinstance(ele,dict):
-        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}", data=[ele])
-        #             else:
-        #                 # str(x) if not FBAHelper.isnumber(x) else float(x)
-        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/elements",
-        #                                               data=list(map(str, ele["elements"])))
-        #                 self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements/{ele_index}/operation",
-        #                                               data=[ele["operation"]])
-        #     else:
-        #         self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/elements", data=cons.expr["elements"])
-        #     self.hdf5_file.create_dataset(f"model/constraints/{cons.name}/expr/operation", data=[cons.expr["operation"]])
-        #
-        # self.hdf5_file.create_dataset(f'model/objective/content', data=[str(objective.name), str(objective.direction)])
-        # self.hdf5_file.create_dataset(f'model/objective/expr/operation', data=["Add"])
-        # for ele_index, ele in enumerate(objective.expr):
-        #     print(ele_index, ele, end="\r")
-        #     if not isinstance(ele, dict):
-        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}", data=[ele])
-        #     else:
-        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}/elements",
-        #                                       data=list(map(str, ele["elements"])))
-        #         self.hdf5_file.create_dataset(f"model/objective/expr/elements/{ele_index}/operation", data=[ele["operation"]])
-
         time_5 = process_time()
         print(f'Done with constructing the {type(self.problem)} model: {(time_5 - time_4) / 60} min')
 
         # export contents
-        # dtypes = {"exchange":str}.update({col: "<f8" for col in self.fluxes_df.columns})
-        # self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=np.array(list(self.fluxes_df.items()), dtype=dtypes))
-        # self.hdf5_file.create_dataset(f"model/phenotype_profiles", data=self.fluxes_df.to_numpy())
-        # self.hdf5_file["model/phenotype_profiles"].attrs["index"] = self.fluxes_df.index.to_numpy()
-        # self.hdf5_file["model/phenotype_profiles"].attrs["columns"] = list(map(str, self.fluxes_df.columns))
         if export_phenotype_profiles:
             phenotype_profiles_name = 'phenotype_profiles.tsv'
             self.fluxes_df.to_csv(phenotype_profiles_name, sep="\t")
@@ -902,14 +861,9 @@ class MSCommPhitting:
             DataFrame(data=list(self.parameters.values()), index=list(self.parameters.keys()),
                       columns=['values']).to_csv(parameter_name, sep="\t")
             self.zipped_output.append(parameter_name)
-            # self.hdf5_file.create_dataset(f'model/parameters', data=list(map(str, self.parameters.values())))
-            # self.hdf5_file['model/parameters'].attrs["index"] = list(map(str, self.parameters.keys()))
         if export_lp:
-            if re.search(r"(\\\\/)", export_lp):
-                os.makedirs(os.path.dirname(export_lp), exist_ok=True)
-            with open(export_lp, 'w') as lp:
-                lp.write(self.problem.to_lp())
-            # self.hdf5_file.create_dataset(f'model/lp', data=self.problem.to_lp())
+            if re.search(r"(\\\\/)", export_lp):  os.makedirs(os.path.dirname(export_lp), exist_ok=True)
+            with open(export_lp, 'w') as lp:  lp.write(self.problem.to_lp())
             model_name = 'CommPhitting.json'
             _export_model_json(self.problem.to_json(), model_name)
             self.zipped_output.extend([export_lp, model_name])
@@ -918,9 +872,7 @@ class MSCommPhitting:
             sleep(2)
             with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
                 for file in self.zipped_output:
-                    zp.write(file)
-                    os.remove(file)
-
+                    zp.write(file) ; os.remove(file)
         time_6 = process_time()
         print(f'Done exporting the content: {(time_6 - time_5) / 60} min')
 
@@ -930,10 +882,12 @@ class MSCommPhitting:
         time1 = process_time()
         self.values = {}
         solution = self.problem.optimize()
+        timesteps = min(list(map(len, self.times.values())))
+        fit_quality = self.problem.objective.value/timesteps
+        print(f"The optimization fit quality is {fit_quality}")
 
-        # TODO normalize the objective value by the number of timesteps as a quantitative metric of the fit
-        ## and then approximate a threshold of good fits. Bad fits can trigger a black box optimization
-        ## adjust the parameters and iteratively improve the fit until the metric reaches the ideal range.
+        # TODO approximate a threshold of good fits, and trigger black box optimization for bad fits
+        ## that iteratively adjust parameters until the fit metric surmounts the threshold.
 
         # categorize the primal values by trial and time
         if "optimal" not in solution:
