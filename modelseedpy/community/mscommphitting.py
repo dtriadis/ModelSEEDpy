@@ -143,7 +143,6 @@ class MSCommPhitting:
                                     species_abundances, carbon_conc, ignore_trials, ignore_timesteps,
                                     species_identities_rows, significant_deviation, extract_zip_path,
                                     determine_requisite_biomass)
-            # self.consumed_mets = [self.msdb.compounds.get_by_any(met).id
             #                       for content in community_members.values() for met in content["phenotypes"]]
         self.fluxes_tup = FBAHelper.parse_df(fluxes_df)
         self.fluxes_df = fluxes_df ; self.data_df = data_df

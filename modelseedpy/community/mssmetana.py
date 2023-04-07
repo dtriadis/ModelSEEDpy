@@ -112,7 +112,7 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None, kbase_obj=None,
                      see_media:bool=True, environment:Union[dict]=None):  # environment can also be a KBase media object
         from pandas import Series, concat
         if pairs:
@@ -154,6 +154,10 @@ class MSSmetana:
             # determine the growth diff content
             kbase_dic.update({"growth_diff": list(MSSmetana.growth_diff(models, environment).values())[0]})
             print("Growth_diff done\t\t", end="\r")
+            # determine the functional complementarity content
+            if kbase_obj is not None:
+                kbase_dic.update({"RAST_similarity": list(MSSmetana.RAST_functionality(models, kbase_obj).values())[0]})
+                print("RAST_similarity done\t\t", end="\r")
 
             # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
             series.append(Series(kbase_dic))
@@ -497,9 +501,8 @@ class MSSmetana:
     @staticmethod
     def get_all_genomes_from_ws(ws_id, kbase_object=None, cobrakbase_repo_path:str=None, kbase_token_path:str=None):
         def get_genome(genome_name):
-            return kbase_object.ws_client.get_objects2({'objects': [{'ref': f"{ws_id}/{genome_name}"}]}
-                                                       )["data"][0]['data']
-
+            return kbase_object.ws_client.get_objects2(
+                {'objects': [{'ref': f"{ws_id}/{genome_name}"}]})["data"][0]['data']
         # load the kbase client instance
         if not kbase_object:
             import os
@@ -517,9 +520,19 @@ class MSSmetana:
                 for genome_name in genome_names}
 
     @staticmethod
-    def RAST_functionality(RAST_genomes:Iterable,):
-        return {f"{g1}--{g2}": MSSmetana._calculate_jaccard_score(
-            RAST_genomes[g1], RAST_genomes[g2]) for g1, g2 in combinations(RAST_genomes.keys(), 2)}
+    def RAST_functionality(models:Iterable, kbase_object=None, cobrakbase_repo_path:str=None,
+                           kbase_token_path:str=None, RAST_genomes=None):
+        if not RAST_genomes:
+            if not kbase_object:
+                import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
+                with open(kbase_token_path) as token_file:
+                    kbase_object = cobrakbase.KBaseAPI(token_file.readline())
+            RAST_genomes = {model.id: kbase_object.get_from_ws(model.genome_ref) for model in models}
+        distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
+                set(sso for j in RAST_genomes[genome1].cdss for sso in j.ontology_terms['SSO']),
+                set(sso for j in RAST_genomes[genome2].cdss for sso in j.ontology_terms['SSO']))
+            for genome1, genome2 in combinations(RAST_genomes.keys(), 2)}
+        return distances
 
     @staticmethod
     def smetana(member_models: Iterable, environment, com_model=None, min_growth=0.1, n_solutions=100, abstol=1e-6,
