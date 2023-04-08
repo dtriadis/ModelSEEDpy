@@ -20,18 +20,13 @@ tupObjective = namedtuple("tupObjective", ("name", "expr", "direction"), default
 def isIterable(term):
     try:
         iter(term)
-        if type(term) is not str:
-            return True
+        if type(term) is not str:  return True
         return False
-    except:
-        return False
+    except:  return False
     
 def isnumber(obj):
-    try:
-        float(obj)
-        return True
-    except:
-        return False
+    try:  float(obj)  ;  return True
+    except:  return False
     
 def define_term(value):
     if isnumber(value):
@@ -67,7 +62,6 @@ class OptlangHelper:
         elif isinstance(objective_expr, dict):
             obj_expr = {"type": objective_expr["operation"], 
                         "args": [define_term(term) for term in objective_expr["elements"]]}
-        
         return {"name": obj_name.replace(" ", "_"), "expression": obj_expr, "direction": direction}
     
     @staticmethod
@@ -75,15 +69,13 @@ class OptlangHelper:
         model = {'name':model_name, 'variables':[], 'constraints':[]}
         # pprint(objective)
         for var in variables:
-            if len(var) == 2:
-                var.append("continuous")
+            if len(var) == 2:  var.append("continuous")
             model["variables"].append(OptlangHelper.add_variables(var[0], var[1], var[2]))
         for cons in constraints:
             model["constraints"].append(OptlangHelper.add_constraint(cons[0], cons[1], cons[2]))
         # if not isinstance(obj, str): # catches a strange error of the objective name as the objective itself
         model["objective"] = OptlangHelper.add_objective(objective[0], objective[1], objective[2])
-        if optlang:
-            return Model.from_json(model)
+        if optlang:  return Model.from_json(model)
         return model
     
     @staticmethod
@@ -101,8 +93,7 @@ class OptlangHelper:
                         arguments.append(define_term(ele2))
                 expression["args"].append(get_expression_template(ele))
                 expression["args"][-1]["args"] = arguments
-            else:
-                expression["args"].append(define_term(ele))
+            else:  expression["args"].append(define_term(ele))
         # pprint(expression)
         return expression      
     
@@ -113,7 +104,8 @@ class OptlangHelper:
             coefs = heuns_coefs if isinstance(heuns_coefs, (list, set)) else heuns_coefs.tolist()
             zipped_length = len(zipped_to_sum); coefs_length = len(coefs)
             if zipped_length != coefs_length:
-                raise IndexError(f"ERROR: The length of zipped elements {zipped_length} is unequal to that of coefficients {coefs_length}")
+                raise IndexError(f"ERROR: The length of zipped elements {zipped_length}"
+                                 f" is unequal to that of coefficients {coefs_length}")
                 
         elements = []
         for index, (term1, term2) in enumerate(zipped_to_sum):

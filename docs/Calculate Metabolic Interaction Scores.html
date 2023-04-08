@@ -1,0 +1,79 @@
+<script type="text/x-mathjax-config">
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ["\\(", "\\)"]],
+        processEscapes: true,
+      }
+    }
+  </script>
+
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+<div class="app-description">
+    <h3>Background</h3>
+    <p>
+        Microbial communities are characteristically complex and high-dimensional systems that are difficult to measure and simulate. The <i><b>S</b>pecies <b>Met</b>abolic Interaction <b>Ana</b>lysis</i>
+        (SMETANA) suite of scores <sup><a href="#smetana">[1]</a></sup> were therefore developed to compress complex interactions of microbial communities into single numeric metrics that can be easily 
+        interpreted, compared, andquantitatively examined. These scores evaluate the interactions between two groupings within a community, where the groupings can be defined by the investigator as 
+        individual members or sub-communities of multiple members. The SMETANA scores have been adapted by several computational biologists into usable API's, but we extend the SMETANA suite further than 
+        the original formulation with algorithmic improvements of existing scores and additional original scores that capture more dimensions and more comprehensively assess community interactions.
+    </p>
+
+    <h3>MSSmetana</h3>
+    <p>
+        Our curated version of SMETANA in the ModelSEEDpy API -- <i>MSSmetana</i> -- consists of the following scores. The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is among the original
+        SMETANA scores and quantifies the fraction of each grouping's nutritional requirements, in a given media or the complete media by default, that overlap with the other grouping's nutritional 
+        requirements. This is mathematically represented in the following algorithm for groupings $i$ and $j$ in the set of all $N$ groupings: 
+            <div class="latex">\[ MRO=i,j \in (N|i\ne j) \left( \frac{|M_i \cap M_j|}{|M_i|} \right) \]</div>
+        The minimal media $M$ for each grouping is determined by minimizing its total exchange flux or the total number of compounds that are consumed through exchanges. The <i><b>M</b>etabolic 
+        <b>I</b>nteraction <b>P</b>otential</i> (MIP) score is also one of the original SMETANA scores and quantifies the number of compounds that can be syntrophically exchanged between the groupings. 
+        This is calculated by first merging the groupings into a compartmentalized community model and then determine the difference between the number of compounds that are consumed as transports 
+        by the individual groupings and the number of consumed compounds as the exchanges of the whole pseudo-community. The consumption difference between grouping-level and the community-level is 
+        attributed to nutritional requirements of the individual groupings that were satisfied through syntrophic exchanges instead of media absorptions, which is represented by the algorithm:
+            <div class="latex">\[ MIP=M_{transports}-M_{exchanges} \]</div>
+        We additionally developed a few original scores. The first of these is the <i><b>G</b>rowth <b>R</b>ate <b>D</b>ifference</i> (GRD) score, which quantifies the difference in monocultural 
+        biomass growth rate between the two groupings in the same media normalized by the growth rate of the slowest growing grouping. This score evaluates prospective dominance of one grouping relative 
+        to the other, which presumably will influence how synergistic or antagonistic that grouping interactions will be. This score is algorithmically represented as the difference in biomass flux 
+        $G$ between groupings 1 $g1$ and 2 $g2$:
+        <div class="latex">\[ GRD = \frac{abs(G_{g1}-G_{g2})}{min(G_{g1}, G_{g2})} \]</div>
+        Another original score is the <i><b>R</b>AST <b>F</b>unctional <b>C</b>omplementarity</i> (RFC) score, which determines the Jacarrd Index between the sets of genome 
+        ontologies for each grouping. This score probes functional alignment of the groupings, where presumably groupings with high functional similarity will compete and be more antagonistic than 
+        groupings with minimal similarity. The genome ontologies are sourced from the RAST annotations that are available on KBase <sup><a href="#kbase">[2]</a></sup>. The RFC is algorithmically 
+        calculated from the sets of ontologies $O$ for each grouping $1$ and $2$: 
+        <div class="latex">\[ RFC= \left( \frac{O_1 \cap O_2}{O_1 \cup O_2} \right) \]</div>
+        <!-- 
+            This should be corrected to parse groupings growth within the community growth to properly contextualize the grouping behaviors within the community environment, which differs from
+            the media conditions in which the score is currently calculated.
+        -->
+    </p>
+
+    <h3>Application</h3>
+    <p>
+        The KBase Application <i>Calculate Metabolic Interaction Scores</i> applies the aforementioned scores to specified member FBA models and in a specified media environment. The groupings for each
+        score are the individual members, which provides the finest resolution of community interactions. The App report consists of two tabs: the first tab provides more information for direct viewing
+        and the second tab is a heatmap that provides only numerical information for post-processing. 
+    </p>
+    <p>
+        Future developments of <i>MSSmetana</i> and <i>Calculate Metabolic Interaction Scores</i> include developing a phylogenetic score that captures another unique biological dimension,
+        improving code efficiency to handle large model sets, and expanding the Application UI to accept more parameters that are available in the API. 
+    </p>
+</div>
+
+
+<div class="publication">
+    <h3>Related Publications</h3>
+    <ol>
+        <li id="smetana">
+            Zelezniak, A., Andrejev, S., Ponomarova, O., Mende, D. R., Bork, P., &#38; Patil, K. R. (2015). 
+            Metabolic dependencies drive species co-occurrence in diverse microbial communities. <i>Proceedings of the National Academy of Sciences of the United States of America</i>, 
+            <i>112</i>(20), 6449-6454. <a href="https://www.pnas.org/doi/abs/10.1073/pnas.1421834112">https://www.pnas.org/doi/abs/10.1073/pnas.1421834112</a>
+        </li>
+        <li id="kbase">
+            Arkin, A. P., Cottingham, R. W., Henry, C. S., Harris, N. L., Stevens, R. L., Maslov, S., Dehal, P., Ware, D., Perez, F., Canon, S., Sneddon, 
+            M. W., Henderson, M. L., Riehl, W. J., Murphy-Olson, D., Chan, S. Y., Kamimura, R. T., Kumari, S., Drake, M. M., Brettin, T. S., … Yu, D. (2018). 
+            KBase: The United States department of energy systems biology knowledgebase. <i>Nature Biotechnology</i>, <i>36</i>(7), 566-569. 
+            <a href="https://doi.org/10.1038/nbt.4163">https://doi.org/10.1038/nbt.4163</a>
+        </li>
+    </ol>
+</div>

@@ -113,7 +113,7 @@ class MSSmetana:
 
     @staticmethod
     def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None, kbase_obj=None,
-                     see_media:bool=True, environment:Union[dict]=None):  # environment can also be a KBase media object
+                     RAST_genomes:dict=None, see_media:bool=True, environment:Union[dict]=None):  # environment can also be a KBase media object
         from pandas import Series, concat
         if pairs:
             model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
@@ -152,12 +152,13 @@ class MSSmetana:
             kbase_dic.update({"mip": mip_values[1]})
             print("MIP done", end="\t")
             # determine the growth diff content
-            kbase_dic.update({"growth_diff": list(MSSmetana.growth_diff(models, environment).values())[0]})
-            print("Growth_diff done\t\t", end="\r")
+            kbase_dic.update({"GRD": list(MSSmetana.growth_diff(models, environment).values())[0]})
+            print("GRD done\t\t", end="\t" if kbase_obj is not None else "\r")
             # determine the functional complementarity content
             if kbase_obj is not None:
-                kbase_dic.update({"RAST_similarity": list(MSSmetana.RAST_functionality(models, kbase_obj).values())[0]})
-                print("RAST_similarity done\t\t", end="\r")
+                kbase_dic.update({"RFC": list(MSSmetana.RAST_functionality(
+                    models, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
+                print("RFC done\t\t", end="\r")
 
             # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
             series.append(Series(kbase_dic))
@@ -496,6 +497,7 @@ class MSSmetana:
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):
+        if set1 == set2:  print(f"The sets are identical, with a length of {len(set1)}.")
         return len(set1.intersection(set2)) / len(set1.union(set2))
 
     @staticmethod
@@ -521,17 +523,27 @@ class MSSmetana:
 
     @staticmethod
     def RAST_functionality(models:Iterable, kbase_object=None, cobrakbase_repo_path:str=None,
-                           kbase_token_path:str=None, RAST_genomes=None):
+                           kbase_token_path:str=None, RAST_genomes:dict=None):
         if not RAST_genomes:
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
                 with open(kbase_token_path) as token_file:
                     kbase_object = cobrakbase.KBaseAPI(token_file.readline())
             RAST_genomes = {model.id: kbase_object.get_from_ws(model.genome_ref) for model in models}
-        distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
-                set(sso for j in RAST_genomes[genome1].cdss for sso in j.ontology_terms['SSO']),
-                set(sso for j in RAST_genomes[genome2].cdss for sso in j.ontology_terms['SSO']))
-            for genome1, genome2 in combinations(RAST_genomes.keys(), 2)}
+        else:  RAST_genomes = {k:v for k,v in RAST_genomes.items() if k in [model.id for model in models]}
+        print(list(combinations(RAST_genomes.keys(), 2)))
+        if not isinstance(list(RAST_genomes.values())[0], dict):
+            distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
+                    set(sso for j in RAST_genomes[genome1].cdss for sso in j.ontology_terms['SSO']),
+                    set(sso for j in RAST_genomes[genome2].cdss for sso in j.ontology_terms['SSO']))
+                for genome1, genome2 in combinations(RAST_genomes.keys(), 2)}
+        else:
+            distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
+                set(list(content["SSO"].keys())[0] for dic in RAST_genomes[genome1]["cdss"]
+                    for x, content in dic.items() if x == "ontology_terms" and len(content["SSO"].keys()) > 0),
+                set(list(content["SSO"].keys())[0] for dic in RAST_genomes[genome2]["cdss"]
+                    for x, content in dic.items() if x == "ontology_terms" and len(content["SSO"].keys()) > 0))
+                for genome1, genome2 in combinations(RAST_genomes.keys(), 2)}
         return distances
 
     @staticmethod

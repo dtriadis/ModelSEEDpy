@@ -21,11 +21,12 @@ def _check_names(name, names):
     return name
 
 def justifyDB(msdb_path:str, changes_path:str=None):
-    # db_element_counts = combine_elements([met.elements for rxn in msdb.reactions for met in rxn.metabolites])
     msdb = from_local(msdb_path)
 
-    mass_vars, charge_vars, mass_diff_pos, mass_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}, {}, {}
-    mass_constraints, charge_constraints = {}, {}
+    # db_element_counts = combine_elements(*[met.elements for rxn in msdb.reactions for met in rxn.metabolites])
+    # print(len(msdb.compounds), db_element_counts)
+    stoich_vars, charge_vars, stoich_diff_pos, stoich_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}, {}, {}
+    stoich_constraints, charge_constraints = {}, {}
     variables, constraints, names = [], [], []
     objective = tupObjective("database_correction", [], "min")
     time1 = process_time()
@@ -33,20 +34,20 @@ def justifyDB(msdb_path:str, changes_path:str=None):
     mets_frequency = Counter([met.id for rxn in msdb.reactions for met in rxn.metabolites])
     for met in msdb.compounds:
         # mass balance
-        mass_constraints[met.id], mass_vars[met.id], mass_diff_pos[met.id], mass_diff_neg[met.id] = {}, {}, {}, {}
+        stoich_constraints[met.id], stoich_vars[met.id], stoich_diff_pos[met.id], stoich_diff_neg[met.id] = {}, {}, {}, {}
         for ele in met.elements:
-            mass_vars[met.id][ele] = tupVariable(_check_names(f"{met.id}~{ele}", names),
-                                                 tuple(sorted((met.elements[ele] * 0.5, met.elements[ele] * 1.5))))
-            mass_diff_pos[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffpos")
-            mass_diff_neg[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffneg")
+            stoich_vars[met.id][ele] = tupVariable(_check_names(f"{met.id}~{ele}", names),
+                                                   tuple(sorted((met.elements[ele] * 0.5, met.elements[ele] * 1.5))))
+            stoich_diff_pos[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffpos")
+            stoich_diff_neg[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffneg")
             ## StoichVar_{m,e} + (diffpos_{m,e} - diffneg_{m,e}) = stoich_{m,e}
-            mass_constraints[met.id][ele] = tupConstraint(f"{met.id}_{ele}_diff", expr={
-                "elements": [mass_diff_pos[met.id][ele].name, mass_vars[met.id][ele].name, -met.elements[ele],
-                             {"elements": [mass_diff_neg[met.id][ele].name, -1], "operation": "Mul"}],
+            stoich_constraints[met.id][ele] = tupConstraint(f"{met.id}_{ele}_diff", expr={
+                "elements": [stoich_diff_pos[met.id][ele].name, stoich_vars[met.id][ele].name, -met.elements[ele],
+                             {"elements": [stoich_diff_neg[met.id][ele].name, -1], "operation": "Mul"}],
                 "operation": "Add"})
             objective.expr.extend([{"elements": [
-                    {"elements": [mass_diff_pos[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"},
-                    {"elements": [mass_diff_neg[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"}],
+                    {"elements": [stoich_diff_pos[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"},
+                    {"elements": [stoich_diff_neg[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"}],
                 "operation": "Add"}])
         # charge balance
         # TODO remove the bounded limitations
@@ -58,16 +59,18 @@ def justifyDB(msdb_path:str, changes_path:str=None):
             "elements": [charge_diff_pos[met.id].name, charge_vars[met.id].name, -met.charge,
                          {"elements": [charge_diff_neg[met.id].name, -1], "operation": "Mul"}],
             "operation": "Add"})
-        variables.extend([*mass_vars[met.id].values(), *mass_diff_pos[met.id].values(),
-                          *mass_diff_neg[met.id].values(), charge_vars[met.id]])
+        # update the objective expression and store the constructed variables and constraints
         objective.expr.extend([{"elements": [
                 {"elements": [charge_diff_pos[met.id].name, mets_frequency[met.id]], "operation": "Mul"},
                 {"elements": [charge_diff_neg[met.id].name, mets_frequency[met.id]], "operation": "Mul"}],
             "operation": "Add"}])
-        constraints.extend([*mass_constraints[met.id].values(), *charge_constraints.values()])
+        variables.extend([*stoich_vars[met.id].values(), *stoich_diff_pos[met.id].values(),
+                          *stoich_diff_neg[met.id].values(), charge_vars[met.id]])
+        constraints.extend([*stoich_constraints[met.id].values(), *charge_constraints.values()])
     time2 = process_time()
     print(f"Done after {(time2-time1)/60} minutes")
     print("Defining constraints", end="\t")
+    print(len(constraints))
     for rxn in msdb.reactions:
         rxn_element_counts = combine_elements(*[met.elements for met in rxn.metabolites])
         # sum_m^M( Charge_(met,rxn) * n_(met,rxn) ) = 0 , for a given reaction rxn
@@ -75,19 +78,18 @@ def justifyDB(msdb_path:str, changes_path:str=None):
             "elements": [{"elements": [charge_vars[re.sub(r"(_\d+)", "", met.id)].name, met.charge],
                           "operation": "Mul"} for met in rxn.metabolites],
             "operation": "Add"})
-        mass_constraints[rxn.id] = {}
-        for ele in rxn_element_counts:
-            # sum_m^M( Ele_(met,rxn) * n_(met,rxn) ) = 0 , for a given reaction rxn
-            mass_constraints[rxn.id][ele] = tupConstraint(f"{rxn.id}_{ele}", expr={
-                "elements": [{"elements": [mass_vars[re.sub(r"(_\d+)", "", met.id)][ele].name, met.elements[ele]],
-                              "operation": "Mul"} for met in rxn.metabolites if ele in met.elements],
-                "operation": "Add"})
-        constraints.extend(list(mass_constraints[rxn.id].values())+[charge_constraints[rxn.id]])
+        # sum_m^M( Ele_(met,rxn) * n_(met,rxn) ) = 0 , for a given reaction rxn
+        stoich_constraints[rxn.id] = {ele: tupConstraint(f"{rxn.id}_{ele}", expr={
+            "elements": [{"elements": [stoich_vars[re.sub(r"(_\d+)", "", met.id)][ele].name, met.elements[ele]],
+                          "operation": "Mul"} for met in rxn.metabolites if ele in met.elements],
+            "operation": "Add"}) for ele in rxn_element_counts}
+        constraints.extend([*stoich_constraints[rxn.id].values(), charge_constraints[rxn.id]])
     time3 = process_time()
     print(f"Done after {(time3-time2)/60} minutes")
 
     # construct the model
     print("Constructing the model", end="\t")
+    print(list(map(len, [variables, constraints, stoich_constraints, charge_constraints, objective.expr])))
     optlang_model = OptlangHelper.define_model("Correct_MSDB", variables, constraints, objective, True)
     with open("Correct_MSDB.lp", 'w') as lp:  lp.write(optlang_model.to_lp())
     with open("Correct_MSDB.json", 'w') as jsonOut:  dump(optlang_model.to_json(), jsonOut, indent=3)
