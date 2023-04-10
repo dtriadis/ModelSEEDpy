@@ -81,21 +81,26 @@ class OptlangHelper:
     @staticmethod
     def _define_expression(expr:dict):
         expression = get_expression_template(expr)
+        level1_coef = 0
         for ele in expr["elements"]:
             if not isnumber(ele) and not isinstance(ele, str):
                 # print(expr, ele, end="\r")
                 arguments = []
+                level2_coef = 0
                 for ele2 in ele["elements"]:
                     if not isnumber(ele2) and not isinstance(ele2, str):
                         # print("recursive ele\t\t", type(ele2), ele2)
                         arguments.append(OptlangHelper._define_expression(ele2))
-                    else:
-                        arguments.append(define_term(ele2))
+                    elif isinstance(ele2, str): arguments.append(define_term(ele2))
+                    else:  level2_coef += float(ele2)
                 expression["args"].append(get_expression_template(ele))
+                if level2_coef != 0:  arguments.append(define_term(level2_coef))
                 expression["args"][-1]["args"] = arguments
-            else:  expression["args"].append(define_term(ele))
+            elif isinstance(ele, str): expression["args"].append(define_term(ele))
+            else:  level1_coef += float(ele)
+        if level1_coef != 0:  expression["args"].append(define_term(level1_coef))
         # pprint(expression)
-        return expression      
+        return expression
     
     @staticmethod
     def dot_product(zipped_to_sum, heuns_coefs=None):

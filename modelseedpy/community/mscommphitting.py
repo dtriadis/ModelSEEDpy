@@ -884,6 +884,14 @@ class MSCommPhitting:
         timesteps = min(list(map(len, self.times.values())))
         fit_quality = self.problem.objective.value/timesteps
         print(f"The optimization fit quality is {fit_quality}")
+        if "parameters.tsv" in self.zipped_output:
+            self.parameters["fit"] = fit_quality
+            parameter_name = 'parameters.tsv'
+            DataFrame(data=list(self.parameters.values()), index=list(self.parameters.keys()),
+                      columns=['values']).to_csv(parameter_name, sep="\t")
+            with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
+                for file in self.zipped_output:
+                    zp.write(file) ; os.remove(file)
 
         # TODO approximate a threshold of good fits, and trigger black box optimization for bad fits
         ## that iteratively adjust parameters until the fit metric surmounts the threshold.
@@ -946,8 +954,9 @@ class MSCommPhitting:
 
         self.hdf5_file.close()
         with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
-            zp.write(self.hdf5_name)
-            os.remove(self.hdf5_name)
+            for output in outputs:
+                zp.write(self.hdf5_name)
+                os.remove(self.hdf5_name)
 
         time3 = process_time()
         print(f"Optimization completed in {(time2-time1)/60} minutes")

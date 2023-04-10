@@ -5,13 +5,13 @@ from modelseedpy.community.mscommunity import MSCommunity
 from itertools import combinations, permutations, chain
 from optlang import Variable, Constraint, Objective
 from modelseedpy.core.exceptions import ObjectiveError, ParameterError
+from numpy import array, unique, ndarray, where, sort
 from modelseedpy.core.msmodelutl import MSModelUtil
 from cobra.medium import minimal_medium
 from collections import Counter
 from deepdiff import DeepDiff  # (old, new)
 from typing import Iterable, Union
 from pprint import pprint
-from numpy import array, unique, ndarray
 from numpy.random import shuffle
 from icecream import ic
 from numpy import mean
@@ -58,7 +58,8 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
             com_model, minimization_method, min_growth, None, interacting, 5, printing)
     if model_s_ is not None:
         if not isinstance(model_s_, (list,set,tuple,ndarray)):
-            return MSMinimalMedia.determine_min_media(model_s_, minimization_method, min_growth, interacting, printing)
+            return MSMinimalMedia.determine_min_media(
+                model_s_, minimization_method, min_growth, environment, interacting, printing)
         members_media = {}
         for model in model_s_:
             members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
@@ -113,59 +114,76 @@ class MSSmetana:
 
     @staticmethod
     def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None, kbase_obj=None,
-                     RAST_genomes:dict=None, see_media:bool=True, environment:Union[dict]=None):  # environment can also be a KBase media object
+                     RAST_genomes:dict=None, see_media:bool=True, environment:Union[dict]=None,  # environment can also be a KBase media object
+                     lazy_load:bool=False):
+        if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
         from pandas import Series, concat
-        if pairs:
-            model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
-            all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
-        elif all_models is not None:  model_pairs = list(combinations(all_models, 2))
+        if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
+        elif all_models is not None:
+            model_pairs = array(list(combinations(all_models, 2)))
+            if pair_limit is not None:
+                shuffle(model_pairs)
+                model_pairs = model_pairs[:pair_limit]
+            model_pairs = sort(model_pairs, axis=1)
+            pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1]
+                     for first in unique(model_pairs[:, 0])}
         else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
-        if pair_limit is not None:
-            shuffle(model_pairs)
-            model_pairs = list(model_pairs)[:pair_limit]
-        if not mem_media:
-            models_media = _get_media(model_s_=all_models)
-        else:
-            missing_models = [m for m in all_models if m.id not in mem_media]
-            models_media = mem_media.copy()
-            if missing_models != []:
-                print(missing_models)
-                models_media.update(_get_media(model_s_=missing_models))
-        if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
+        if not lazy_load:
+            if pairs:
+                all_models = unique(list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys()))
+            if not mem_media:  models_media = _get_media(model_s_=all_models)
+            else:
+                missing_models = [m for m in all_models if m.id not in mem_media]
+                models_media = mem_media.copy()
+                if missing_models != []:
+                    print(missing_models)
+                    models_media.update(_get_media(model_s_=missing_models))
+            if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
         print(f"\nExamining the {len(list(model_pairs))} model pairs")
         series, mets = [], []
         count = 0
         # print(all_models)
-        for models in model_pairs:
-            # initiate the KBase output
-            modelIDs = [model.id for model in models]
-            print(f"\n{count}\t{modelIDs}", end="\t")
-            kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
-            # define the MRO content
-            mro_values = MSSmetana.mro(models, models_media, raw_content=True, environment=environment)
-            kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
-                              f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
-                              for models_string, (intersection, memMedia) in mro_values.items()})
-            print("MRO done", end="\t")
-            # define the MIP content
-            mip_values = MSSmetana.mip(None, models, environment=environment, compatibilized=True)
-            kbase_dic.update({"mip": mip_values[1]})
-            print("MIP done", end="\t")
-            # determine the growth diff content
-            kbase_dic.update({"GRD": list(MSSmetana.growth_diff(models, environment).values())[0]})
-            print("GRD done\t\t", end="\t" if kbase_obj is not None else "\r")
-            # determine the functional complementarity content
-            if kbase_obj is not None:
-                kbase_dic.update({"RFC": list(MSSmetana.RAST_functionality(
-                    models, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
-                print("RFC done\t\t", end="\r")
+        if lazy_load:  models_media = {}
+        for model1, models in pairs.items():
+            if lazy_load:
+                if len(model1) == 2:  model1 = kbase_obj.get_from_ws(*model1)
+                else:  model1 = kbase_obj.get_from_ws(model1)
+                if model1.id not in models_media:  models_media[model1.id] = {"media": _get_media(model_s_=model1)}
+            for model2 in models:
+                if lazy_load:
+                    if len(model2) == 2:  model2 = kbase_obj.get_from_ws(*model2)
+                    else:  model2 = kbase_obj.get_from_ws(model2)
+                    if model2.id not in models_media:  models_media[model2.id] = {"media": _get_media(model_s_=model2)}
+                grouping = [model1, model2]
+                # initiate the KBase output
+                modelIDs = [model.id for model in grouping]
+                print(f"\n{count}\t{modelIDs}", end="\t")
+                kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
+                # define the MRO content
+                mro_values = MSSmetana.mro(grouping, models_media, raw_content=True, environment=environment)
+                kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
+                                  f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
+                                  for models_string, (intersection, memMedia) in mro_values.items()})
+                print("MRO done", end="\t")
+                # define the MIP content
+                mip_values = MSSmetana.mip(None, grouping, environment=environment, compatibilized=True)
+                kbase_dic.update({"mip": mip_values[1]})
+                print("MIP done", end="\t")
+                # determine the growth diff content
+                kbase_dic.update({"GRD": list(MSSmetana.growth_diff(grouping, environment).values())[0]})
+                print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\r")
+                # determine the functional complementarity content
+                if kbase_obj is not None and RAST_genomes is not None:
+                    kbase_dic.update({"RFC": list(MSSmetana.RAST_functionality(
+                        grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
+                    print("RFC done\t\t", end="\r")
 
-            # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
-            series.append(Series(kbase_dic))
-            mets.append({"mro_mets": list(mro_values.values())})
-            if mip_values[0] is not None:
-                mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
-            count += 1
+                # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
+                series.append(Series(kbase_dic))
+                mets.append({"mro_mets": list(mro_values.values())})
+                if mip_values[0] is not None:
+                    mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
+                count += 1
         return concat(series, axis=1).T, mets
 
     def mro_score(self):
