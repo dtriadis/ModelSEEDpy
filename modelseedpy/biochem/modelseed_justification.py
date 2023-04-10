@@ -20,7 +20,7 @@ def _check_names(name, names):
     names.append(name)
     return name
 
-def justifyDB(msdb_path:str, changes_path:str=None):
+def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     msdb = from_local(msdb_path)
 
     db_element_counts = combine_elements(*[met.elements for rxn in msdb.reactions for met in rxn.metabolites])
@@ -68,7 +68,7 @@ def justifyDB(msdb_path:str, changes_path:str=None):
             "operation": "Add"}])
         variables.extend([#*stoich_vars[met.id].values(),
                           *stoich_diff_pos[met.id].values(), *stoich_diff_neg[met.id].values(),
-                          *charge_diff_pos.values(), *charge_diff_neg.values(),
+                          charge_diff_pos[met.id], charge_diff_neg[met.id],
                           # charge_vars[met.id]
                           ])
         # constraints.extend([*stoich_constraints[met.id].values(), *charge_constraints.values()])
@@ -113,7 +113,7 @@ def justifyDB(msdb_path:str, changes_path:str=None):
 
     # construct the model
     print("Constructing the model", end="\t")
-    print(list(map(len, [variables, constraints, stoich_constraints, charge_constraints, objective.expr])))
+    print(list(map(len, [variables, constraints, stoich_constraints, charge_constraints, objective.expr])), end="\t")
     optlang_model = OptlangHelper.define_model("Correct_MSDB", variables, constraints, objective, True)
     with open("Correct_MSDB.lp", 'w') as lp:  lp.write(optlang_model.to_lp())
     with open("Correct_MSDB.json", 'w') as jsonOut:  dump(optlang_model.to_json(), jsonOut, indent=3)
@@ -126,6 +126,7 @@ def justifyDB(msdb_path:str, changes_path:str=None):
     after = process_time()
     print(f"Done after \t{(after-before)/60} minutes")
     if solution != "optimal":  FeasibilityError(f"The optimization is {solution}.")
+    return optlang_model
     print("Exporting primals", end="\t")
     # export the changes
     if changes_path is not None:
@@ -133,35 +134,37 @@ def justifyDB(msdb_path:str, changes_path:str=None):
         proposed_changes = {}
         for varName, val in optlang_model.primal_values.items():
             # print(var, val)
-            if "diff" in varName:  continue
-            if "charge" not in varName:
-                metID, ele = varName.split("~")
-                # print(rxnID, metID, ele)
-                met = msdb.compounds.get_by_id(metID)
-                ele_stoich = met.elements[ele]
-                if val != ele_stoich:
-                    if metID not in proposed_changes:  proposed_changes[metID] = {}
-                    proposed_changes[metID][ele] = {"original": ele_stoich, "proposed": val}
-                continue
-            # print(varName)
-            metID = varName.split("~")[0]
+            content, diffName = varName.split("_")
+            metID, context = content.split("~")
             # print(rxnID, metID, ele)
             met = msdb.compounds.get_by_id(metID)
-            if val != met.charge:
+            missing_formula = False
+            if context == "charge":
+                original_val = met.charge
+            elif context in met.elements:
+                original_val = met.elements[context]
+            elif context not in met.elements:
+                missing_formula = True ; original_val = None
+                print(f"The {metID} metabolite is mis-categorized with the {context} element,"
+                      f" or possibly the formula and thus elements attribute is not defined.")
+            if val != 0 or missing_formula:
+                val = -val if "neg" in diffName else val
                 if metID not in proposed_changes:  proposed_changes[metID] = {}
-                proposed_changes[metID]["charge"] = {"original": met.charge, "proposed": val}
+                if context in proposed_changes[metID]:  proposed_changes[metID][context]["proposed"] += val
+                else:  proposed_changes[metID][context] = {
+                    "original": original_val, "proposed": val+original_val if original_val is not None else val}
         # export the proposed changes
         with open(changes_path, "w") as out:  dump(proposed_changes, out, indent=3)
         print(f"Done after {(process_time()-after)/60} minutes")  ;  return optlang_model, proposed_changes
     print(f"Done after {(process_time()-after)/60} minutes")  ;  return optlang_model
 
-if __name__ == "__main__":
-    # accept the command-line arguments
-    from argparse import ArgumentParser
-    from pathlib import Path
-
-    parser = ArgumentParser()
-    parser.add_argument("--msdb_path", type=Path, default=".")
-    parser.add_argument("--changes_path", type=Path, default="MSDB_corrections.json")
-    args = parser.parse_args()
-    justifyDB(args.msdb_path, args.changes_path)
+# if __name__ == "__main__":
+#     # accept the command-line arguments
+#     from argparse import ArgumentParser
+#     from pathlib import Path
+#
+#     parser = ArgumentParser()
+#     parser.add_argument("--msdb_path", type=Path, default=".")
+#     parser.add_argument("--changes_path", type=Path, default="MSDB_corrections.json")
+#     args = parser.parse_args()
+#     justifyDB(args.msdb_path, args.changes_path)
