@@ -24,7 +24,6 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     msdb = from_local(msdb_path)
 
     db_element_counts = combine_elements(*[met.elements for rxn in msdb.reactions for met in rxn.metabolites])
-    # print(len(msdb.compounds), db_element_counts)
     stoich_vars, charge_vars, stoich_diff_pos, stoich_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}, {}, {}
     stoich_constraints, charge_constraints = {}, {}
     variables, constraints, names = [], [], []
@@ -34,44 +33,25 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     mets_frequency = Counter([met.id for rxn in msdb.reactions for met in rxn.metabolites])
     for met in msdb.compounds:
         # mass balance
-        # stoich_constraints[met.id], stoich_vars[met.id] = {}, {}
         stoich_diff_pos[met.id], stoich_diff_neg[met.id] = {}, {}
         met_elements = met.elements if met.elements != {} else list(db_element_counts.keys())
         for ele in met_elements:
-            # stoich_vars[met.id][ele] = tupVariable(_check_names(f"{met.id}~{ele}", names),
-            #                                        tuple(sorted((met.elements[ele] * 0.5, met.elements[ele] * 1.5))))
             stoich_diff_pos[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffpos")
             stoich_diff_neg[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffneg")
-            ## StoichVar_{m,e} + (diffpos_{m,e} - diffneg_{m,e}) = stoich_{m,e}
-            # stoich_constraints[met.id][ele] = tupConstraint(f"{met.id}_{ele}_diff", expr={
-            #     "elements": [stoich_diff_pos[met.id][ele].name, stoich_vars[met.id][ele].name, -met.elements[ele],
-            #                  {"elements": [stoich_diff_neg[met.id][ele].name, -1], "operation": "Mul"}],
-            #     "operation": "Add"})
             objective.expr.extend([{"elements": [
                     {"elements": [stoich_diff_pos[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"},
                     {"elements": [stoich_diff_neg[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"}],
                 "operation": "Add"}])
         # charge balance
-        # TODO remove the bounded limitations
-        # charge_vars[met.id] = tupVariable(f"{met.id}~charge", tuple(sorted((met.charge * 0.5, met.charge * 1.5))))
         charge_diff_pos[met.id] = tupVariable(f"{met.id}~charge_diffpos")
         charge_diff_neg[met.id] = tupVariable(f"{met.id}~charge_diffneg")
-        ## ChargeVar_{m} + (diffpos_{m} - diffneg_{m}) = charge_{m}
-        # charge_constraints[met.id] = tupConstraint(f"{met.id}_charge_diff", expr={
-        #     "elements": [charge_diff_pos[met.id].name, charge_vars[met.id].name, -met.charge,
-        #                  {"elements": [charge_diff_neg[met.id].name, -1], "operation": "Mul"}],
-        #     "operation": "Add"})
-        # update the objective expression and store the constructed variables and constraints
+        # define the objective expression and store the variables
         objective.expr.extend([{"elements": [
                 {"elements": [charge_diff_pos[met.id].name, mets_frequency[met.id]], "operation": "Mul"},
                 {"elements": [charge_diff_neg[met.id].name, mets_frequency[met.id]], "operation": "Mul"}],
             "operation": "Add"}])
-        variables.extend([#*stoich_vars[met.id].values(),
-                          *stoich_diff_pos[met.id].values(), *stoich_diff_neg[met.id].values(),
-                          charge_diff_pos[met.id], charge_diff_neg[met.id],
-                          # charge_vars[met.id]
-                          ])
-        # constraints.extend([*stoich_constraints[met.id].values(), *charge_constraints.values()])
+        variables.extend([*stoich_diff_pos[met.id].values(), *stoich_diff_neg[met.id].values(),
+                          charge_diff_pos[met.id], charge_diff_neg[met.id]])
     time2 = process_time()
     print(f"Done after {(time2-time1)/60} minutes")
     print("Defining constraints", end="\t")
@@ -80,23 +60,22 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     for rxn in msdb.reactions:
         rxn_element_counts = combine_elements(*[met.elements for met in rxn.metabolites])
         if rxn_element_counts == {}:  empty_reactions.append(rxn.id)
-        charge_constraints[rxn.id] = {}
+        # sum_m^M( (-diffpos_{m} + diffneg_{m}) * n_{met,rxn} ) = sum_m^M( charge_{m} * n_{met,rxn} ) , per reaction rxn
+        charge_constraints[rxn.id] = tupConstraint(
+            name=f"{rxn.id}_charge", expr={"elements": [sum([
+                met.charge*rxn.metabolites[met] if hasattr(met, "charge") else 0
+                for met in rxn.metabolites])], "operation":"Add"})
         for met in rxn.metabolites:
-            # sum_m^M( (-diffpos_{m} + diffneg_{m}) * n_{met,rxn} ) = charge_{m} * n_{met,rxn} , per reaction rxn
-            charge_constraints[rxn.id][met.id] = tupConstraint(f"{rxn.id}_{met.id}_charge", expr={
-                "elements": [{"elements": [charge_diff_pos[re.sub(r"(_\d+)", "", met.id)].name,
-                                           -rxn.metabolites[met]],
-                              "operation": "Mul"},
-                             {"elements": [charge_diff_neg[re.sub(r"(_\d+)", "", met.id)].name,
-                                           rxn.metabolites[met]],
-                              "operation": "Mul"},
-                             met.charge * rxn.metabolites[met]],
-                "operation": "Add"})
-        # sum_m^M( (-diffpos_{m,e} + diffneg_{m,e}) * n_{met,rxn} ) = -stoich_{m,e} * n_{met,rxn} , per reaction rxn
+            charge_constraints[rxn.id].expr["elements"].extend([
+                {"elements": [charge_diff_pos[re.sub(r"(_\d+)", "", met.id)].name, -rxn.metabolites[met]],
+                 "operation": "Mul"},
+                {"elements": [charge_diff_neg[re.sub(r"(_\d+)", "", met.id)].name, rxn.metabolites[met]],
+                 "operation": "Mul"}])
+        # sum_m^M( (-diffpos_{m,e} + diffneg_{m,e}) * n_{met,rxn} ) = -count_{rxn,e} , per reaction rxn
         stoich_constraints[rxn.id] = {}
         for ele, count in rxn_element_counts.items():
             stoich_constraints[rxn.id][ele] = tupConstraint(
-                f"{rxn.id}_{ele}", expr={"elements": [count], "operation":"Add"})
+                name=f"{rxn.id}_{ele}", expr={"elements": [count], "operation":"Add"})
             for met in rxn.metabolites:
                 if ele not in met.elements:  continue
                 stoich_constraints[rxn.id][ele].expr["elements"].extend([
@@ -104,7 +83,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
                      "operation": "Mul"},
                     {"elements": [stoich_diff_neg[re.sub(r"(_\d+)", "", met.id)][ele].name, rxn.metabolites[met]],
                      "operation": "Mul"}])
-        constraints.extend([*stoich_constraints[rxn.id].values(), *charge_constraints[rxn.id].values()])
+        constraints.extend([*stoich_constraints[rxn.id].values(), charge_constraints[rxn.id]])
     if empty_reactions:
         print(f"The {empty_reactions} reactions lack any metabolites with "
               f"defined formula, and thus are not constrained.", end="\t")
@@ -131,22 +110,18 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     # export the changes
     if changes_path is not None:
         # evaluate proposed changes from the optimization
-        proposed_changes = {}
+        proposed_changes, undefined =  {}, {}
         for varName, val in optlang_model.primal_values.items():
-            # print(var, val)
             content, diffName = varName.split("_")
             metID, context = content.split("~")
-            # print(rxnID, metID, ele)
             met = msdb.compounds.get_by_id(metID)
             missing_formula = False
-            if context == "charge":
-                original_val = met.charge
-            elif context in met.elements:
-                original_val = met.elements[context]
+            if context == "charge":  original_val = met.charge
+            elif context in met.elements:  original_val = met.elements[context]
             elif context not in met.elements:
                 missing_formula = True ; original_val = None
-                print(f"The {metID} metabolite is mis-categorized with the {context} element,"
-                      f" or possibly the formula and thus elements attribute is not defined.")
+                if metID not in undefined: undefined[metID] = [context]
+                else:  undefined[metID].append(context)
             if val != 0 or missing_formula:
                 val = -val if "neg" in diffName else val
                 if metID not in proposed_changes:  proposed_changes[metID] = {}
@@ -154,6 +129,8 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
                 else:  proposed_changes[metID][context] = {
                     "original": original_val, "proposed": val+original_val if original_val is not None else val}
         # export the proposed changes
+        print(f"The {list(undefined.keys())} metabolites are mis-categorized with the {list(undefined.values())} "
+              f"elements, or possibly the formula and < elements > metabolite attribute are not defined.")
         with open(changes_path, "w") as out:  dump(proposed_changes, out, indent=3)
         print(f"Done after {(process_time()-after)/60} minutes")  ;  return optlang_model, proposed_changes
     print(f"Done after {(process_time()-after)/60} minutes")  ;  return optlang_model

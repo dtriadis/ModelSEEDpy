@@ -1,3 +1,5 @@
+import os
+
 from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msminimalmedia import MSMinimalMedia
 from modelseedpy.community.commhelper import build_from_species_models
@@ -5,7 +7,7 @@ from modelseedpy.community.mscommunity import MSCommunity
 from itertools import combinations, permutations, chain
 from optlang import Variable, Constraint, Objective
 from modelseedpy.core.exceptions import ObjectiveError, ParameterError
-from numpy import array, unique, ndarray, where, sort
+from numpy import array, unique, ndarray, where, sort, array_split
 from modelseedpy.core.msmodelutl import MSModelUtil
 from cobra.medium import minimal_medium
 from collections import Counter
@@ -113,50 +115,26 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
 
     @staticmethod
-    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
-                     exclude_pairs:list=None, kbase_obj=None, RAST_genomes:dict=None, see_media:bool=True,
-                     environment:Union[dict]=None,  # environment can also be a KBase media object
-                     lazy_load:bool=False):
-        if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
-        from pandas import Series, concat
-        if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
-        elif all_models is not None:
-            model_pairs = array(list(combinations(all_models, 2)))
-            if pair_limit is not None:
-                shuffle(model_pairs)
-                new_pairs = []
-                for index, pair in enumerate(model_pairs):
-                    if pair not in exclude_pairs and index < pair_limit:  new_pairs.append(pair)
-                    elif index >= pair_limit:  break
-                model_pairs = new_pairs
-            if isinstance(model_pairs[0], str):  model_pairs = unique(sort(model_pairs, axis=1))
-            pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1]
-                     for first in model_pairs[:, 0]}
-        else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
-        if not lazy_load:
-            if pairs:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
-            if not mem_media:  models_media = _get_media(model_s_=all_models)
-            else:
-                missing_models = {m for m in all_models if m.id not in mem_media}
-                models_media = mem_media.copy()
-                if missing_models != []:
-                    print(f"Media of the {missing_models} models are not defined, and will be calculated separately.")
-                    models_media.update(_get_media(model_s_=missing_models))
-            if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
-        print(f"\nExamining the {len(list(model_pairs))} model pairs")
+    def calculate_scores(pairs, models_media=None, environment=None, RAST_genomes=None,
+                         lazy_load=False, kbase_obj=None, queue=None):
+        from pandas import Series
+
+        if isinstance(pairs, list):
+            pairs, models_media, environment, RAST_genomes, kbase_obj = pairs  ;  pairs = dict([pairs])
+            lazy_load = True
         series, mets = [], []
         count = 0
-        # print(all_models)
-        if lazy_load:  models_media = {}
         for model1, models in pairs.items():
             if lazy_load:
-                if len(model1) == 2:  model1 = kbase_obj.get_from_ws(*model1)
-                else:  model1 = kbase_obj.get_from_ws(model1)
+                if isinstance(model1, str):
+                    if len(model1) == 2:  model1 = kbase_obj.get_from_ws(*model1)
+                    else:  model1 = kbase_obj.get_from_ws(model1)
                 if model1.id not in models_media:  models_media[model1.id] = {"media": _get_media(model_s_=model1)}
-            for model2 in models:  # TODO parallelize this loop
+            for model2 in models:
                 if lazy_load:
-                    if len(model2) == 2:  model2 = kbase_obj.get_from_ws(*model2)
-                    else:  model2 = kbase_obj.get_from_ws(model2)
+                    if isinstance(model2, str):
+                        if len(model2) == 2:  model2 = kbase_obj.get_from_ws(*model2)
+                        else:  model2 = kbase_obj.get_from_ws(model2)
                     if model2.id not in models_media:  models_media[model2.id] = {"media": _get_media(model_s_=model2)}
                 grouping = [model1, model2]
                 # initiate the KBase output
@@ -174,7 +152,7 @@ class MSSmetana:
                 kbase_dic.update({"mip": mip_values[1]})
                 print("MIP done", end="\t")
                 # determine the growth diff content
-                kbase_dic.update({"GRD": list(MSSmetana.growth_diff(grouping, environment).values())[0]})
+                kbase_dic.update({"GRD": list(MSSmetana.grd(grouping, environment).values())[0]})
                 print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\r")
                 # determine the functional complementarity content
                 if kbase_obj is not None and RAST_genomes is not None:
@@ -182,12 +160,94 @@ class MSSmetana:
                         grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
                     print("RFC done\t\t", end="\r")
 
-                # return the content as a pandas Series, which can be easily aggregated with other results into a DataFrame
+                # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                 series.append(Series(kbase_dic))
                 mets.append({"mro_mets": list(mro_values.values())})
                 if mip_values[0] is not None:
                     mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
                 count += 1
+        if queue is not None: queue.put(series, mets)
+        else:  return series, mets
+
+    @staticmethod
+    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+                     exclude_pairs:list=None, kbase_obj=None, RAST_genomes:dict=None, see_media:bool=True,
+                     environment:Union[dict]=None,  # environment can also be a KBase media object
+                     lazy_load:bool=False, pool_size:int=None):
+        from pandas import concat
+
+        if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
+        if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
+        elif all_models is not None:
+            model_pairs = array(list(combinations(all_models, 2)))
+            if pair_limit is not None:
+                shuffle(model_pairs)
+                new_pairs = []
+                for index, pair in enumerate(model_pairs):
+                    if set(pair) not in exclude_pairs and index < pair_limit:  new_pairs.append(pair)
+                    elif index >= pair_limit:  break
+                model_pairs = array(new_pairs)
+            if isinstance(model_pairs[0], str):  model_pairs = unique(sort(model_pairs, axis=1))
+            pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1]
+                     for first in model_pairs[:, 0]}
+        else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
+        if not lazy_load:
+            if pairs:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
+            if not mem_media:  models_media = _get_media(model_s_=all_models)
+            else:
+                missing_models = {m for m in all_models if m.id not in mem_media}
+                models_media = mem_media.copy()
+                if missing_models != set():
+                    print(f"Media of the {missing_models} models are not defined, and will be calculated separately.")
+                    models_media.update(_get_media(model_s_=missing_models))
+            if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
+        else:  models_media = {}
+        # print(locals().keys())
+        print(f"\nExamining the {len(list(model_pairs))} model pairs")
+        if isinstance(pool_size, int):
+            from datetime import datetime
+            import concurrent.futures as cf
+            from multiprocess import Pool, Process, Queue
+            # from multiprocessing import Pool
+            # pool_size = 5 # os.cpu_count()
+            # q = Queue()
+            # chunked_pairs = array_split(list(pairs.items()), pool_size)
+            # processes, results = [], []
+            # for jobNum in range(pool_size):
+            #     print(jobNum, end="\r")
+            #     process = Process(target=MSSmetana.calculate_scores, args=[
+            #         chunked_pairs[jobNum], models_media, environment, RAST_genomes, lazy_load, kbase_obj, True])
+            #     process.start()
+            #     processes.append(process)
+            # for process in processes:
+            #     results.append(q.get())
+            # for process in processes:
+            #     process.join()
+            # print(results)
+            # args = [[pair, models_media, environment, RAST_genomes, lazy_load, kbase_obj]
+            #         for pair in array_split(list(pairs.items()), pool_size)]
+            # print(*args)
+            # with cf.ProcessPoolExecutor(max_workers=5) as executor:
+            #     results = executor.map(MSSmetana.calculate_scores, *args)
+            #     # results = [executor.submit(calculate_scores, )]
+            #     print(list(results))
+            #     for result in cf.as_completed(results):
+            #         print(result.result())
+            print(f"Loading the {pool_size} workers", datetime.now())
+            pool = Pool(pool_size)#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
+            args = [[pair, models_media, environment, RAST_genomes, kbase_obj] for pair in list(pairs.items())]
+            # display(args[0])
+            # print(args[0][0])
+            # print(dict([args[0][0]]))
+            print(f"Computing the scores", datetime.now())
+            output = pool.map(MSSmetana.calculate_scores, args)
+            # print(type(output[0][0]), *output[0])
+            series = chain.from_iterable([ele[0] for ele in output])
+            mets = chain.from_iterable([ele[1] for ele in output])
+        else:  series, mets = MSSmetana.calculate_scores(pairs, models_media, environment,
+                                                         RAST_genomes, lazy_load, kbase_obj)
+        # display(series)
+        # display(output[0])
         return concat(series, axis=1).T, mets
 
     def mro_score(self):
@@ -254,7 +314,7 @@ class MSSmetana:
         return self.sc_val
 
     def growth_score(self):
-        self.growth_diff = MSSmetana
+        self.grd = MSSmetana
 
     def smetana_score(self):
         if not hasattr(self, "sc_val"):
@@ -505,7 +565,7 @@ class MSSmetana:
         return scores
 
     @staticmethod
-    def growth_diff(member_models:Iterable, environment=None):
+    def grd(member_models:Iterable, environment=None):
         diffs = {}
         for combination in combinations(member_models, 2):
             model1_util = MSModelUtil(combination[0]) ; model2_util = MSModelUtil(combination[1])
