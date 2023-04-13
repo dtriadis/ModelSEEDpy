@@ -15,6 +15,7 @@ from deepdiff import DeepDiff  # (old, new)
 from typing import Iterable, Union
 from pprint import pprint
 from numpy.random import shuffle
+from multiprocess import current_process
 from icecream import ic
 from numpy import mean
 import re
@@ -120,9 +121,9 @@ class MSSmetana:
         from pandas import Series
 
         if isinstance(pairs, list):
-            pairs, models_media, environment, RAST_genomes, kbase_obj = pairs  ;  pairs = dict([pairs])
-            lazy_load = True
+            pairs, models_media, environment, RAST_genomes, kbase_obj, lazy_load = pairs  ;  pairs = dict([pairs])
         series, mets = [], []
+        pid = current_process().name
         count = 0
         for model1, models in pairs.items():
             if lazy_load:
@@ -139,7 +140,7 @@ class MSSmetana:
                 grouping = [model1, model2]
                 # initiate the KBase output
                 modelIDs = [model.id for model in grouping]
-                print(f"\n{count}\t{modelIDs}", end="\t")
+                print(f"{pid}~~{count}\t{modelIDs}", end="\t")
                 kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                 # define the MRO content
                 mro_values = MSSmetana.mro(grouping, models_media, raw_content=True, environment=environment)
@@ -153,12 +154,12 @@ class MSSmetana:
                 print("MIP done", end="\t")
                 # determine the growth diff content
                 kbase_dic.update({"GRD": list(MSSmetana.grd(grouping, environment).values())[0]})
-                print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\r")
+                print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\n")
                 # determine the functional complementarity content
                 if kbase_obj is not None and RAST_genomes is not None:
                     kbase_dic.update({"RFC": list(MSSmetana.RAST_functionality(
                         grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
-                    print("RFC done\t\t", end="\r")
+                    print("RFC done\t\t")
 
                 # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                 series.append(Series(kbase_dic))
@@ -202,52 +203,20 @@ class MSSmetana:
                     models_media.update(_get_media(model_s_=missing_models))
             if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
         else:  models_media = {}
-        # print(locals().keys())
         print(f"\nExamining the {len(list(model_pairs))} model pairs")
-        if isinstance(pool_size, int):
+        if pool_size is not None:
             from datetime import datetime
-            import concurrent.futures as cf
-            from multiprocess import Pool, Process, Queue
-            # from multiprocessing import Pool
-            # pool_size = 5 # os.cpu_count()
-            # q = Queue()
-            # chunked_pairs = array_split(list(pairs.items()), pool_size)
-            # processes, results = [], []
-            # for jobNum in range(pool_size):
-            #     print(jobNum, end="\r")
-            #     process = Process(target=MSSmetana.calculate_scores, args=[
-            #         chunked_pairs[jobNum], models_media, environment, RAST_genomes, lazy_load, kbase_obj, True])
-            #     process.start()
-            #     processes.append(process)
-            # for process in processes:
-            #     results.append(q.get())
-            # for process in processes:
-            #     process.join()
-            # print(results)
-            # args = [[pair, models_media, environment, RAST_genomes, lazy_load, kbase_obj]
-            #         for pair in array_split(list(pairs.items()), pool_size)]
-            # print(*args)
-            # with cf.ProcessPoolExecutor(max_workers=5) as executor:
-            #     results = executor.map(MSSmetana.calculate_scores, *args)
-            #     # results = [executor.submit(calculate_scores, )]
-            #     print(list(results))
-            #     for result in cf.as_completed(results):
-            #         print(result.result())
-            print(f"Loading the {pool_size} workers", datetime.now())
-            pool = Pool(pool_size)#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
-            args = [[pair, models_media, environment, RAST_genomes, kbase_obj] for pair in list(pairs.items())]
-            # display(args[0])
-            # print(args[0][0])
-            # print(dict([args[0][0]]))
-            print(f"Computing the scores", datetime.now())
+            from multiprocess import Pool
+
+            print(f"Loading {int(pool_size)} workers and computing the scores", datetime.now())
+            pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
+            args = [[pair, models_media, environment, RAST_genomes, kbase_obj, lazy_load]
+                    for pair in list(pairs.items())]
             output = pool.map(MSSmetana.calculate_scores, args)
-            # print(type(output[0][0]), *output[0])
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSSmetana.calculate_scores(pairs, models_media, environment,
                                                          RAST_genomes, lazy_load, kbase_obj)
-        # display(series)
-        # display(output[0])
         return concat(series, axis=1).T, mets
 
     def mro_score(self):

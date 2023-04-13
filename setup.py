@@ -45,7 +45,8 @@ setup(
         "icecream",
         "deepdiff",
         "openpyxl",
-        "jinja2"
+        "jinja2",
+        "multiprocess"
     ],
     tests_require=[
         "pytest",

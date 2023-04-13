@@ -6,14 +6,15 @@ from time import process_time
 from json import dump
 import re
 
-def combine_elements(*ele_dics):
+def counted_components(*ele_dics):
     ele_dic = {}
     for dic in ele_dics:
         # print(dic, ele_dics)
         for ele, count in dic.items():
-            if ele in ele_dic:  ele_dic[ele] += count
-            else:  ele_dic[ele] = count
-    return ele_dic
+            if not isinstance(ele, str):  ele = ele.id
+            if ele in ele_dic:  ele_dic[ele] += abs(count)
+            else:  ele_dic[ele] = abs(count)
+    return dict(sorted(ele_dic.items(), key=lambda x: x[1], reverse=True))
 
 def _check_names(name, names):
     if name in names:  raise ObjectAlreadyDefinedError(f"The {name} is already defined in the model.")
@@ -23,14 +24,14 @@ def _check_names(name, names):
 def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     msdb = from_local(msdb_path)
 
-    db_element_counts = combine_elements(*[met.elements for rxn in msdb.reactions for met in rxn.metabolites])
+    db_element_counts = counted_components(*[met.elements for rxn in msdb.reactions for met in rxn.metabolites])
     stoich_vars, charge_vars, stoich_diff_pos, stoich_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}, {}, {}
     stoich_constraints, charge_constraints = {}, {}
     variables, constraints, names = [], [], []
     objective = tupObjective("database_correction", [], "min")
     time1 = process_time()
     print("Defining variables and objective", end="\t")
-    mets_frequency = Counter([met.id for rxn in msdb.reactions for met in rxn.metabolites])
+    mets_frequency = counted_components(*[rxn.metabolites for rxn in msdb.reactions])
     for met in msdb.compounds:
         # mass balance
         stoich_diff_pos[met.id], stoich_diff_neg[met.id] = {}, {}
@@ -58,7 +59,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     # print(len(constraints))
     empty_reactions = []
     for rxn in msdb.reactions:
-        rxn_element_counts = combine_elements(*[met.elements for met in rxn.metabolites])
+        rxn_element_counts = counted_components(*[met.elements for met in rxn.metabolites])
         if rxn_element_counts == {}:  empty_reactions.append(rxn.id)
         # sum_m^M( (-diffpos_{m} + diffneg_{m}) * n_{met,rxn} ) = sum_m^M( charge_{m} * n_{met,rxn} ) , per reaction rxn
         charge_constraints[rxn.id] = tupConstraint(
