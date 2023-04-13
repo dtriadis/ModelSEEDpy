@@ -127,16 +127,24 @@ class MSSmetana:
         count = 0
         for model1, models in pairs.items():
             if lazy_load:
-                if isinstance(model1, str):
-                    if len(model1) == 2:  model1 = kbase_obj.get_from_ws(*model1)
-                    else:  model1 = kbase_obj.get_from_ws(model1)
+                model1_str = model1
+                if len(model1) == 2:  model1 = kbase_obj.get_from_ws(*model1)
+                else:  model1 = kbase_obj.get_from_ws(model1)
                 if model1.id not in models_media:  models_media[model1.id] = {"media": _get_media(model_s_=model1)}
+            if model1 is None or model1.slim_optimize() == 0:
+                model1_str = model1_str or list(pairs.keys()).index(model1)
+                print(f"The {model1_str} model input does not yield an operational model.")
+                continue
             for model2 in models:
                 if lazy_load:
-                    if isinstance(model2, str):
-                        if len(model2) == 2:  model2 = kbase_obj.get_from_ws(*model2)
-                        else:  model2 = kbase_obj.get_from_ws(model2)
+                    model2_str = model2
+                    if len(model2) == 2:  model2 = kbase_obj.get_from_ws(*model2)
+                    else:  model2 = kbase_obj.get_from_ws(model2)
                     if model2.id not in models_media:  models_media[model2.id] = {"media": _get_media(model_s_=model2)}
+                if model2 is None or model2.slim_optimize() == 0:
+                    model2_str = model2_str or str(list(pairs.keys()).index(model1))+str(pairs[model1].index(model2))
+                    print(f"The {model2_str} model input does not yield an operational model.")
+                    continue
                 grouping = [model1, model2]
                 # initiate the KBase output
                 modelIDs = [model.id for model in grouping]
@@ -196,7 +204,7 @@ class MSSmetana:
             if pairs:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
             if not mem_media:  models_media = _get_media(model_s_=all_models)
             else:
-                missing_models = {m for m in all_models if m.id not in mem_media}
+                missing_models = {m for m in all_models if m is not None and m.id not in mem_media}
                 models_media = mem_media.copy()
                 if missing_models != set():
                     print(f"Media of the {missing_models} models are not defined, and will be calculated separately.")

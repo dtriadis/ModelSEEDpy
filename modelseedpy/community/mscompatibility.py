@@ -73,7 +73,7 @@ class MSCompatibility:
             # standardize metabolites
             if not metabolites:
                 # TODO develop a correction of reactions based upon their stoichiometry
-                continue
+                break
             ## standardize exchanges
             if exchanges:
                 if printing:
