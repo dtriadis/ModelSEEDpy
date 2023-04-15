@@ -31,8 +31,7 @@ def dict_keys_exists(dic, *keys):
     result = keys[0] in dic
     if keys[0] in dic:
         remainingKeys = keys[1:]
-        if len(remainingKeys) > 0:
-            result = dict_keys_exists(dic[keys[0]], *remainingKeys)
+        if len(remainingKeys) > 0:  result = dict_keys_exists(dic[keys[0]], *remainingKeys)
         return result
     return result
 
@@ -57,16 +56,11 @@ def dic_keys(dic):
 # define data objects
 def _name(name, suffix, short_code, timestep, names):
     name = '-'.join([x for x in list(map(str, [name + suffix, short_code, timestep])) if x])
-    if name not in names:
-        names.append(name)
-        return name
-    else:
-        pprint(names)
-        raise ObjectAlreadyDefinedError(f"The object {name} is already defined for the problem.")
+    if name not in names:  names.append(name) ; return name
+    else:  pprint(names) ; raise ObjectAlreadyDefinedError(f"The object {name} is already defined for the problem.")
 
 def _export_model_json(json_model, path):
-    with open(path, 'w') as lp:
-        json.dump(json_model, lp, indent=3)
+    with open(path, 'w') as lp:  json.dump(json_model, lp, indent=3)
 
 def _met_id_parser(met):
     met_id = re.sub('(\_\w\d+)', '', met)
@@ -227,7 +221,7 @@ class MSCommPhitting:
                               self.variables['bin5_' + pheno][short_code]])
         return variables
 
-    def define_b_cons(self, pheno, short_code, timestep, constraints, biomass_coefs):
+    def define_b_cons(self, pheno, short_code, timestep, biomass_coefs):
         biomass_coefs = biomass_coefs or biomass_partition_coefs[-1]
         # define the partitioned biomass groups
         ## b_n{pheno,t} <= coef*b_tot{pheno,t}
@@ -404,22 +398,21 @@ class MSCommPhitting:
             })
 
         # load the constraints to the model
-        constraints.extend([self.constraints['b1c_' + pheno][short_code][timestep],
-                            self.constraints['b2c_' + pheno][short_code][timestep],
-                            self.constraints['b3c_' + pheno][short_code][timestep],
-                            self.constraints['b4c_' + pheno][short_code][timestep],
-                            self.constraints['b5c_' + pheno][short_code][timestep],
-                            self.constraints['b1c_control_' + pheno][short_code][timestep],
-                            self.constraints['b2c_control_' + pheno][short_code][timestep],
-                            self.constraints['b3c_control_' + pheno][short_code][timestep],
-                            self.constraints['b4c_control_' + pheno][short_code][timestep],
-                            self.constraints['b5c_control_' + pheno][short_code][timestep],
-                            self.constraints['bin1c_' + pheno][short_code][timestep],
-                            self.constraints['bin2c_' + pheno][short_code][timestep],
-                            self.constraints['bin3c_' + pheno][short_code][timestep],
-                            self.constraints['bin4c_' + pheno][short_code][timestep],
-                            self.constraints['bin5c_' + pheno][short_code][timestep]])
-        return constraints
+        return [self.constraints['b1c_' + pheno][short_code][timestep],
+                self.constraints['b2c_' + pheno][short_code][timestep],
+                self.constraints['b3c_' + pheno][short_code][timestep],
+                self.constraints['b4c_' + pheno][short_code][timestep],
+                self.constraints['b5c_' + pheno][short_code][timestep],
+                self.constraints['b1c_control_' + pheno][short_code][timestep],
+                self.constraints['b2c_control_' + pheno][short_code][timestep],
+                self.constraints['b3c_control_' + pheno][short_code][timestep],
+                self.constraints['b4c_control_' + pheno][short_code][timestep],
+                self.constraints['b5c_control_' + pheno][short_code][timestep],
+                self.constraints['bin1c_' + pheno][short_code][timestep],
+                self.constraints['bin2c_' + pheno][short_code][timestep],
+                self.constraints['bin3c_' + pheno][short_code][timestep],
+                self.constraints['bin4c_' + pheno][short_code][timestep],
+                self.constraints['bin5c_' + pheno][short_code][timestep]]
 
     def initialize_vars_cons(self, pheno, short_code):
         # cvt and cvf
@@ -470,10 +463,10 @@ class MSCommPhitting:
         num_sorted = np.sort(np.array([int(obj[1:]) for obj in set(growth_tup.index)]))
         # TODO - short_codes must be distinguished for different conditions
         unique_short_codes = [f"{growth_tup.index[0][0]}{num}" for num in map(str, num_sorted)]
-        time_column_index = growth_tup.columns.index("Time (s)")
-        full_times = growth_tup.values[:, time_column_index]
+        full_times = growth_tup.values[:, growth_tup.columns.index("Time (s)")]
         self.times = {short_code: trial_contents(short_code, growth_tup.index, full_times)
                       for short_code in unique_short_codes}
+        self.time_ranges = {}
 
         # define default values
         # TODO render bcv and cvmin dependent upon temperature, and possibly trained on Carlson's data
@@ -588,7 +581,7 @@ class MSCommPhitting:
                                 "operation": "Add"
                             })
                         constraints.append(self.constraints['binc_' + pheno][short_code])
-                    constraints = self.define_b_cons(pheno, short_code, timestep, constraints, biomass_coefs)
+                    constraints.extend(self.define_b_cons(pheno, short_code, timestep, biomass_coefs))
 
                     ## define the growth rate variable or primal value
                     species, phenotype = pheno.split("_")
@@ -638,11 +631,11 @@ class MSCommPhitting:
                                 self.variables['b3_' + pheno][short_code][timestep].name,
                                 self.variables['b4_' + pheno][short_code][timestep].name,
                                 self.variables['b5_' + pheno][short_code][timestep].name]
-                    b_terms = [{"elements": [-self.parameters["kcat"][species][phenotype], b],
-                                "operation": "Mul"} for b in b_values]
                     self.constraints['gc_' + pheno][short_code][timestep] = tupConstraint(
                         name=_name('gc_', pheno, short_code, timestep, self.names),
-                        expr={"elements": [*b_terms, self.variables['g_' + pheno][short_code][timestep].name],
+                        expr={"elements": [*[{"elements": [-self.parameters["kcat"][species][phenotype], b],
+                                              "operation": "Mul"} for b in b_values],
+                                           self.variables['g_' + pheno][short_code][timestep].name],
                               "operation": "Add"})
 
                     constraints.extend([self.constraints['cvc_' + pheno][short_code][timestep],
@@ -726,7 +719,8 @@ class MSCommPhitting:
                 ## requires a future timestep, which does not exist for the last timestep
                 for timestep in timesteps[:-1]:
                     ## the user timestep and data timestep must be synchronized
-                    if int(timestep)*self.parameters['timestep_hr'] < data_timestep*self.parameters['data_timestep_hr']:
+                    if (int(timestep)*self.parameters['timestep_hr']
+                            < data_timestep*self.parameters['data_timestep_hr']):
                         print(f"Skipping timestep {timestep} that does not align with the user's timestep") ; continue
                     data_timestep += 1
                     if data_timestep > int(self.times[short_code][-1] / self.parameters["data_timestep_hr"]):
@@ -926,9 +920,8 @@ class MSCommPhitting:
         #         os.remove(primals_export_path)
         # visualize the specified information
         time2 = process_time()
-        if graphs:
-            self.graph(graphs, export_zip_name=figures_zip_name or export_zip_name, publishing=publishing,
-                       remove_empty_plots=remove_empty_plots)
+        if graphs:  self.graph(graphs, export_zip_name=figures_zip_name or export_zip_name,
+                               publishing=publishing, remove_empty_plots=remove_empty_plots)
 
         # parse the primal values
         values_df = DataFrame(self.values)
@@ -964,11 +957,9 @@ class MSCommPhitting:
 
     def load_model(self, mscomfit_json_path: str = None, zip_name: str = None, model_to_load: dict = None):
         if zip_name:
-            with ZipFile(zip_name, 'r') as zp:
-                zp.extract(mscomfit_json_path)
+            with ZipFile(zip_name, 'r') as zp:  zp.extract(mscomfit_json_path)
         if mscomfit_json_path:
-            with open(mscomfit_json_path, 'r') as mscmft:
-                return json.load(mscmft)
+            with open(mscomfit_json_path, 'r') as mscmft:  return json.load(mscmft)
         if model_to_load:  self.problem = Model.from_json(model_to_load)
 
     @staticmethod
@@ -1031,10 +1022,8 @@ class MSCommPhitting:
         timestep_ratio = data_timestep_hr / self.parameters.get('timestep_hr', data_timestep_hr)
         if primal_values_filename:
             if primal_values_zip_path:
-                with ZipFile(primal_values_zip_path, 'r') as zp:
-                    zp.extract(primal_values_filename)
-            with open(primal_values_filename, 'r', encoding='utf-8') as primal:
-                self.values = json.load(primal)
+                with ZipFile(primal_values_zip_path, 'r') as zp:  zp.extract(primal_values_filename)
+            with open(primal_values_filename, 'r', encoding='utf-8') as primal:  self.values = json.load(primal)
 
         # plot the content for desired trials
         x_axis_split = int(3 / data_timestep_hr / timestep_ratio)
@@ -1047,12 +1036,9 @@ class MSCommPhitting:
             if any([x in graph['content'] for x in ['biomass', 'OD']]):
                 total_biomasses = {name: [] for name in self.species_list}
                 total_biomasses.update({"OD":[]})
-                if "species" not in graph:
-                    graph['species'] = self.species_list
-            if "biomass" in graph['content']:
-                y_label = r'Biomass ($\frac{g}{L}$)'
-            elif 'growth' in graph['content']:
-                y_label = r'Biomass growth ($\frac{g}{hr}$)'
+                if "species" not in graph:  graph['species'] = self.species_list
+            if "biomass" in graph['content']:  y_label = r'Biomass ($\frac{g}{L}$)'
+            elif 'growth' in graph['content']:  y_label = r'Biomass growth ($\frac{g}{hr}$)'
             graph["experimental_data"] = graph.get("experimental_data", False)
             if "painting" not in graph:
                 graph["painting"] = {
@@ -1073,12 +1059,11 @@ class MSCommPhitting:
                     }}
             graph["parsed"] = graph.get("parsed", False)
             if 'phenotype' in graph and graph['phenotype'] == '*':
-                if "species" not in graph:
-                    graph['species'] = self.species_list
+                if "species" not in graph:  graph['species'] = self.species_list
                 graph['phenotype'] = set([pheno.split("_")[-1] for pheno in self.phenotypes
                                           if pheno.split("_")[0] in graph["species"]])
-            if 'species' in graph and graph['species'] == '*':   # TODO - a species-resolved option must be developed for the paper figure
-                graph['species'] = self.species_list
+            # TODO - a species-resolved option must be developed for the paper figure
+            if 'species' in graph and graph['species'] == '*':  graph['species'] = self.species_list
             elif content == "c_" and 'mets' not in graph:
                 print(self.mets_to_track)
                 graph["mets"] = self.mets_to_track
@@ -1182,9 +1167,7 @@ class MSCommPhitting:
                                 label = f'{name}_biomass (model)'
                                 if labeled_species:
                                     for label_specie in labeled_species:
-                                        if name in label_specie:
-                                            label = label_specie[name]
-                                            break
+                                        if name in label_specie:  label = label_specie[name] ; break
                             style = "solid" if (len(graph["species"]) < 1 or name not in graph["painting"]
                                                 ) else graph["painting"][name]["linestyle"]
                             style = "dashdot" if "model" in label else style
@@ -1215,12 +1198,9 @@ class MSCommPhitting:
                     species_id = ""
                     if "mets" not in graph and content != "c_":
                         species_id = graph["species"] if isinstance(graph["species"], str) else ",".join(graph["species"])
-                        if "species" in graph and graph['species'] == self.species_list:
-                            species_id = 'all species'
-                        else:
-                            phenotype_id = f"{','.join(graph['species'])} species"
-                        if species_id == "all species" and not phenotype_id:
-                            phenotype_id = ','.join(graph['species'])
+                        if "species" in graph and graph['species'] == self.species_list:  species_id = 'all species'
+                        else:  phenotype_id = f"{','.join(graph['species'])} species"
+                        if species_id == "all species" and not phenotype_id: phenotype_id = ','.join(graph['species'])
 
                     ax.set_xlabel(x_label) ; ax.set_ylabel(y_label)
                     if "mets" in graph:  ax.set_ylim(mM_threshold)
@@ -1233,8 +1213,7 @@ class MSCommPhitting:
                             org_content = content if content not in contents.values() else list(
                                 contents.keys())[list(contents.values()).index(content)]
                             this_title = f'{org_content} of {species_id} ({phenotype_id}) in the {trial} trial'
-                            if content == "c_":
-                                this_title = f"{org_content} in the {trial} trial"
+                            if content == "c_":  this_title = f"{org_content} in the {trial} trial"
                             ax.set_title(this_title)
                         else:  ax.set_title(title)
                     fig_name = f'{"_".join([trial, species_id, phenotype_id, content])}.jpg'

@@ -132,7 +132,7 @@ class MSSmetana:
                 else:  model1 = kbase_obj.get_from_ws(model1)
                 if model1.id not in models_media:  models_media[model1.id] = {"media": _get_media(model_s_=model1)}
             if model1 is None or model1.slim_optimize() == 0:
-                model1_str = model1_str or list(pairs.keys()).index(model1)
+                model1_str = list(pairs.keys()).index(model1) if "model1_str" not in locals().keys() else model1_str
                 print(f"The {model1_str} model input does not yield an operational model.")
                 continue
             for model2 in models:
@@ -142,7 +142,8 @@ class MSSmetana:
                     else:  model2 = kbase_obj.get_from_ws(model2)
                     if model2.id not in models_media:  models_media[model2.id] = {"media": _get_media(model_s_=model2)}
                 if model2 is None or model2.slim_optimize() == 0:
-                    model2_str = model2_str or str(list(pairs.keys()).index(model1))+str(pairs[model1].index(model2))
+                    model1_str = (str(list(pairs.keys()).index(model1))+str(pairs[model1].index(model2))
+                                  if "model1_str" not in locals().keys() else model2_str)
                     print(f"The {model2_str} model input does not yield an operational model.")
                     continue
                 grouping = [model1, model2]

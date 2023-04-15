@@ -396,7 +396,7 @@ class GrowthData:
     def _min_significant_timesteps(full_df, ignore_timesteps, significant_deviation, ignore_trials, df_name, name):
         # refine the DataFrames
         values_df = _column_reduction(full_df.iloc[1::2])
-        values_df = _remove_trials(values_df, ignore_trials, df_name, name, significant_deviation)
+        values_df, removed_trials = _remove_trials(values_df, ignore_trials, df_name, name, significant_deviation)
         timestep_range = list(set(list(values_df.columns)) - set(ignore_timesteps))
         start, end = ignore_timesteps[0], ignore_timesteps[-1]
         start_index = list(values_df.columns).index(start)

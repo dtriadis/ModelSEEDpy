@@ -23,20 +23,45 @@ def _check_names(name, names):
     names.append(name)
     return name
 
-def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
+def combined_dic(dic):
+    new_dic = {}
+    for k, v in dic.items():
+        k = re.sub(r"(\_\d+$)", "", k)
+        if k not in new_dic:  new_dic[k] = v
+        else:  new_dic[k] += v
+    return new_dic
+
+def optimized_reactions(msdb, met_freq, met_freq_threshold=10):
+    # TODO select all reactions that contain a given metabolite,
+    ##  either by updating the API to accept the attribute or through a custom function
+    # reactions with undefined metabolites or metabolites that are in fewer than met_freq_threshold reactions
+    rxns_to_optimize = set([rxn for met in msdb.compunds for rxn in met.reactions
+                            if met.elements == {} or (met.id in met_freq and met_freq[met.id] < met_freq_threshold)])# [rxn for rxn in msdb.reactions if any([
+    # reaction that are empty, mass imbalanced, or charge imbalanced
+    rxns_to_optimize.update([rxn for rxn in msdb.reactions if any([
+        "MI" in rxn.status, "CI" in rxn.status, len(rxn.metabolites) == 0])])
+    return rxns_to_optimize
+
+
+def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_frequency_threshold=10):
     msdb = from_local(msdb_path)
 
     db_element_counts = counted_components(*[(met.elements, rxn.metabolites[met])
                                              for rxn in msdb.reactions for met in rxn.metabolites])
-    stoich_vars, charge_vars, stoich_diff_pos, stoich_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}, {}, {}
-    stoich_error, charge_error, protstoich = {}, {}, {}
+    stoich_vars, charge_vars, stoich_error, charge_error, protstoich = {}, {}, {}, {}, {}
+    stoich_diff_pos, stoich_diff_neg, charge_diff_pos, charge_diff_neg = {}, {}, {}, {}
     stoich_constraints, charge_constraints = {}, {}
     variables, constraints, names = [], [], []
     objective = tupObjective("database_correction", [], "min")
     time1 = process_time()
     print("Defining variables and objective", end="\t")
-    mets_frequency = counted_components(*[rxn.metabolites for rxn in msdb.reactions])
-    for met in msdb.compounds:
+    mets_frequency = combined_dic(counted_components(*[rxn.metabolites for rxn in msdb.reactions]))
+    reactions_to_examine = optimized_reactions(msdb, mets_frequency, mets_frequency_threshold)
+    mets_to_vary = [met for rxn in reactions_to_examine for met in rxn.metabolites]
+    # print(mets_frequency)
+    for met in mets_to_vary:
+        met_freq = mets_frequency[met.id]
+        if met_freq > mets_frequency_threshold:  continue
         # mass balance
         stoich_diff_pos[met.id], stoich_diff_neg[met.id], stoich_error[met.id] = {}, {}, {}
         met_elements = met.elements if met.elements != {} else list(db_element_counts.keys())
@@ -45,8 +70,8 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
             stoich_diff_neg[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffneg")
             stoich_error[met.id][ele] = tupVariable(f"{met.id}~{ele}_error")
             objective.expr.extend([{"elements": [
-                    {"elements": [stoich_diff_pos[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"},
-                    {"elements": [stoich_diff_neg[met.id][ele].name, mets_frequency[met.id]], "operation": "Mul"}],
+                    {"elements": [stoich_diff_pos[met.id][ele].name, met_freq], "operation": "Mul"},
+                    {"elements": [stoich_diff_neg[met.id][ele].name, met_freq], "operation": "Mul"}],
                 "operation": "Add"}])
         # charge balance
         charge_diff_pos[met.id] = tupVariable(f"{met.id}~charge_diffpos")
@@ -54,8 +79,8 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
         charge_error[met.id] = tupVariable(f"{met.id}~charge_error")
         # define the objective expression and store the variables
         objective.expr.extend([{"elements": [
-                {"elements": [charge_diff_pos[met.id].name, mets_frequency[met.id]], "operation": "Mul"},
-                {"elements": [charge_diff_neg[met.id].name, mets_frequency[met.id]], "operation": "Mul"}],
+                {"elements": [charge_diff_pos[met.id].name, met_freq], "operation": "Mul"},
+                {"elements": [charge_diff_neg[met.id].name, met_freq], "operation": "Mul"}],
             "operation": "Add"}])
         variables.extend([*stoich_diff_pos[met.id].values(), *stoich_diff_neg[met.id].values(),
                           *stoich_error[met.id].values(), charge_diff_pos[met.id],
@@ -66,8 +91,6 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
     # print(len(constraints))
     empty_reactions = []
     proton_met = msdb.compounds.get_by_id("cpd00067")
-    reactions_to_examine = [rxn for rxn in msdb.reaction if any([
-        re.search("MI", rxn.status) is not None, re.search("CI", rxn.status) is not None, len(rxn.metabolites) == 0])]
     for rxn in reactions_to_examine:
         rxn_element_counts = counted_components(*[(met.elements, rxn.metabolites[met]) for met in rxn.metabolites])
         if proton_met in rxn.metabolites:  rxn.subtract_metabolites({proton_met: rxn.metabolites[proton_met]})
@@ -79,28 +102,26 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json"):
                 met.charge*rxn.metabolites[met] if hasattr(met, "charge") else 0
                 for met in rxn.metabolites])], "operation":"Add"})
         for met in rxn.metabolites:
+            metID = re.sub(r"(\_\d+$)", "", met.id)
             charge_constraints[rxn.id].expr["elements"].extend([
-                {"elements": [charge_diff_pos[re.sub(r"(_\d+)", "", met.id)].name, -rxn.metabolites[met]],
-                 "operation": "Mul"},
-                {"elements": [charge_diff_neg[re.sub(r"(_\d+)", "", met.id)].name, rxn.metabolites[met]],
-                 "operation": "Mul"},
-                charge_error[met.id].name])
+                {"elements": [charge_diff_pos[metID].name, -rxn.metabolites[met]], "operation": "Mul"},
+                {"elements": [charge_diff_neg[metID].name, rxn.metabolites[met]], "operation": "Mul"},
+                charge_error[metID].name])
         # sum_{m,e}^{M,E}( (-diffpos_{m,e} + diffneg_{m,e}) * n_{met,rxn} )
         ##  = {m,e}^{M,E}( stoich_{m,e} * n_{met,rxn} ) , per reaction rxn
         stoich_constraints[rxn.id] = {}
         for ele, count in rxn_element_counts.items():
             stoich_constraints[rxn.id][ele] = tupConstraint(
                 name=f"{rxn.id}_{ele}", expr={"elements": [protstoich[rxn.id].name, sum([
-                    met.elemets[ele]*rxn.metabolites[met] if hasattr(met, "elements") and ele in met.elements else 0
+                    met.elements[ele]*rxn.metabolites[met] if hasattr(met, "elements") and ele in met.elements else 0
                     for met in rxn.metabolites])], "operation":"Add"})
             for met in rxn.metabolites:
                 if ele not in met.elements:  continue
+                metID = re.sub(r"(\_\d+$)", "", met.id)
                 stoich_constraints[rxn.id][ele].expr["elements"].extend([
-                    {"elements": [stoich_diff_pos[re.sub(r"(_\d+)", "", met.id)][ele].name, -rxn.metabolites[met]],
-                     "operation": "Mul"},
-                    {"elements": [stoich_diff_neg[re.sub(r"(_\d+)", "", met.id)][ele].name, rxn.metabolites[met]],
-                     "operation": "Mul"},
-                    stoich_error[met.id][ele].name])
+                    {"elements": [stoich_diff_pos[metID][ele].name, -rxn.metabolites[met]], "operation": "Mul"},
+                    {"elements": [stoich_diff_neg[metID][ele].name, rxn.metabolites[met]], "operation": "Mul"},
+                    stoich_error[metID][ele].name])
         constraints.extend([*stoich_constraints[rxn.id].values(), charge_constraints[rxn.id]])
     if empty_reactions:
         print(f"The {empty_reactions} reactions lack any metabolites with "
