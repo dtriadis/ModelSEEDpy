@@ -87,18 +87,18 @@ def parse_primals(primal_values, entity_labels=None, coefs=None, kcat_vals=None)
         for trial, content in primal_values.items():
             for primal, time_value in content.items():
                 if "bin" not in primal:  continue
-                for time, value in time_value.items():
+                for tsBin, value in time_value.items():
                     name, trial = primal.split("-")
                     number = re.search(r"(\d)", name).group()
                     species, pheno = re.sub(r"(bin\d_)", "", name).split("_")
                     if "stationary" in pheno:  continue
                     if species not in kcat_primal:  kcat_primal[species] = {}
                     if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = {}
-                    if time not in kcat_primal[species][pheno]:  kcat_primal[species][pheno][time] = 0
+                    if tsBin not in kcat_primal[species][pheno]:  kcat_primal[species][pheno][tsBin] = 0
                     # kcat_(k,new) = sum_z^Z ( kcat_z * bin_k^z ) * kcat_(k,old) < 10
-                    if value == 0 and kcat_primal[species][pheno][time] < 10:
-                        kcat_primal[species][pheno][time] += coefs[int(number)-1]*kcat_vals[species][pheno]
-                    kcat_primal[species][pheno][time] = clamp(kcat_primal[species][pheno][time], 0, 10)
+                    if value == 0 and kcat_primal[species][pheno][tsBin] < 10:
+                        kcat_primal[species][pheno][tsBin] += coefs[int(number)-1]*kcat_vals[species][pheno]
+                    kcat_primal[species][pheno][tsBin] = clamp(kcat_primal[species][pheno][tsBin], 1e-4, 10)
         return kcat_primal
     select_primals = {}
     for trial, entities in primal_values.items():
@@ -132,8 +132,8 @@ class MSCommPhitting:
         self.significant_deviation = significant_deviation ; self.extract_zip_path = extract_zip_path
 
         self.community_members = community_members
-        self.consumed_mets = consumed_mets or [met for content in community_members.values()
-                                               for met in content["phenotypes"]]
+        self.consumed_mets = consumed_mets or set([
+            met for content in community_members.values() for met in content["phenotypes"]])
         if community_members is not None or any([x is None for x in [fluxes_df, data_df]]):
             (self.experimental_metadata, data_df, fluxes_df, carbon_conc, self.requisite_biomass,
              self.trial_name_conversion, self.data_timestep_hr, simulation_timestep, media_conc
@@ -209,22 +209,22 @@ class MSCommPhitting:
                           self.variables['b4_' + pheno][short_code][timestep],
                           self.variables['b5_' + pheno][short_code][timestep]])
         for tsBin in self.time_ranges:
-            if short_code not in self.variables[f"bin1_{pheno}"][tsBin]:
-                self.variables[f"bin1_{pheno}"][tsBin][short_code] = tupVariable(
+            if tsBin not in self.variables[f"bin1_{pheno}"][short_code]:
+                self.variables[f"bin1_{pheno}"][short_code][tsBin] = tupVariable(
                     _name("bin1_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin2_{pheno}"][tsBin][short_code] = tupVariable(
+                self.variables[f"bin2_{pheno}"][short_code][tsBin] = tupVariable(
                     _name("bin2_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin3_{pheno}"][tsBin][short_code] = tupVariable(
+                self.variables[f"bin3_{pheno}"][short_code][tsBin] = tupVariable(
                     _name("bin3_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin4_{pheno}"][tsBin][short_code] = tupVariable(
+                self.variables[f"bin4_{pheno}"][short_code][tsBin] = tupVariable(
                     _name("bin4_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin5_{pheno}"][tsBin][short_code] = tupVariable(
+                self.variables[f"bin5_{pheno}"][short_code][tsBin] = tupVariable(
                     _name("bin5_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                variables.extend([self.variables[f"bin1_{pheno}"][tsBin][short_code],
-                                  self.variables[f"bin2_{pheno}"][tsBin][short_code],
-                                  self.variables[f"bin3_{pheno}"][tsBin][short_code],
-                                  self.variables[f"bin4_{pheno}"][tsBin][short_code],
-                                  self.variables[f"bin5_{pheno}"][tsBin][short_code]])
+                variables.extend([self.variables[f"bin1_{pheno}"][short_code][tsBin],
+                                  self.variables[f"bin2_{pheno}"][short_code][tsBin],
+                                  self.variables[f"bin3_{pheno}"][short_code][tsBin],
+                                  self.variables[f"bin4_{pheno}"][short_code][tsBin],
+                                  self.variables[f"bin5_{pheno}"][short_code][tsBin]])
         return variables
 
     def define_b_cons(self, pheno, short_code, timestep, biomass_coefs):
@@ -292,7 +292,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b1_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -304,7 +304,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b2_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -316,7 +316,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b3_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -328,7 +328,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b4_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -340,7 +340,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b5_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -354,7 +354,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b1_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -365,7 +365,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b2_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -376,7 +376,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b3_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -387,7 +387,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b4_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -398,7 +398,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b5_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][tsBin][short_code].name],
+                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -439,10 +439,9 @@ class MSCommPhitting:
         ## biomass binary variables
         self.variables[f'bin1_{pheno}'] = {}; self.variables[f'bin2_{pheno}'] = {}; self.variables[f'bin3_{pheno}'] = {}
         self.variables[f'bin4_{pheno}'] = {}; self.variables[f'bin5_{pheno}'] = {}
-        for tsBin in self.time_ranges:
-            self.variables[f"bin1_{pheno}"][tsBin] = {}; self.variables[f"bin2_{pheno}"][tsBin] = {}
-            self.variables[f"bin3_{pheno}"][tsBin] = {}; self.variables[f"bin4_{pheno}"][tsBin] = {}
-            self.variables[f"bin5_{pheno}"][tsBin] = {}
+        self.variables[f"bin1_{pheno}"][short_code] = {}; self.variables[f"bin2_{pheno}"][short_code] = {}
+        self.variables[f"bin3_{pheno}"][short_code] = {}; self.variables[f"bin4_{pheno}"][short_code] = {}
+        self.variables[f"bin5_{pheno}"][short_code] = {}
         ## biomass partition constraints
         self.constraints['b1c_' + pheno] = {}; self.constraints['b2c_' + pheno] = {}; self.constraints['b3c_' + pheno] = {}
         self.constraints['b4c_' + pheno] = {}; self.constraints['b5c_' + pheno] = {}
@@ -455,9 +454,7 @@ class MSCommPhitting:
         self.constraints['b1c_control_' + pheno][short_code] = {}; self.constraints['b2c_control_' + pheno][short_code] = {}
         self.constraints['b3c_control_' + pheno][short_code] = {}; self.constraints['b4c_control_' + pheno][short_code] = {}
         self.constraints['b5c_control_' + pheno][short_code] = {}
-        self.constraints['binc_' + pheno] = {}
-        for tsBin in self.time_ranges:  # TODO capture other constraints as is necessary with the time bin dependence
-            self.constraints[f'binc_{pheno}'][tsBin] = {}
+        self.constraints[f'binc_{pheno}'] = {}; self.constraints[f'binc_{pheno}'][short_code] = {}
         self.constraints['bin1c_' + pheno] = {}; self.constraints['bin2c_' + pheno] = {}
         self.constraints['bin3c_' + pheno] = {}; self.constraints['bin4c_' + pheno] = {}; self.constraints['bin5c_' + pheno] = {}
         self.constraints['bin1c_' + pheno][short_code] = {}; self.constraints['bin2c_' + pheno][short_code] = {}
@@ -471,9 +468,10 @@ class MSCommPhitting:
         elif timestep < self.fourth: return 3
         return 4
 
-    def define_problem(self, parameters=None, mets_to_track=None, rel_final_conc=None, zero_start=None, abs_final_conc=None,
-                       data_timesteps=None, export_zip_name: str=None, export_parameters: bool=True, export_lp: str='CommPhitting.lp',
-                       primal_values=None, biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False,
+    def define_problem(self, parameters=None, mets_to_track=None, rel_final_conc=None, zero_start=None,
+                       abs_final_conc=None, data_timesteps=None, export_zip_name: str=None,
+                       export_parameters: bool=True, export_lp: str='CommPhitting.lp', primal_values=None,
+                       biomass_coefs=None, requisite_biomass:dict=None, biolog_simulation=False,
                        export_phenotype_profiles=True):
         # parse the growth data
         growth_tup = FBAHelper.parse_df(self.data_df, False)
@@ -488,7 +486,7 @@ class MSCommPhitting:
         self.times = {short_code: trial_contents(short_code, growth_tup.index, full_times)
                       for short_code in unique_short_codes}
         average_time_series = np.mean(list(self.times.values()), axis=0)  ;  points = len(average_time_series)
-        self.first, self.second, self.third, self.fourth = int(points+0.1), int(points*0.25), int(points*0.45), int(points*0.7)
+        self.first, self.second, self.third, self.fourth = int(points*0.1), int(points*0.25), int(points*0.45), int(points*0.7)
         self.time_ranges = {0: average_time_series[:self.first], 1: average_time_series[self.first:self.second],
                             2: average_time_series[self.second:self.third], 3: average_time_series[self.third:self.fourth],
                             4: average_time_series[self.fourth:]}
@@ -509,7 +507,8 @@ class MSCommPhitting:
         self.parameters.update(parameters)
         # distribute kcat values to all phenotypes of all species and update from previous simulations where necessary
         self.parameters.update(self._universalize(self.parameters, "kcat", exclude=["stationary"]))
-        if primal_values:
+        print(self.parameters["kcat"])
+        if primal_values is not None:
             for species, content in self.parameters["kcat"].items():
                 if species not in primal_values:  continue
                 for pheno, content2 in content.items():
@@ -520,7 +519,7 @@ class MSCommPhitting:
         # define the metabolites that are tracked, exchanged, and not available in the media
         # TODO the default zero_start logic appears to be incorrect
         self.zero_start = zero_start or [met for met in self.consumed_mets
-                                         if met not in self.carbon_conc or self.carbon_conc[met] == 0]
+                                         if (met not in self.carbon_conc or self.carbon_conc[met] == 0)]
         self.rel_final_conc = rel_final_conc or {
             met:0.1 for met, concs in self.carbon_conc.items() if any(
                 [concs[short_code] > 0 for short_code in self.data_df.index.unique()]
@@ -531,11 +530,11 @@ class MSCommPhitting:
         else:  self.mets_to_track = list(self.rel_final_conc.keys()) + self.zero_start
         print(self.mets_to_track)
 
-        timesteps_indices_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
+        ts_to_delete = {}  # {short_code: full_times for short_code in unique_short_codes}
         if data_timesteps:  # {short_code:[times]}
             for short_code, times in data_timesteps.items():
-                timesteps_indices_to_delete[short_code] = set(list(range(len(full_times)))) - set(times)
-                self.times[short_code] = np.delete(self.times[short_code], list(timesteps_indices_to_delete[short_code]))
+                ts_to_delete[short_code] = set(list(range(len(full_times)))) - set(times)
+                self.times[short_code] = np.delete(self.times[short_code], list(ts_to_delete[short_code]))
 
         # construct the problem
         objective = tupObjective("minimize variance and phenotypic transitions", [], "min")
@@ -551,6 +550,7 @@ class MSCommPhitting:
             self.variables[concID] = {}; self.constraints['dcc_' + met_id] = {}
 
             # define the growth rate for each metabolite and concentrations
+            # TODO the MM parameters may be deletable once the binned kcat method is refined
             if "Vmax" and "Km" in self.parameters:
                 self.parameters["Vmax"].update(self._universalize(self.parameters["Vmax"], met_id))
                 self.parameters["Km"].update(self._universalize(self.parameters["Km"], met_id))
@@ -593,34 +593,19 @@ class MSCommPhitting:
                 penalty_range = np.linspace(self.parameters['stationary'], self.parameters['stationary']/10,
                                             len(timesteps[nth_percentile_timestep:]))
                 timestep_excess_count = 0
-                # for timestep in map(int, timesteps):
-                #     variables = self.define_b_vars(pheno, short_code, timestep, variables)
-                #         self.constraints[f'binc_{pheno}~{timestep_bin}'][short_code] = tupConstraint(
-                #             _name("binc_", pheno, short_code, "", self.names), Bounds(0, 4), {
-                #                 "elements": [self.variables[f'bin1_{pheno}~{timestep_bin}'][short_code].name,
-                #                              self.variables[f'bin2_{pheno}~{timestep_bin}'][short_code].name,
-                #                              self.variables[f'bin3_{pheno}~{timestep_bin}'][short_code].name,
-                #                              self.variables[f'bin4_{pheno}~{timestep_bin}'][short_code].name,
-                #                              self.variables[f'bin5_{pheno}~{timestep_bin}'][short_code].name],
-                #                 "operation": "Add"
-                #             })
-                #         constraints.append(self.constraints[f'binc_{pheno}~{timestep_bin}'][short_code])
-                #     constraints.extend(self.define_b_cons(pheno, short_code, timestep, biomass_coefs))
-
                 for timestep in map(int, timesteps):
-                    timestep_bin = get_timestep_bin(timestep)
+                    tsBin = self.get_timestep_bin(timestep)
                     variables = self.define_b_vars(pheno, short_code, timestep, variables)
-                    if short_code not in self.constraints["binc_" + pheno]:
-                        self.constraints['binc_' + pheno][short_code] = tupConstraint(
-                            _name("binc_", pheno, short_code, "", self.names), Bounds(0, 4), {
-                                "elements": [self.variables[f"bin1_{pheno}"][tsBin][short_code].name,
-                                             self.variables[f"bin2_{pheno}"][tsBin][short_code].name,
-                                             self.variables[f"bin3_{pheno}"][tsBin][short_code].name,
-                                             self.variables[f"bin4_{pheno}"][tsBin][short_code].name,
-                                             self.variables[f"bin5_{pheno}"][tsBin][short_code].name],
-                                "operation": "Add"
-                            })
-                        constraints.append(self.constraints['binc_' + pheno][short_code])
+                    if tsBin not in self.constraints[f"binc_{pheno}"][short_code]:
+                        self.constraints[f"binc_{pheno}"][short_code][tsBin] = tupConstraint(
+                            _name("binc_", pheno, short_code, tsBin, self.names), Bounds(0, 4), {
+                                "elements": [self.variables[f"bin1_{pheno}"][short_code][tsBin].name,
+                                             self.variables[f"bin2_{pheno}"][short_code][tsBin].name,
+                                             self.variables[f"bin3_{pheno}"][short_code][tsBin].name,
+                                             self.variables[f"bin4_{pheno}"][short_code][tsBin].name,
+                                             self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
+                                "operation": "Add"})
+                        constraints.append(self.constraints[f'binc_{pheno}'][short_code][tsBin])
                     constraints.extend(self.define_b_cons(pheno, short_code, timestep, biomass_coefs))
 
                     ## define the growth rate variable or primal value
@@ -635,11 +620,9 @@ class MSCommPhitting:
                             weight = penalty_range[timestep_excess_count]
                             timestep_excess_count += 1
                         objective.expr.extend([{
-                            "elements": [
-                                {"elements": [weight, self.variables['b_' + pheno][short_code][timestep].name],
-                                 "operation": "Mul"}],
-                            "operation": "Add"
-                        }])
+                            "elements": [{"elements": [weight, self.variables['b_' + pheno][short_code][timestep].name],
+                                          "operation": "Mul"}],
+                            "operation": "Add"}])
                         continue
                     # the conversion rates to and from the stationary phase
                     self.variables['cvt_' + pheno][short_code][timestep] = tupVariable(
@@ -652,12 +635,9 @@ class MSCommPhitting:
                     # cvt <= bcv*b_{pheno} + cvmin
                     self.constraints['cvc_' + pheno][short_code][timestep] = tupConstraint(
                         _name('cvc_', pheno, short_code, timestep, self.names), (0, None), {
-                            "elements": [
-                                {"elements": [
-                                    -1, self.variables['cvt_' + pheno][short_code][timestep].name],
-                                    "operation": "Mul"}],
-                            "operation": "Add"
-                        })
+                            "elements": [{"elements": [-1, self.variables['cvt_' + pheno][short_code][timestep].name],
+                                          "operation": "Mul"}],
+                            "operation": "Add"})
                     # biomass_term = [self.parameters['bcv']*b_value + self.parameters['cvmin']] if FBAHelper.isnumber(b_value) else [
                     biomass_term = [self.parameters['cvmin'],
                                     {"elements": [self.parameters['bcv'],
@@ -666,6 +646,7 @@ class MSCommPhitting:
                     self.constraints['cvc_' + pheno][short_code][timestep].expr["elements"].extend(biomass_term)
 
                     # g_{pheno} = b_{pheno}*v_{pheno}
+                    print(self.parameters["kcat"][species][phenotype][tsBin])
                     b_values = [self.variables['b1_' + pheno][short_code][timestep].name,
                                 self.variables['b2_' + pheno][short_code][timestep].name,
                                 self.variables['b3_' + pheno][short_code][timestep].name,
@@ -673,13 +654,13 @@ class MSCommPhitting:
                                 self.variables['b5_' + pheno][short_code][timestep].name]
                     self.constraints['gc_' + pheno][short_code][timestep] = tupConstraint(
                         name=_name('gc_', pheno, short_code, timestep, self.names),
-                        expr={"elements": [*[{"elements": [-self.parameters["kcat"][species][phenotype], b],
+                        expr={"elements": [*[{"elements": [-self.parameters["kcat"][species][phenotype][tsBin], b],
                                               "operation": "Mul"} for b in b_values],
                                            self.variables['g_' + pheno][short_code][timestep].name],
                               "operation": "Add"})
 
                     constraints.extend([self.constraints['cvc_' + pheno][short_code][timestep],
-                                        self.constraints['gc_' + pheno][short_code][timestep],])
+                                        self.constraints['gc_' + pheno][short_code][timestep]])
                                         # self.constraints["binTot_" + pheno][short_code]])
 
         # define the concentration constraint
@@ -707,8 +688,7 @@ class MSCommPhitting:
                                  "operation": "Mul"},
                                 *OptlangHelper.dot_product(
                                     growth_phenos, heuns_coefs=half_dt * self.fluxes_tup.values[r_index])],
-                            "operation": "Add"
-                        })
+                            "operation": "Add"})
                     constraints.append(self.constraints['dcc_' + met_id][short_code][timestep])
 
         #   define the conversion variables of every signal for every phenotype
@@ -751,8 +731,7 @@ class MSCommPhitting:
                 # self.constraints[signal + '|bio_finalc'][short_code] = {}
                 # the value entries are matched to only the timesteps that are condoned by data_timesteps
                 values_slice = trial_contents(short_code, growth_tup.index, growth_tup.values)
-                if timesteps_indices_to_delete:
-                    values_slice = np.delete(values_slice, list(timesteps_indices_to_delete[short_code]), axis=0)
+                if ts_to_delete:  values_slice = np.delete(values_slice, list(ts_to_delete[short_code]), axis=0)
                 timesteps = list(range(1, len(values_slice) + 1))
                 print(timesteps)
                 # the last timestep is omitted since Heun's method in the modelled biomass
@@ -804,8 +783,7 @@ class MSCommPhitting:
                                          "operation": "Mul"},
                                         {"elements": [-1, self.variables['cvt_' + pheno][short_code][timestep].name],
                                          "operation": "Mul"}],
-                                    "operation": "Add"
-                                })
+                                    "operation": "Add"})
                         # if not FBAHelper.isnumber(self.variables['b_' + pheno][short_code][timestep]):
                         biomass_term = [self.variables['b_' + pheno][short_code][timestep].name, {
                             "elements": [-1, self.variables['b_' + pheno][short_code][next_timestep].name],
@@ -843,8 +821,7 @@ class MSCommPhitting:
                                 {"elements": [self.variables[signal + '|conversion'].name,
                                               values_slice[timestep, signal_column_index]],
                                  "operation": "Mul"}],
-                            "operation": "Add"
-                        })
+                            "operation": "Add"})
                     constraints.append(self.constraints[signal + '|bioc'][short_code][timestep])
 
                     # {speces}_bio + {signal}_diffneg-{signal}_diffpos = sum_k^K(es_k*b_{phenotype})
@@ -856,8 +833,7 @@ class MSCommPhitting:
                                 self.variables[signal + '|diffneg'][short_code][timestep].name,
                                 {"elements": [-1, self.variables[signal + '|diffpos'][short_code][timestep].name],
                                  "operation": "Mul"}],
-                            "operation": "Add"
-                        })
+                            "operation": "Add"})
                     if all([isinstance(val, dict) for val in signal_sum]):
                         self.constraints[signal + "|diffc"][short_code][timestep].expr["elements"].extend(signal_sum)
                     else:  raise ValueError(f"The {signal_sum} value has unexpected contents.")
@@ -866,13 +842,12 @@ class MSCommPhitting:
                     objective.expr.extend([{
                         "elements": [
                             {"elements": [self.parameters['diffpos'],
-                                          self.variables[signal + '|diffpos'][short_code][timestep].name],
+                                          self.variables[f'{signal}|diffpos'][short_code][timestep].name],
                              "operation": "Mul"},
                             {"elements": [self.parameters['diffneg'],
-                                          self.variables[signal + '|diffneg'][short_code][timestep].name],
+                                          self.variables[f'{signal}|diffneg'][short_code][timestep].name],
                              "operation": "Mul"}],
-                        "operation": "Add"
-                    }])
+                        "operation": "Add"}])
 
         time_4 = process_time()
         print(f'Done with the DBC & diffc loop: {(time_4 - time_3) / 60} min')
@@ -965,9 +940,7 @@ class MSCommPhitting:
 
         # parse the primal values
         values_df = DataFrame(self.values)
-        # display(values_df)
         values_index = values_df.index.tolist()
-        # values_cols = list(map(str, values_df.columns))
         for col in values_df.columns:
             trial_values = values_df[col].tolist()
             ## process the times
@@ -987,9 +960,7 @@ class MSCommPhitting:
 
         self.hdf5_file.close()
         with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
-            for output in outputs:
-                zp.write(self.hdf5_name)
-                os.remove(self.hdf5_name)
+            zp.write(self.hdf5_name)  ;  os.remove(self.hdf5_name)
 
         time3 = process_time()
         print(f"Optimization completed in {(time2-time1)/60} minutes")
@@ -1005,9 +976,10 @@ class MSCommPhitting:
     @staticmethod
     def assign_values(param, var, next_dimension):
         dic = {var: {}}
+        print(var, next_dimension)
         for dim1, dim2_list in next_dimension.items():
             if isinstance(dim2_list, dict):  dic[var].update(MSCommPhitting.assign_values(param, dim1, dim2_list))
-            elif isinstance(dim2_list, list):  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
+            else:  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
         return dic
 
     def _universalize(self, param, var, next_dimension=None, exclude=None):
@@ -1147,8 +1119,7 @@ class MSCommPhitting:
                             if (any([x in graph['content'] for x in ["total", "biomass", 'OD']]) or
                                     graph['species'] == self.species_list): # and not graph["parsed"]:
                                 total_biomasses['OD'].append(vals)
-                                if "OD" not in graph['content']:
-                                    total_biomasses[species].append(vals)
+                                if "OD" not in graph['content']:  total_biomasses[species].append(vals)
                         if all([graph['experimental_data'], '|bio' in basename, ]):
                             # any([content in basename])]):  # TODO - any() must include all_biomass and total
                             species, signal, phenotype = basename.split('|')
@@ -1267,8 +1238,7 @@ class MSCommPhitting:
         if export_zip_name:
             with ZipFile(export_zip_name, 'a', compression=ZIP_LZMA) as zp:
                 for plot in self.plots:
-                    zp.write(plot)
-                    os.remove(plot)
+                    zp.write(plot)  ;  os.remove(plot)
 
 
     #################### ENGINEERING PHASE METHODS ####################
