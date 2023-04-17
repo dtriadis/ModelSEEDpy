@@ -507,7 +507,6 @@ class MSCommPhitting:
         self.parameters.update(parameters)
         # distribute kcat values to all phenotypes of all species and update from previous simulations where necessary
         self.parameters.update(self._universalize(self.parameters, "kcat", exclude=["stationary"]))
-        print(self.parameters["kcat"])
         if primal_values is not None:
             for species, content in self.parameters["kcat"].items():
                 if species not in primal_values:  continue
@@ -516,6 +515,7 @@ class MSCommPhitting:
                     for time, val in content2.items():
                         if time not in primal_values[species][pheno]:  continue
                         self.parameters["kcat"][species][pheno][time] = val
+        print(self.parameters["kcat"])
         # define the metabolites that are tracked, exchanged, and not available in the media
         # TODO the default zero_start logic appears to be incorrect
         self.zero_start = zero_start or [met for met in self.consumed_mets
@@ -646,7 +646,6 @@ class MSCommPhitting:
                     self.constraints['cvc_' + pheno][short_code][timestep].expr["elements"].extend(biomass_term)
 
                     # g_{pheno} = b_{pheno}*v_{pheno}
-                    print(self.parameters["kcat"][species][phenotype][tsBin])
                     b_values = [self.variables['b1_' + pheno][short_code][timestep].name,
                                 self.variables['b2_' + pheno][short_code][timestep].name,
                                 self.variables['b3_' + pheno][short_code][timestep].name,
@@ -733,7 +732,6 @@ class MSCommPhitting:
                 values_slice = trial_contents(short_code, growth_tup.index, growth_tup.values)
                 if ts_to_delete:  values_slice = np.delete(values_slice, list(ts_to_delete[short_code]), axis=0)
                 timesteps = list(range(1, len(values_slice) + 1))
-                print(timesteps)
                 # the last timestep is omitted since Heun's method in the modelled biomass
                 ## requires a future timestep, which does not exist for the last timestep
                 for timestep in timesteps[:-1]:
@@ -880,7 +878,7 @@ class MSCommPhitting:
             sleep(2)
             with ZipFile(self.zip_name, 'a', compression=ZIP_LZMA) as zp:
                 for file in self.zipped_output:
-                    zp.write(file) ; os.remove(file)
+                    zp.write(file) ; os.remove(file) ; self.zipped_output.remove(file)
         time_6 = process_time()
         print(f'Done exporting the content: {(time_6 - time_5) / 60} min')
 
@@ -974,12 +972,13 @@ class MSCommPhitting:
         if model_to_load:  self.problem = Model.from_json(model_to_load)
 
     @staticmethod
-    def assign_values(param, var, next_dimension):
+    def assign_values(param, var, next_dimension, kcat=True):
         dic = {var: {}}
-        print(var, next_dimension)
         for dim1, dim2_list in next_dimension.items():
             if isinstance(dim2_list, dict):  dic[var].update(MSCommPhitting.assign_values(param, dim1, dim2_list))
-            else:  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
+            else:
+                if kcat:  dic[var][dim1] = param
+                else:  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
         return dic
 
     def _universalize(self, param, var, next_dimension=None, exclude=None):

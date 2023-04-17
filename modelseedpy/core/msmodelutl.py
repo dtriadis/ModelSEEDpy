@@ -710,13 +710,13 @@ class MSModelUtil:
     #################################################################################
     # Functions related to applying, running, and expanding with test conditions
     #################################################################################
-    def run(self, media=False, pfba=False, fva=False, fva_reactions=None):
+    def run_fba(self, media=None, pfba=False, fva_reactions=None):
         from cobra import flux_analysis
         if media:
             self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
         if pfba:
             return flux_analysis.pfba(self.model)
-        if fva:
+        if fva_reactions is not None:
             return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
         return self.model.optimize()
 

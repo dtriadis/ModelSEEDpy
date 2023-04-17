@@ -3,6 +3,7 @@ from icecream import ic
 from modelseedpy import FBAHelper
 from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterError, NoFluxError
 # from modelseedpy.community.commhelper import build_from_species_models, CommHelper
+from optlang import Constraint, Variable
 from itertools import combinations
 from optlang.symbolics import Zero
 from pandas import DataFrame
@@ -23,9 +24,37 @@ def add_collection_item(met_name, normalized_flux, flux_threshold, ignore_mets,
 
 
 class MSSteadyCom:
-    
+
     @staticmethod
-    def compute(
+    def run_fba(mscommodel, media, pfba=False, fva_reactions=None, ava=False, minMemGrwoth:float=1, interactions=True):
+        # define a minimal growth for all members
+        # minGrowth = Constraint(name="minMemGrowth", lb=, ub=None)
+        # mscommodel.model.add_cons_vars
+        if not mscommodel.abundances_set:
+            for member in mscommodel.members:
+                member.biomass_cpd.lb = minMemGrwoth
+            all_metabolites = {mscommodel.primary_biomass.products[0]: 1}
+            all_metabolites.update({mem.biomass_cpd: 1 / len(mscommodel.members) for mem in mscommodel.members})
+            mscommodel.primary_biomass.add_metabolites(all_metabolites, combine=False)
+        sol = mscommodel.run_fba(media, pfba, fva_reactions)
+        if interactions:  MSSteadyCom.interactions(mscommodel, sol)
+        if ava:  return MSSteadyCom.abundance_variability_analysis(mscommodel, sol)
+
+    @staticmethod
+    def abundance_variability_analysis(mscommodel, media):
+        variability = {}
+        for mem in mscommodel.members:
+            variability[mem.id] = {}
+            # minimal variability
+            mscommodel.set_objective(mem.biomasses, minimize=True)
+            variability[mem.id]["minVar"] = mscommodel.run_fba(media)
+            # maximal variability
+            mscommodel.set_objective(mem.biomasses, minimize=False)
+            variability[mem.id]["maxVar"] = mscommodel.run_fba(media)
+        return variability
+
+    @staticmethod
+    def interactions(
             mscommodel,                          # The MSCommunity object of the model (mandatory to prevent circular imports)
             solution = None,                     # the COBRA simulation solution that will be parsed and visualized
             media=None,                          # The media in which the community model will be simulated
@@ -180,10 +209,8 @@ class MSSteadyCom:
         # logger.info(cross_feeding_df)
 
         # graph the network diagram
-        if visualize:
-            MSSteadyCom._visualize_cross_feeding(
-                cross_feeding_df, exMets_df, filename, export_directory, mscommodel.species,
-                node_metabolites, x_offset, show_figure)
+        if visualize:  MSSteadyCom._visualize_cross_feeding(cross_feeding_df, exMets_df, filename, export_directory,
+                                                            mscommodel.species, node_metabolites, x_offset, show_figure)
 
         return cross_feeding_df, exMets_df
 

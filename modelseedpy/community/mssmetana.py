@@ -543,14 +543,21 @@ class MSSmetana:
         return scores
 
     @staticmethod
-    def grd(member_models:Iterable, environment=None):
+    def grd(member_models:Iterable, environment=None, coculture_growth=False):
         diffs = {}
         for combination in combinations(member_models, 2):
             model1_util = MSModelUtil(combination[0]) ; model2_util = MSModelUtil(combination[1])
             if environment:
                 model1_util.add_medium(environment) ; model2_util.add_medium(environment)
-            model1_growth = model1_util.model.slim_optimize()
-            model2_growth = model2_util.model.slim_optimize()
+            if not coculture_growth:
+                model1_growth = model1_util.model.slim_optimize()
+                model2_growth = model2_util.model.slim_optimize()
+            else:
+                mscom = MSCommunity(models=[model1_util.model, model2_util.model],
+                                    names=[mem.id for mem in member_models])
+                sol = mscom.run_fba()
+                # TODO parse the community FBA solution for the individual member growths.
+                ## This may require converting the biomasses into growth fluxes.
             diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = abs(
                 model1_growth - model2_growth) / min([model1_growth, model2_growth])
         return diffs
