@@ -46,6 +46,7 @@ The ``community`` sub-library compatibilizes transport reactions of individual m
 
    community/commkineticpkg_api
    community/dfbapkg_api
+   community/mssmetana_api
    community/mscommphitting_api
    community/mscommunity_api
    community/mscompatibility_api
