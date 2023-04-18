@@ -179,12 +179,10 @@ class MSCommunity:
             else:
                 self.pkgmgr.getpkg("SimpleThermoPkg").build_package(thermo_params)
 
-    def steadycom(self, solution=None, media=None, filename=None, export_directory=None,
-                  node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
-        return MSSteadyCom.interactions(
-            self, self.util.model, None, solution or self.run_fba(media), filename=filename, export_directory=export_directory,
-            node_metabolites=node_metabolites, flux_threshold=flux_threshold, visualize=visualize,
-            show_figure=True, ignore_mets=ignore_mets)
+    def interactions(self, solution=None, media=None, filename=None, export_directory=None,
+                     node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
+        return MSSteadyCom.interactions(self, solution, media, flux_threshold, visualize, filename, export_directory,
+                                        node_metabolites, show_figure=True, ignore_mets=ignore_mets)
 
     #Utility functions
     def print_lp(self, filename=None):
@@ -264,7 +262,8 @@ class MSCommunity:
             return self._compute_relative_abundance_from_solution()
 
     def run_fba(self, media=None, pfba=False, fva_reactions=None):
-        return self._set_solution(self.util.run_fba(media, pfba, fva_reactions))
+        self.util.add_medium(media)
+        return self._set_solution(self.util.run_fba(None, pfba, fva_reactions))
 
     def _compute_relative_abundance_from_solution(self,solution = None):
         if not solution and not self.solution:

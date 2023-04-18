@@ -16,8 +16,7 @@ import os, re
 
 def add_collection_item(met_name, normalized_flux, flux_threshold, ignore_mets,
                         species_collection, first, second):
-    if flux_threshold and normalized_flux <= flux_threshold:
-        return species_collection
+    if flux_threshold and normalized_flux <= flux_threshold:  return species_collection
     if not any([re.search(x, met_name, flags=re.IGNORECASE) for x in ignore_mets]):
         species_collection[first][second].append(re.sub(r"(_\w\d$)", "", met_name))
     return species_collection
@@ -69,13 +68,11 @@ class MSSteadyCom:
             ignore_mets=None                     # cross-fed exchanges that will not be displayed in the graphs
             ):
         # verify that the model has a solution and parallelize where the solver is permissible
-        solver = mscommodel.util.model.solver
+        solver = str(type(mscommodel.util.model.solver))
         print(f"{solver} model loaded")
-        if "gurobi" in solver:
-            mscommodel.util.model.problem.Params.Threads = os.cpu_count()/2
+        if "gurobi" in solver:  mscommodel.util.model.problem.Params.Threads = os.cpu_count()/2
         solution = solution or mscommodel.run(media)
-        if not solution:
-            raise ParameterError("A solution must be provided. Interactions are computed from a solution.")
+        if not solution:  raise ParameterError("A solution must be provided, from which interactions are computed.")
         if all(array(list(solution.fluxes.values)) == 0):
             print(list(solution.fluxes.values))
             raise NoFluxError("The simulation lacks any flux.")
@@ -91,14 +88,14 @@ class MSSteadyCom:
             data["IDs"].append(met.id)
             data["Metabolites/Donor"].append(re.sub(r"(_\w\d$)", "", met.name))
             metabolite_data[met.id] = {"Environment": 0}
-            metabolite_data[met.id].update({individual.id: 0 for individual in mscommodel.species})
+            metabolite_data[met.id].update({individual.id: 0 for individual in mscommodel.members})
 
         # computing net metabolite flux from each reaction
-        for individual in mscommodel.species:
+        for individual in mscommodel.members:
             species_data[individual.id], species_collection[individual.id] = {}, {}
             species_list[individual.index] = individual
             data[individual.id] = []
-            for other in mscommodel.species:
+            for other in mscommodel.members:
                 species_data[individual.id][other.id] = 0
                 species_collection[individual.id][other.id] = []
             species_data["Environment"][individual.id] = species_data[individual.id]["Environment"] = 0
@@ -111,25 +108,23 @@ class MSSteadyCom:
                 # the Environment takes the opposite perspective to the members
                 metabolite_data[cpd.id]["Environment"] += -solution.fluxes[rxn.id]
             rxn_index = int(FBAHelper.rxn_compartment(rxn)[1:])
-            if not any([met not in exchange_mets_list for met in rxn.metabolites]) or rxn_index not in species_list:
-                continue
+            if not any([met not in exchange_mets_list for met in rxn.metabolites]
+                       ) or rxn_index not in species_list:  continue
             for met in rxn.metabolites:
-                if met.id not in metabolite_data:
-                    continue
+                if met.id not in metabolite_data:  continue
                 metabolite_data[met.id][species_list[rxn_index].id] += solution.fluxes[rxn.id]*rxn.metabolites[met]
 
         # translating net metabolite flux into species interaction flux
         ignore_mets = ignore_mets if ignore_mets is not None else ["h2o_e0", "co2_e0"]
         for met in exchange_mets_list:
             #Iterating through the metabolite producers
-            # !!! Why are fluxes normalized?
-            total = sum([max([metabolite_data[met.id][individual.id], 0]) for individual in mscommodel.species
+            # TODO Why are fluxes normalized?
+            total = sum([max([metabolite_data[met.id][individual.id], 0]) for individual in mscommodel.members
                          ]) + max([metabolite_data[met.id]["Environment"], 0])
-            for individual in mscommodel.species:
+            for individual in mscommodel.members:
                 ## calculate metabolic consumption of a species from the environment
                 if metabolite_data[met.id][individual.id] < Zero:
-                    if metabolite_data[met.id]["Environment"] <= Zero:
-                        continue
+                    if metabolite_data[met.id]["Environment"] <= Zero:  continue
                     normalized_flux = abs(metabolite_data[met.id][individual.id]
                                           * metabolite_data[met.id]["Environment"]) / total
                     species_data["Environment"][individual.id] += normalized_flux
@@ -137,10 +132,9 @@ class MSSteadyCom:
                                                              species_collection, "Environment", individual.id)
                 ## calculate and track metabolic donations between a member and another or the environment
                 elif metabolite_data[met.id][individual.id] > Zero:
-                    for other in mscommodel.species:
+                    for other in mscommodel.members:
                         ### filter against organisms that do not consume
-                        if metabolite_data[met.id][other.id] >= Zero:
-                            continue
+                        if metabolite_data[met.id][other.id] >= Zero:  continue
                         normalized_flux = abs(metabolite_data[met.id][individual.id]
                                               * metabolite_data[met.id][other.id])/total
                         species_data[individual.id][other.id] += normalized_flux
@@ -149,8 +143,7 @@ class MSSteadyCom:
                         species_collection = add_collection_item(met.name, normalized_flux, flux_threshold, ignore_mets,
                                                                  species_collection, individual.id, other.id)
                     ## calculate donations to the environment
-                    if metabolite_data[met.id]["Environment"] >= Zero:
-                        continue
+                    if metabolite_data[met.id]["Environment"] >= Zero:  continue
                     normalized_flux = abs(metabolite_data[met.id][individual.id]
                                           * metabolite_data[met.id]["Environment"])/total
                     ic(normalized_flux)
@@ -160,18 +153,18 @@ class MSSteadyCom:
 
         # construct the dataframes
         for metID in metabolite_data:
-            for individual in mscommodel.species:
+            for individual in mscommodel.members:
                 data[individual.id].append(metabolite_data[metID][individual.id])
             data["Environment"].append(metabolite_data[metID]["Environment"])
 
         ## process the fluxes dataframe
         data["IDs"].append("zz_Environment")
         data["Metabolites/Donor"].append(0)
-        for individual in mscommodel.species:
+        for individual in mscommodel.members:
             data[individual.id].append(species_data["Environment"][individual.id])
         data["Environment"].append(0)
-        for individual in mscommodel.species:
-            for other in mscommodel.species:
+        for individual in mscommodel.members:
+            for other in mscommodel.members:
                 data[individual.id].append(species_data[individual.id][other.id])
             data["Environment"].append(species_data[individual.id]["Environment"])
             data["IDs"].append(f"zz_Species{individual.index}")
@@ -188,14 +181,14 @@ class MSSteadyCom:
 
         ## process the identities dataframe
         exchanged_mets = {"Environment": [" "], "Donor ID": ["Environment"]}
-        exchanged_mets.update({ind.id: [] for ind in mscommodel.species})
-        for individual in mscommodel.species:
+        exchanged_mets.update({ind.id: [] for ind in mscommodel.members})
+        for individual in mscommodel.members:
             ### environment exchanges
             exchanged_mets[individual.id].append("; ".join(species_collection["Environment"][individual.id]))
             exchanged_mets["Environment"].append("; ".join(species_collection[individual.id]["Environment"]))
             ### member exchanges
             exchanged_mets["Donor ID"].append(individual.id)
-            for other in mscommodel.species:
+            for other in mscommodel.members:
                 exchanged_mets[individual.id].append("; ".join(species_collection[individual.id][other.id]))
 
         # if len(set(list(map(len, list(exchanged_mets.values()))))) != 1:
@@ -210,7 +203,7 @@ class MSSteadyCom:
 
         # graph the network diagram
         if visualize:  MSSteadyCom._visualize_cross_feeding(cross_feeding_df, exMets_df, filename, export_directory,
-                                                            mscommodel.species, node_metabolites, x_offset, show_figure)
+                                                            mscommodel.members, node_metabolites, x_offset, show_figure)
 
         return cross_feeding_df, exMets_df
 

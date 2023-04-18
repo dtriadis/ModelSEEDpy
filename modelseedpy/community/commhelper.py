@@ -154,7 +154,9 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # newmodel.remove_reactions(newmodel.sinks)
     newmodel.add_boundary(comm_biomass, "sink")
     # newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
-    newutl.model._contents.append(member_biomasses)
+    # print(dir(newutl.model))
+    if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
+    elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     if cobra_model:
         return newutl.model
     return newutl.model, names or [], abundances

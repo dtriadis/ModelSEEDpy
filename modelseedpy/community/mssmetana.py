@@ -76,7 +76,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
 
 
 class MSSmetana:
-    def __init__(self, member_models: Iterable, com_model, min_growth=0.1, n_solutions=100, environment=None,
+    def __init__(self, member_models, min_growth=0.1, n_solutions=100, environment=None,
                  abstol=1e-3, media_dict=None, printing=True, raw_content=False, antismash_json_path:str=None,
                  antismash_zip_path:str=None, minimal_media_method="minFlux"):
         self.min_growth = min_growth ; self.abstol = abstol ; self.n_solutions = n_solutions
@@ -85,7 +85,7 @@ class MSSmetana:
 
         # process the models
         self.models = _compatibilize(member_models)
-        self.community = MSModelUtil(com_model or build_from_species_models(self.models, cobra_model=True))
+        self.community = MSModelUtil(build_from_species_models(self.models, cobra_model=True))
         ## define the environment
         if environment:
             if hasattr(environment, "get_media_constraints"):
@@ -104,16 +104,22 @@ class MSSmetana:
                                  "media computations and hence SMETANA.")
         ## determine the minimal media for each model, including the community
         self.media = media_dict if media_dict else MSMinimalMedia.comm_media_est(
-            member_models, com_model, minimal_media_method, min_growth, self.environment, True, n_solutions, printing)
+            member_models, self.community.model, minimal_media_method,
+            min_growth, self.environment, True, n_solutions, printing)
 
-    def all_scores(self, mp_score=True):
+    def all_scores(self, mp_score=True, kbase_obj=None, cobrakbase_path:str=None,
+                   kbase_token_path:str=None, RAST_genomes:dict=None):
         mro = self.mro_score()
         mip = self.mip_score(interacting_media=self.media)
         mp = None if not mp_score else self.mp_score()
         mu = None # self.mu_score()
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
-        return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana}
+        grd = self.grd_score()
+        rfc = self.rfc_score() if any([kbase_obj is not None, RAST_genomes != [], cobrakbase_path is not None
+                                       and kbase_token_path is not None]) else None
+        return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana,
+                "grd":grd, "rfc":rfc}
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environment=None, RAST_genomes=None,
@@ -166,7 +172,7 @@ class MSSmetana:
                 print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\n")
                 # determine the functional complementarity content
                 if kbase_obj is not None and RAST_genomes is not None:
-                    kbase_dic.update({"RFC": list(MSSmetana.RAST_functionality(
+                    kbase_dic.update({"RFC": list(MSSmetana.rfc(
                         grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
                     print("RFC done\t\t")
 
@@ -231,8 +237,7 @@ class MSSmetana:
     def mro_score(self):
         self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
                                      self.media, self.raw_content, self.environment, self.printing, True)
-        if not self.printing:
-            return self.mro_val
+        if not self.printing:  return self.mro_val
         if self.raw_content:
             for pair, (interaction, media) in self.mro_val.items():
                 newcomer, established = pair.split('---')
@@ -250,18 +255,32 @@ class MSSmetana:
         interacting_media = interacting_media or self.media or None
         diff, self.mip_val = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
                                            noninteracting_media, self.environment, self.printing, True)
-        if not self.printing:
-            return self.mip_val
+        if not self.printing:  return self.mip_val
         print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
-        if self.raw_content:
-            pprint(diff)
+        if self.raw_content:  pprint(diff)
         return self.mip_val
+
+    def grd_score(self, coculture_growth=False):
+        self.grd_val = MSSmetana.grd(self.models, self.environment, coculture_growth)
+        if not self.printing:  return self.grd
+        growth_type = "monocultural" if not coculture_growth else "cocultural"
+        for pair, score in self.grd_val.items():
+            print(f"\nGRD score: The {growth_type} growth difference between the {pair} member models"
+                  f" is {score} times greater than the growth of the slower member.")
+        return self.grd
+
+    def rfc_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, RAST_genomes:dict=None):
+        self.rfc_val = MSSmetana.rfc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
+        if not self.printing:  return self.rfc
+        for pair, score in self.rfc_val.items():
+            print(f"\nRFC Score: The similarity of RAST functional SSO ontology "
+                  f"terms between the {pair} members is {score}.")
+        return self.rfc
 
     def mp_score(self):
         print("executing MP")
         self.mp_val = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
-        if not self.printing:
-            return self.mp_val
+        if not self.printing:  return self.mp_val
         if self.raw_content:
             print("\n(MP) The possible contributions of each member in the member media include:\n")
             pprint(self.mp_val)
@@ -275,8 +294,7 @@ class MSSmetana:
         member_excreta = self.mp_score() if not hasattr(self, "mp_val") else self.mp_val
         self.mu_val = MSSmetana.mu(self.models, self.environment, member_excreta, self.n_solutions,
                                self.abstol, True, self.printing)
-        if not self.printing:
-            return self.mu_val
+        if not self.printing:  return self.mu_val
         print("\nMU score:\t\t\tThe fraction of solutions in which each member is the "
               "syntrophic receiver that contain a respective metabolite:\n")
         pprint(self.mu_val)
@@ -285,38 +303,26 @@ class MSSmetana:
     def sc_score(self):
         self.sc_val = MSSmetana.sc(self.models, self.community.model, self.min_growth,
                                self.n_solutions, self.abstol, True, self.printing)
-        if not self.printing:
-            return self.sc_val
+        if not self.printing:  return self.sc_val
         print("\nSC score:\t\t\tThe fraction of community members who syntrophically contribute to each species:\n")
         pprint(self.sc_val)
         return self.sc_val
 
-    def growth_score(self):
-        self.grd = MSSmetana
-
     def smetana_score(self):
-        if not hasattr(self, "sc_val"):
-            self.sc_val = self.sc_score()
+        if not hasattr(self, "sc_val"):  self.sc_val = self.sc_score()
         sc_coupling = all(array(list(self.sc.values())) is not None)
-        if not hasattr(self, "mu_val"):
-            self.mu_val = self.mu_score()
-        if not hasattr(self, "mp_val"):
-            self.mp_val = self.mp_score()
+        if not hasattr(self, "mu_val"):  self.mu_val = self.mu_score()
+        if not hasattr(self, "mp_val"):  self.mp_val = self.mp_score()
 
         self.smetana = MSSmetana.smetana(
             self.models, self.community.model, self.min_growth, self.n_solutions, self.abstol,
             (self.sc_val, self.mu_val, self.mp_val), True, sc_coupling, self.printing)
-        if self.printing:
-            print("\nsmetana score:\n")
-            pprint(self.smetana)
+        if self.printing:  print("\nsmetana score:\n")  ;  pprint(self.smetana)
         return self.smetana
 
-    def antiSMASH_scores(self):
-        if not hasattr(self, "antismash_json_path"):
-            raise TypeError("The antismash_json_path argument must be specified to conduct the antiSMASH scores.")
-        self.antismash = MSSmetana.antiSMASH(self.antismash_json_path)
-        if not self.printing:
-            return self.antismash
+    def antiSMASH_scores(self, antismash_json_path=None):
+        self.antismash = MSSmetana.antiSMASH(antismash_json_path or self.antismash_json_path)
+        if not self.printing:  return self.antismash
         if self.raw_content:
             print("\n(antismash) The biosynthetic_areas, BGCs, protein_annotations, clusterBlast, and "
                   "num_clusterBlast from the provided antiSMASH results:\n")
@@ -353,18 +359,15 @@ class MSSmetana:
                 raise ParameterError("The either member_models or minimal_media parameter must be defined.")
             member_models = _compatibilize(member_models, printing)
             mem_media = _get_media(media_dict, None, member_models, min_growth, environment, printing=printing)
-            if "community_media" in mem_media:
-                mem_media = mem_media["members"]
+            if "community_media" in mem_media:  mem_media = mem_media["members"]
         # MROs = array(list(map(len, pairs.values()))) / array(list(map(len, mem_media.values())))
         mro_values = {}
         for model1, model2 in permutations(member_models, 2):
             intersection = set(mem_media[model1.id]["media"].keys()) & set(mem_media[model2.id]["media"].keys())
             member_media = mem_media[model1.id]["media"]
-            if raw_content:
-                mro_values[f"{model1.id}---{model2.id})"] = (intersection, member_media)
-            else:
-                mro_values[f"{model1.id}---{model2.id})"] = (
-                    len(intersection)/len(member_media), len(intersection), len(member_media))
+            if raw_content:  mro_values[f"{model1.id}---{model2.id})"] = (intersection, member_media)
+            else:  mro_values[f"{model1.id}---{model2.id})"] = (
+                len(intersection)/len(member_media), len(intersection), len(member_media))
         return mro_values
         # return mean(list(map(len, pairs.values()))) / mean(list(map(len, mem_media.values())))
 
@@ -589,7 +592,7 @@ class MSSmetana:
                 for genome_name in genome_names}
 
     @staticmethod
-    def RAST_functionality(models:Iterable, kbase_object=None, cobrakbase_repo_path:str=None,
+    def rfc(models:Iterable, kbase_object=None, cobrakbase_repo_path:str=None,
                            kbase_token_path:str=None, RAST_genomes:dict=None):
         if not RAST_genomes:
             if not kbase_object:
@@ -614,8 +617,8 @@ class MSSmetana:
         return distances
 
     @staticmethod
-    def smetana(member_models: Iterable, environment, com_model=None, min_growth=0.1, n_solutions=100, abstol=1e-6,
-                prior_values=None, compatibilized=False, sc_coupling=False, printing=False):
+    def smetana(member_models: Iterable, environment, com_model=None, min_growth=0.1, n_solutions=100,
+                abstol=1e-6, prior_values=None, compatibilized=False, sc_coupling=False, printing=False):
         """Quantifies the extent of syntrophy as the sum of all exchanges in a given nutritional environment"""
         member_models, community = _load_models(
             member_models, com_model, compatibilized==False, printing=printing)
