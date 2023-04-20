@@ -35,7 +35,7 @@ def optimized_reactions(msdb, met_freq, met_freq_threshold=10):
     # TODO select all reactions that contain a given metabolite,
     ##  either by updating the API to accept the attribute or through a custom function
     # reactions with undefined metabolites or metabolites that are in fewer than met_freq_threshold reactions
-    rxns_to_optimize = set([rxn for met in msdb.compunds for rxn in met.reactions
+    rxns_to_optimize = set([rxn for met in msdb.compound_tokens for rxn in met.reactions
                             if met.elements == {} or (met.id in met_freq and met_freq[met.id] < met_freq_threshold)])# [rxn for rxn in msdb.reactions if any([
     # reaction that are empty, mass imbalanced, or charge imbalanced
     rxns_to_optimize.update([rxn for rxn in msdb.reactions if any([

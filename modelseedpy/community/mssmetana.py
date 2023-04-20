@@ -504,6 +504,7 @@ class MSSmetana:
         variables = {}
         constraints = []
         # TODO this can be converted to an MSCommunity object by looping through each index
+        # leverage CommKinetics
         for org_model in member_models:
             model_util = MSModelUtil(org_model, True)
             variables[model_util.model.id] = Variable(name=f'y_{model_util.model.id}', lb=0, ub=1, type='binary')
