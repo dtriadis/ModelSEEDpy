@@ -21,8 +21,8 @@ class ExpressionPkg(BaseFBAPkg):
         self.util = MSModelUtil(self.model)
         self.msdb = from_local(msdb_path)
 
-    def maximize_required_functionality(self, rxnIDs):
-        # optimize the respective
+    def maximize_functionality(self, rxnIDs):
+        # the default objective of biomass is probably sufficient
         self.util.add_objective(sum([self.msdb.reactions.get_by_id(rxnID).flux_expression for rxnID in rxnIDs]))
         sol = self.util.model.optimize()
         return sum([sol.fluxes[rxnID] for rxnID in rxnIDs])
@@ -30,21 +30,22 @@ class ExpressionPkg(BaseFBAPkg):
     def build_package(self, ex_data, required_functionalities, minFunctionality=0.5,
                       threshold_percentile=25, reversibility=False):
         # determine the maximum flux for each required functionality
-        max_req_funcs = {rxnIDs:self.maximize_required_functionality(rxnIDs) for rxnIDs in required_functionalities}
+        required_functionalities = required_functionalities or self.util.bio_rxns_list()
+        max_req_funcs = {list(rxnIDs): self.maximize_functionality(rxnIDs) for rxnIDs in required_functionalities}
         for rxnIDs, minFlux in max_req_funcs.items():
             for rxnID in rxnIDs:
-                rxn = self.msdb.reactions.get_by_id(rxnID)
+                rxn = self.util.model.reactions.get_by_id(rxnID)
                 rxn.lower_bound = minFlux*minFunctionality/len(rxnIDs)
         # integrate the expression data as flux bounds
         threshold = percentile(list(ex_data.values()), threshold_percentile)
+        # The < ex_data > expression data object must be pre-processed into
         self.coefs = {r_id: threshold - val for r_id, val in ex_data.items() if val < threshold}
         objective_coefs = {}
-        for rxn in self.model.reactions:
-            if rxn.id not in ex_data:
-                continue
+        for rxn in self.util.model.reactions:
+            if rxn.id not in ex_data:  continue
             rxn.lower_bound = ex_data[rxn.id]
             # rxn.upper_bound = ex_data[rxn.id]
-            objective_coefs[rxn.forward_variable] = objective_coefs[rxn.reverse_variable] = coefs[rxn.id]
+            objective_coefs[rxn.forward_variable] = objective_coefs[rxn.reverse_variable] = self.coefs[rxn.id]
         # define the objective expression
         self.util.add_objective(sum(list(objective_coefs.keys())), "min", objective_coefs)
         return self.util.model

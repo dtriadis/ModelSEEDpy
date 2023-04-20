@@ -53,6 +53,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     biomass_compounds, biomass_indices = [], []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
+    member_biomasses = {}
     for model_index, org_model in enumerate(models):
         model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
@@ -84,6 +85,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
             if "cpd11416_c" in met.id:
                 # print(met.id, model_util.model.id)
                 biomass_compounds.append(met)
+                member_biomasses[org_model.id] = met.id
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
             if rxn.id[0:3] != "EX_":
@@ -152,6 +154,9 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # newmodel.remove_reactions(newmodel.sinks)
     newmodel.add_boundary(comm_biomass, "sink")
     # newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
+    # print(dir(newutl.model))
+    if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
+    elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     if cobra_model:
         return newutl.model
     return newutl.model, names or [], abundances

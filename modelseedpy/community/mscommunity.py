@@ -24,15 +24,7 @@ import re, os
 logger = logging.getLogger(__name__)
 
 
-def isNumber(string):
-    try:
-        float(string)
-        return True
-    except:
-        return False
-
-
-class CommunityModelSpecies:
+class CommunityMembers:
     def __init__(self,
                  community,         # MSCommunity environment
                  biomass_cpd,       # metabolite in the biomass reaction
@@ -54,7 +46,6 @@ class CommunityModelSpecies:
 
         logger.info("Making atp hydrolysis reaction for species: "+self.id)
         atp_rxn = self.community.util.add_atp_hydrolysis("c"+str(self.index))
-        # FBAHelper.add_autodrain_reactions_to_self.community_model(self.community.model)  # !!! FIXME This FBAHelper function is not defined.
         self.atp_hydrolysis = atp_rxn["reaction"]
         self.biomass_drain = None
         self.biomasses, self.reactions = [], []
@@ -116,7 +107,7 @@ class MSCommunity:
         #Define Data attributes as None
         self.solution = self.biomass_cpd = self.primary_biomass = self.biomass_drain = None
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
-        self.species = DictList()
+        self.members = DictList()
 
         # defining the models
         model = model if not models else build_from_species_models(
@@ -147,36 +138,30 @@ class MSCommunity:
                 other_biomass_cpds.append(self.biomass_cpd)
         for biomass_cpd in other_biomass_cpds:
             print(biomass_cpd)
-            self.species.append(CommunityModelSpecies(community=self, biomass_cpd=biomass_cpd, names=names))
+            self.members.append(CommunityMembers(community=self, biomass_cpd=biomass_cpd, names=names))
+        self.abundances_set = False
         if abundances:  self.set_abundance(abundances)
+        self.set_objective()
 
     #Manipulation functions
     def set_abundance(self, abundances):
         #calculate the normalized biomass
-        total_abundance = sum([abundances[species] for species in abundances])
+        total_abundance = sum(list(abundances.values()))
         # map abundances to all species
-        for species in abundances:
-            abundances[species] /= total_abundance
-            if species in self.species:
-                self.species.get_by_id(species).abundance = abundances[species]
+        for species, abundance in abundances.items():
+            if species in self.members:  self.members.get_by_id(species).abundance = abundance/total_abundance
         #remake the primary biomass reaction based on abundances
-        if self.primary_biomass is None:
-            logger.critical("Primary biomass reaction not found in community model")
-        all_metabolites = {self.biomass_cpd: 1}
-        for species in self.species:
-            all_metabolites[species.biomass_cpd] = -abundances[species.id]
-        self.primary_biomass.add_metabolites(all_metabolites,combine=False)
+        if self.primary_biomass is None:  logger.critical("Primary biomass reaction not found in community model")
+        all_metabolites = {self.primary_biomass.products[0]: 1}
+        all_metabolites.update({mem.biomass_cpd: -abundances[mem.id]/total_abundance for mem in self.members})
+        self.primary_biomass.add_metabolites(all_metabolites, combine=False)
+        self.abundances_set = True
 
-    def set_objective(self,target = None,minimize = False):  #!!! Mustn't a multilevel objective be set for community models?
-        if target is None:
-            target = self.primary_biomass.id
-        sense = "max"
-        if minimize:
-            sense = "min"
+    def set_objective(self, target=None, targets=None, minimize=False):
+        targets = targets or [self.util.model.reactions.get_by_id(target or self.primary_biomass.id).flux_expression]
         self.util.model.objective = self.util.model.problem.Objective(
-            self.util.model.reactions.get_by_id(target).flux_expression,
-            direction=sense
-        )
+            sum(targets), direction="max" if not minimize else "min")
+        # TODO explore a multi-level objective
 
     def constrain(self, element_uptake_limit=None, kinetic_coeff=None,
                   thermo_params=None, msdb_path=None):
@@ -194,12 +179,10 @@ class MSCommunity:
             else:
                 self.pkgmgr.getpkg("SimpleThermoPkg").build_package(thermo_params)
 
-    def steadycom(self, solution=None, media=None, filename=None, export_directory=None,
-                  node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
-        return MSSteadyCom.compute(
-            self, self.util.model, None, solution or self.run(media), filename=filename, export_directory=export_directory,
-            node_metabolites=node_metabolites, flux_threshold=flux_threshold, visualize=visualize,
-            show_figure=True, ignore_mets=ignore_mets)
+    def interactions(self, solution=None, media=None, filename=None, export_directory=None,
+                     node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
+        return MSSteadyCom.interactions(self, solution, media, flux_threshold, visualize, filename, export_directory,
+                                        node_metabolites, show_figure=True, ignore_mets=ignore_mets)
 
     #Utility functions
     def print_lp(self, filename=None):
@@ -218,8 +201,7 @@ class MSCommunity:
         test_conditions = test_conditions or []
         reaction_scores = reaction_scores or {}
         blacklist = blacklist or []
-        if not target:
-            target = self.primary_biomass.id
+        if not target:  target = self.primary_biomass.id
         self.set_objective(target, minimize)
         gfname = FBAHelper.medianame(media) + "-" + target
         if suffix:
@@ -238,12 +220,12 @@ class MSCommunity:
         self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
         # Iterating over species and running tests
         data = {"Species": [], "Biomass": [], "ATP": []}
-        for individual in self.species:
+        for individual in self.members:
             data["Species"].append(individual.id)
             with self.util.model:
                 #If no interaction allowed, iterate over all other species and disable them
                 if not allow_cross_feeding:
-                    for indtwo in self.species:
+                    for indtwo in self.members:
                         if indtwo != individual:
                             indtwo.disable_species()
                 if (
@@ -271,7 +253,7 @@ class MSCommunity:
             self.pkgmgr.getpkg("CommKineticPkg").build_package(kinetic_coeff,self)
 
             objcoef = {}
-            for species in self.species:
+            for species in self.members:
                 objcoef[species.biomasses[0].forward_variable] = 1
             new_objective = self.util.model.problem.Objective(Zero,direction="max")
             self.util.model.objective = new_objective
@@ -279,25 +261,22 @@ class MSCommunity:
             self.run(media, pfba)
             return self._compute_relative_abundance_from_solution()
 
-    def run(self, media, pfba=False, fva=False, fva_reactions=None):
-        return self._set_solution(self.util.run(media, pfba, fva, fva_reactions))
+    def run_fba(self, media=None, pfba=False, fva_reactions=None):
+        self.util.add_medium(media)
+        return self._set_solution(self.util.run_fba(None, pfba, fva_reactions))
 
     def _compute_relative_abundance_from_solution(self,solution = None):
         if not solution and not self.solution:
             logger.warning("The simulation lacks any flux.")
             return None
         data = {"Species": [], "Abundance": []}
-        totalgrowth = sum(
-            [self.solution.fluxes[species.biomasses[0].id] for species in self.species]
-        )
+        totalgrowth = sum([self.solution.fluxes[member.biomasses[0].id] for member in self.members])
         if totalgrowth == 0:
             logger.warning("The community did not grow!")
             return None
-        for species in self.species:
-            data["Species"].append(species.id)
-            data["Abundance"].append(
-                self.solution.fluxes[species.biomasses[0].id] / totalgrowth
-            )
+        for member in self.members:
+            data["Member"].append(member.id)
+            data["Abundance"].append(self.solution.fluxes[member.biomasses[0].id] / totalgrowth)
         df = DataFrame(data)
         logger.info(df)
         return df

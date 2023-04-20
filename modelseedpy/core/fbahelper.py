@@ -136,10 +136,8 @@ class FBAHelper:
         return reaction.id[0:3] == "bio"
 
     def isnumber(string):
-        try:
-            float(string);  return True
-        except:
-            return False
+        try:  float(string);  return True
+        except:  return False
 
     @staticmethod
     def rxn_mets_list(rxn):

@@ -3,7 +3,7 @@ from numpy import nan, isnan, unique
 import jinja2
 import os, re, math, json
 
-package_dir = os.path.abspath(f"{os.path.dirname(__file__)}/..")
+package_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..")
 
 # Helper function
 def round_float_str(s, precision=6):
@@ -183,9 +183,9 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     content = {'flux_table': flux_df.style.background_gradient().to_html(),
                "total_table": total_table.style.background_gradient().to_html(),
                "exchanged_mets": exMets_df.to_html()}
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.join("community", "steadycom_template.html")).render(content)
+    html_report = env.get_template("steadycom_template.html").render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -193,7 +193,7 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
 def smetana_report(df, mets, export_html_path="smetana_report.html"):
     # refine the DataFrame into a heatmap
     def quantify_MRO(element):
-        print(element)
+        # print(element)
         return float(re.sub("(\s\(.+\))", "", str(element)))
 
     # construct the Heatmap
@@ -211,9 +211,9 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     content = {'table': df.to_html(),
                "heatmap": heatmap_df.style.background_gradient().to_html(),
                "mets": mets}
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.join("community", "smetana_template.html")).render(content)
+    html_report = env.get_template("smetana_template.html").render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report
@@ -228,9 +228,9 @@ def msdb_justification_report(proposed_changes, export_html_path="msdb_correctio
     heatmap_changes = proposed_changes_df.copy(deep=True)
     # construct and export the HTML files
     content = {"table": proposed_changes_df, "heatmap": heatmap_changes.style.background_gradient().to_html()}
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(package_dir),
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "biochem")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
-    html_report = env.get_template(os.path.join("biochem", "msdb_template.html")).render(content)
+    html_report = env.get_template("msdb_template.html").render(content)
     with open(export_html_path, "w") as out:
         out.writelines(html_report)
     return html_report

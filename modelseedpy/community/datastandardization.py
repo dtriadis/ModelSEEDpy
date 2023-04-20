@@ -273,14 +273,11 @@ class GrowthData:
         (media_conc, data_timestep_hr, simulation_time, dataframes, trials, fluxes_df
          ) = GrowthData.load_data(
             base_media, community_members, solver, data_paths, ignore_trials, all_phenotypes,
-            ignore_timesteps, significant_deviation, row_num, extract_zip_path
-        )
+            ignore_timesteps, significant_deviation, row_num, extract_zip_path)
         experimental_metadata, standardized_carbon_conc, trial_name_conversion = GrowthData.metadata(
             base_media, community_members, species_abundances, carbon_conc_series,
-            species_identities_rows, row_num, _findDate(data_paths["path"])
-        )
+            species_identities_rows, row_num, _findDate(data_paths["path"]))
         data_df = GrowthData.data_process(dataframes, trial_name_conversion)
-        # display(fluxes_df)
         requisite_biomass = {} if not determine_requisite_biomass else GrowthData.biomass_growth(
             carbon_conc_series, fluxes_df, data_df.index.unique(), trial_name_conversion,
             data_paths, community_members if all_phenotypes else None)
@@ -396,7 +393,7 @@ class GrowthData:
     def _min_significant_timesteps(full_df, ignore_timesteps, significant_deviation, ignore_trials, df_name, name):
         # refine the DataFrames
         values_df = _column_reduction(full_df.iloc[1::2])
-        values_df = _remove_trials(values_df, ignore_trials, df_name, name, significant_deviation)
+        values_df, removed_trials = _remove_trials(values_df, ignore_trials, df_name, name, significant_deviation)
         timestep_range = list(set(list(values_df.columns)) - set(ignore_timesteps))
         start, end = ignore_timesteps[0], ignore_timesteps[-1]
         start_index = list(values_df.columns).index(start)
@@ -601,7 +598,6 @@ class GrowthData:
             first = False
         # process the data to the smallest dataset, to accommodate heterogeneous data sizes
         minVal = min(list(map(len, values.values())))
-        print(minVal)
         for df_name, data in values.items():
             values[df_name] = data[:minVal]
         times2 = times.copy()
