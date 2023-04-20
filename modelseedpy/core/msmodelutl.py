@@ -202,6 +202,10 @@ class MSModelUtil:
     def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
 
+    def transport_list(self):
+        return [rxn for rxn in self.model.reactions
+                if any(["_e0" in met.id for met in rxn.metabolites]) and "EX_" not in rxn.id]
+
     def carbon_mets(self):
         return [met for met in self.model.metabolites if 'C' in met.elements]
 
@@ -226,9 +230,6 @@ class MSModelUtil:
 
     def bio_rxns_list(self):
         return [rxn for rxn in self.model.reactions if re.search(r"(^bio\d+)", rxn.id)]
-
-    def transport_list(self):
-        return [rxn for rxn in self.model.reactions if any(["_e0" in met.id for met in rxn.metabolites])]
 
     def compatibilize(self, conflicts_file_name="orig_conflicts.json", printing=False):
         from modelseedpy.community.mscompatibility import MSCompatibility

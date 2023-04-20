@@ -378,8 +378,7 @@ class MSSmetana:
                                            None, min_growth, environment, False)
         if "community_media" in noninteracting_medium:
             noninteracting_medium = noninteracting_medium["community_media"]
-        interacting_medium = _get_media(interacting_media_dict, community,
-                                        None, min_growth, environment, True)
+        interacting_medium = _get_media(interacting_media_dict, community, None, min_growth, environment, True)
         if "community_media" in interacting_medium:
             interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
