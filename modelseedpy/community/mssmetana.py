@@ -167,11 +167,15 @@ class MSSmetana:
                 mip_values = MSSmetana.mip(None, grouping, environment=environment, compatibilized=True)
                 kbase_dic.update({"mip": mip_values[1]})
                 print("MIP done", end="\t")
+                # define the CIP content
+                cip_values = MSSmetana.cip(grouping)
+                kbase_dic.update({"cip": cip_values[1]})
+                print("CIP done", end="\t")
                 # determine the growth diff content
                 kbase_dic.update({"GRD": list(MSSmetana.grd(grouping, environment).values())[0]})
                 print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\n")
-                # determine the functional complementarity content
-                if kbase_obj is not None and RAST_genomes is not None:
+                # determine the RAST Functional Complementarity content
+                if kbase_obj is not None or RAST_genomes is not None:
                     kbase_dic.update({"RFC": list(MSSmetana.rfc(
                         grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
                     print("RFC done\t\t")
@@ -373,7 +377,7 @@ class MSSmetana:
 
     @staticmethod
     def mip(com_model=None, member_models:Iterable=None, min_growth=0.1, interacting_media_dict=None,
-            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False):
+            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False, costless=False):
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(
             member_models, com_model, not compatibilized, printing=printing)
@@ -387,10 +391,15 @@ class MSSmetana:
             interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
-        # print(interact_diff)
         if "dictionary_item_removed" in interact_diff:
-            return interact_diff["dictionary_item_removed"], len(interact_diff["dictionary_item_removed"])
+            cross_fed_cpdID = interact_diff["dictionary_item_removed"]
+            return cross_fed_cpdID, len(cross_fed_cpdID)
         return None, 0
+
+    @staticmethod
+    def cip(member_models):  # costless interaction potential
+        costless_mets = {MSModelUtil(model).costless_excreta() for model in member_models}
+        return costless_mets, len(costless_mets)
 
     @staticmethod
     def contributions(org_possible_contributions, scores, model_util, abstol):
@@ -592,21 +601,29 @@ class MSSmetana:
                 for genome_name in genome_names}
 
     @staticmethod
-    def rfc(models:Iterable, kbase_object=None, cobrakbase_repo_path:str=None,
-                           kbase_token_path:str=None, RAST_genomes:dict=None):
+    def rfc(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,  # RAST Functional Complementarity
+            kbase_token_path:str=None, RAST_genomes:dict=None):
         if not RAST_genomes:
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
-                with open(kbase_token_path) as token_file:
-                    kbase_object = cobrakbase.KBaseAPI(token_file.readline())
+                with open(kbase_token_path) as token_file:  kbase_object = cobrakbase.KBaseAPI(token_file.readline())
             RAST_genomes = {model.id: kbase_object.get_from_ws(model.genome_ref) for model in models}
-        else:  RAST_genomes = {k:v for k,v in RAST_genomes.items() if k in [model.id for model in models]}
-        print(list(combinations(RAST_genomes.keys(), 2)))
+        elif not isinstance(RAST_genomes, dict):  RAST_genomes = dict(zip([model.id for model in models], RAST_genomes))
+        elif models is not None:
+            RAST_genomes = {k:v for k,v in RAST_genomes.items() if k in [model.id for model in models]}
+        genome_combinations = list(combinations(RAST_genomes.keys(), 2))
+        print(f"The RAST Functionality Score (RFC) will be calculated for {len(genome_combinations)} member pairs.")
         if not isinstance(list(RAST_genomes.values())[0], dict):
-            distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
-                    set(sso for j in RAST_genomes[genome1].cdss for sso in j.ontology_terms['SSO']),
-                    set(sso for j in RAST_genomes[genome2].cdss for sso in j.ontology_terms['SSO']))
-                for genome1, genome2 in combinations(RAST_genomes.keys(), 2)}
+            genome1_set, genome2_set = set(), set()
+            distances = {}
+            for genome1, genome2 in genome_combinations:
+                for j in RAST_genomes[genome1].features:
+                    for key, val in j.ontology_terms.items():
+                        if key == 'SSO':  genome1_set.update(val)
+                for j in RAST_genomes[genome2].features:
+                    for key, val in j.ontology_terms.items():
+                        if key == 'SSO':  genome2_set.update(val)
+                distances[f"{genome1} ++ {genome2}"] = MSSmetana._calculate_jaccard_score(genome1_set, genome2_set)
         else:
             distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
                 set(list(content["SSO"].keys())[0] for dic in RAST_genomes[genome1]["cdss"]
@@ -628,10 +645,8 @@ class MSSmetana:
             mu = MSSmetana.mu(member_models, environment, mp, n_solutions, abstol, compatibilized)
             if sc_coupling:
                 sc = MSSmetana.sc(member_models, com_model, min_growth, n_solutions, abstol, compatibilized)
-        elif len(prior_values) == 3:
-            sc, mu, mp = prior_values
-        else:
-            mu, mp = prior_values
+        elif len(prior_values) == 3:  sc, mu, mp = prior_values
+        else:  mu, mp = prior_values
 
         smetana_scores = {}
         for pairs in combinations(member_models, 2):

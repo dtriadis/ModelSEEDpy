@@ -57,34 +57,39 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
     print("Defining variables and objective", end="\t")
     mets_frequency = combined_dic(counted_components(*[rxn.metabolites for rxn in msdb.reactions]))
     reactions_to_examine = optimized_reactions(msdb, mets_frequency, mets_frequency_threshold)
-    mets_to_vary = [met for rxn in reactions_to_examine for met in rxn.metabolites]
+    mets_to_vary, mets_added = [], []
+    for rxn in reactions_to_examine:
+        for met in rxn.metabolites:
+            metID = re.sub(r"(\_\d+$)", "", met.id)
+            if metID not in mets_added:  mets_to_vary.append(met) ; mets_added.append(metID)
     # print(mets_frequency)
     for met in mets_to_vary:
-        met_freq = mets_frequency[met.id]
-        if met_freq > mets_frequency_threshold:  continue
+        metID = re.sub(r"(\_\d+$)", "", met.id)
+        met_freq = mets_frequency[metID]
+        # if met_freq > mets_frequency_threshold:  continue
         # mass balance
-        stoich_diff_pos[met.id], stoich_diff_neg[met.id], stoich_error[met.id] = {}, {}, {}
+        stoich_diff_pos[metID], stoich_diff_neg[metID], stoich_error[metID] = {}, {}, {}
         met_elements = met.elements if met.elements != {} else list(db_element_counts.keys())
         for ele in met_elements:
-            stoich_diff_pos[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffpos")
-            stoich_diff_neg[met.id][ele] = tupVariable(f"{met.id}~{ele}_diffneg")
-            stoich_error[met.id][ele] = tupVariable(f"{met.id}~{ele}_error")
+            stoich_diff_pos[metID][ele] = tupVariable(f"{metID}~{ele}_diffpos")
+            stoich_diff_neg[metID][ele] = tupVariable(f"{metID}~{ele}_diffneg")
+            stoich_error[metID][ele] = tupVariable(f"{metID}~{ele}_error")
             objective.expr.extend([{"elements": [
-                    {"elements": [stoich_diff_pos[met.id][ele].name, met_freq], "operation": "Mul"},
-                    {"elements": [stoich_diff_neg[met.id][ele].name, met_freq], "operation": "Mul"}],
+                    {"elements": [stoich_diff_pos[metID][ele].name, met_freq], "operation": "Mul"},
+                    {"elements": [stoich_diff_neg[metID][ele].name, met_freq], "operation": "Mul"}],
                 "operation": "Add"}])
         # charge balance
-        charge_diff_pos[met.id] = tupVariable(f"{met.id}~charge_diffpos")
-        charge_diff_neg[met.id] = tupVariable(f"{met.id}~charge_diffneg")
-        charge_error[met.id] = tupVariable(f"{met.id}~charge_error")
+        charge_diff_pos[metID] = tupVariable(f"{metID}~charge_diffpos")
+        charge_diff_neg[metID] = tupVariable(f"{metID}~charge_diffneg")
+        charge_error[metID] = tupVariable(f"{metID}~charge_error")
         # define the objective expression and store the variables
         objective.expr.extend([{"elements": [
-                {"elements": [charge_diff_pos[met.id].name, met_freq], "operation": "Mul"},
-                {"elements": [charge_diff_neg[met.id].name, met_freq], "operation": "Mul"}],
+                {"elements": [charge_diff_pos[metID].name, met_freq], "operation": "Mul"},
+                {"elements": [charge_diff_neg[metID].name, met_freq], "operation": "Mul"}],
             "operation": "Add"}])
-        variables.extend([*stoich_diff_pos[met.id].values(), *stoich_diff_neg[met.id].values(),
-                          *stoich_error[met.id].values(), charge_diff_pos[met.id],
-                          charge_diff_neg[met.id], charge_error[met.id]])
+        variables.extend([*stoich_diff_pos[metID].values(), *stoich_diff_neg[metID].values(),
+                          *stoich_error[metID].values(), charge_diff_pos[metID],
+                          charge_diff_neg[metID], charge_error[metID]])
     time2 = process_time()
     print(f"Done after {(time2-time1)/60} minutes")
     print("Defining constraints", end="\t")
@@ -96,6 +101,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
         if proton_met in rxn.metabolites:  rxn.subtract_metabolites({proton_met: rxn.metabolites[proton_met]})
         if rxn_element_counts == {}:  empty_reactions.append(rxn.id)
         protstoich[rxn.id] = tupVariable(f"{rxn.id}~protstoich")
+        variables.append(protstoich[rxn.id])
         # sum_m^M( (-diffpos_{m} + diffneg_{m}) * n_{met,rxn} ) = sum_m^M( charge_{m} * n_{met,rxn} ) , per reaction rxn
         charge_constraints[rxn.id] = tupConstraint(
             name=f"{rxn.id}_charge", expr={"elements": [protstoich[rxn.id].name, sum([

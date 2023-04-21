@@ -1049,6 +1049,11 @@ class MSModelUtil:
         self.model.add_reactions([cobra_reaction])
         return {"reaction": cobra_reaction, "direction": ">", "new": True}
 
+    def costless_excreta(self):
+        self.add_cons_vars([Constraint(self.model.objective.expression, lb=self.model.slim_optimize())])
+        sol = self.model.optimize()
+        return [rxnID for rxnID, flux in sol.fluxes.items() if "EX_" in rxnID and flux > 0]
+
     @staticmethod
     def parse_id(cobra_obj):
         if re.search("(.+)_([a-z])(\d+)$", cobra_obj.id):
