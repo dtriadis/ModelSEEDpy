@@ -115,11 +115,11 @@ class MSSmetana:
         mu = None # self.mu_score()
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
-        grd = self.grd_score()
+        gyd = self.gyd_score()
         rfc = self.rfc_score() if any([kbase_obj is not None, RAST_genomes != [], cobrakbase_path is not None
                                        and kbase_token_path is not None]) else None
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana,
-                "grd":grd, "rfc":rfc}
+                "gyd":gyd, "rfc":rfc}
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environment=None, RAST_genomes=None,
@@ -168,12 +168,12 @@ class MSSmetana:
                 kbase_dic.update({"mip": mip_values[1]})
                 print("MIP done", end="\t")
                 # define the CIP content
-                cip_values = MSSmetana.cip(grouping)
+                cip_values = MSSmetana.cip(member_models=grouping)
                 kbase_dic.update({"cip": cip_values[1]})
                 print("CIP done", end="\t")
                 # determine the growth diff content
-                kbase_dic.update({"GRD": list(MSSmetana.grd(grouping, environment).values())[0]})
-                print("GRD done\t\t", end="\t" if RAST_genomes is not None else "\n")
+                kbase_dic.update({"gyd": list(MSSmetana.gyd(grouping, environment).values())[0]})
+                print("GYD done\t\t", end="\t" if RAST_genomes is not None else "\n")
                 # determine the RAST Functional Complementarity content
                 if kbase_obj is not None or RAST_genomes is not None:
                     kbase_dic.update({"RFC": list(MSSmetana.rfc(
@@ -264,14 +264,14 @@ class MSSmetana:
         if self.raw_content:  pprint(diff)
         return self.mip_val
 
-    def grd_score(self, coculture_growth=False):
-        self.grd_val = MSSmetana.grd(self.models, self.environment, coculture_growth)
-        if not self.printing:  return self.grd
+    def gyd_score(self, coculture_growth=False):
+        self.gyd_val = MSSmetana.gyd(self.models, self.environment, coculture_growth)
+        if not self.printing:  return self.gyd
         growth_type = "monocultural" if not coculture_growth else "cocultural"
-        for pair, score in self.grd_val.items():
-            print(f"\nGRD score: The {growth_type} growth difference between the {pair} member models"
+        for pair, score in self.gyd_val.items():
+            print(f"\nGYD score: The {growth_type} growth difference between the {pair} member models"
                   f" is {score} times greater than the growth of the slower member.")
-        return self.grd
+        return self.gyd
 
     def rfc_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, RAST_genomes:dict=None):
         self.rfc_val = MSSmetana.rfc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
@@ -392,13 +392,18 @@ class MSSmetana:
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
         if "dictionary_item_removed" in interact_diff:
-            cross_fed_cpdID = interact_diff["dictionary_item_removed"]
-            return cross_fed_cpdID, len(cross_fed_cpdID)
+            cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
+            if costless:
+                costless_mets, numMets = MSSmetana.cip(member_models=member_models)
+                costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
+                return costless_cross_fed, len(costless_cross_fed)
+            return cross_fed_exIDs, len(cross_fed_exIDs)
         return None, 0
 
     @staticmethod
-    def cip(member_models):  # costless interaction potential
-        costless_mets = {MSModelUtil(model).costless_excreta() for model in member_models}
+    def cip(modelutil=None, member_models=None):  # costless interaction potential
+        costless_mets = {MSModelUtil(model).costless_excreta() for model in member_models} \
+            if modelutil is None else modelutil.costless_excreta()
         return costless_mets, len(costless_mets)
 
     @staticmethod
@@ -555,7 +560,7 @@ class MSSmetana:
         return scores
 
     @staticmethod
-    def grd(member_models:Iterable, environment=None, coculture_growth=False):
+    def gyd(member_models:Iterable, environment=None, coculture_growth=False):
         diffs = {}
         for combination in combinations(member_models, 2):
             model1_util = MSModelUtil(combination[0]) ; model2_util = MSModelUtil(combination[1])

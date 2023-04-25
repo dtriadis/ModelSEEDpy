@@ -9,6 +9,7 @@ from cobra.io.json import from_json, to_json
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.core.exceptions import *
 from modelseedpy.core.fbahelper import FBAHelper
+from itertools import chain
 from optlang.symbolics import Zero
 from optlang import Constraint, Objective
 from math import isclose
@@ -1049,8 +1050,14 @@ class MSModelUtil:
         self.model.add_reactions([cobra_reaction])
         return {"reaction": cobra_reaction, "direction": ">", "new": True}
 
-    def costless_excreta(self):
+    def costless_excreta(self, pfba=False):
+        # the double optimization is intended to truly find the maximal biomass growth
         self.add_cons_vars([Constraint(self.model.objective.expression, lb=self.model.slim_optimize())])
+        if pfba:
+            self.add_cons_vars([Constraint(self.model.objective.expression, lb=self.model.slim_optimize())])
+            # pFBA
+            reaction_variables = ((rxn.forward_variable, rxn.reverse_variable) for rxn in self.model.reactions)
+            self.model.problem.Objective(sum(chain(*reaction_variables)), direction="min")
         sol = self.model.optimize()
         return [rxnID for rxnID, flux in sol.fluxes.items() if "EX_" in rxnID and flux > 0]
 

@@ -63,6 +63,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
             metID = re.sub(r"(\_\d+$)", "", met.id)
             if metID not in mets_added:  mets_to_vary.append(met) ; mets_added.append(metID)
     # print(mets_frequency)
+    if "cpd00067" in mets_to_vary:  mets_to_vary.remove("cpd00067")
     for met in mets_to_vary:
         metID = re.sub(r"(\_\d+$)", "", met.id)
         met_freq = mets_frequency[metID]
@@ -109,6 +110,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
                 for met in rxn.metabolites])], "operation":"Add"})
         for met in rxn.metabolites:
             metID = re.sub(r"(\_\d+$)", "", met.id)
+            if metID == "cpd00067":  continue
             charge_constraints[rxn.id].expr["elements"].extend([
                 {"elements": [charge_diff_pos[metID].name, -rxn.metabolites[met]], "operation": "Mul"},
                 {"elements": [charge_diff_neg[metID].name, rxn.metabolites[met]], "operation": "Mul"},
@@ -116,6 +118,8 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
         # sum_{m,e}^{M,E}( (-diffpos_{m,e} + diffneg_{m,e}) * n_{met,rxn} )
         ##  = {m,e}^{M,E}( stoich_{m,e} * n_{met,rxn} ) , per reaction rxn
         stoich_constraints[rxn.id] = {}
+        # TODO the reaction elemental count is based on the presence of protons, so the protstoich
+        ## value will just fill the vacancy when the cpd00067 variable is removed and offer no new information
         for ele, count in rxn_element_counts.items():
             stoich_constraints[rxn.id][ele] = tupConstraint(
                 name=f"{rxn.id}_{ele}", expr={"elements": [protstoich[rxn.id].name, sum([
@@ -124,6 +128,7 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
             for met in rxn.metabolites:
                 if ele not in met.elements:  continue
                 metID = re.sub(r"(\_\d+$)", "", met.id)
+                if metID == "cpd00067":  continue
                 stoich_constraints[rxn.id][ele].expr["elements"].extend([
                     {"elements": [stoich_diff_pos[metID][ele].name, -rxn.metabolites[met]], "operation": "Mul"},
                     {"elements": [stoich_diff_neg[metID][ele].name, rxn.metabolites[met]], "operation": "Mul"},
@@ -157,7 +162,9 @@ def justifyDB(msdb_path:str, changes_path:str="MSDB_corrections.json", mets_freq
         # evaluate proposed changes from the optimization
         proposed_changes, undefined =  {}, {}
         for varName, val in optlang_model.primal_values.items():
-            content, diffName = varName.split("_")
+            if "_" in varName: content, diffName = varName.split("_")
+            elif "cpd" not in varName and not isclose(float(val), 0, abs_tol=1e-6):
+                proposed_changes[varName] = val  ;  continue
             metID, context = content.split("~")
             met = msdb.compounds.get_by_id(metID)
             missing_formula = False

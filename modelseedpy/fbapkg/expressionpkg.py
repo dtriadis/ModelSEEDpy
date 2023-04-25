@@ -27,8 +27,9 @@ class ExpressionPkg(BaseFBAPkg):
         sol = self.util.model.optimize()
         return sum([sol.fluxes[rxnID] for rxnID in rxnIDs])
 
+    # TODO - optionally support E-Flux calculation
     def build_package(self, ex_data, required_functionalities, minFunctionality=0.5,
-                      threshold_percentile=25, reversibility=False):
+                      threshold_percentile=25, reversibility=False, eflux=False):
         # determine the maximum flux for each required functionality
         required_functionalities = required_functionalities or self.util.bio_rxns_list()
         max_req_funcs = {list(rxnIDs): self.maximize_functionality(rxnIDs) for rxnIDs in required_functionalities}
