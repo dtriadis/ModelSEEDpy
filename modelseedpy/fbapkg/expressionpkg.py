@@ -27,9 +27,8 @@ class ExpressionPkg(BaseFBAPkg):
         sol = self.util.model.optimize()
         return sum([sol.fluxes[rxnID] for rxnID in rxnIDs])
 
-    # TODO - optionally support E-Flux calculation
-    def build_package(self, ex_data, required_functionalities, minFunctionality=0.5,
-                      threshold_percentile=25, reversibility=False, eflux=False):
+    def build_gimme(self, ex_data, required_functionalities, minFunctionality=0.5,
+                    threshold_percentile=25, reversibility=False):
         # determine the maximum flux for each required functionality
         required_functionalities = required_functionalities or self.util.bio_rxns_list()
         max_req_funcs = {list(rxnIDs): self.maximize_functionality(rxnIDs) for rxnIDs in required_functionalities}
@@ -51,13 +50,20 @@ class ExpressionPkg(BaseFBAPkg):
         self.util.add_objective(sum(list(objective_coefs.keys())), "min", objective_coefs)
         return self.util.model
 
+    def build_eFlux(self, ex_data):
+        max_ex_data = max(ex_data.values())
+        for rxnID, flux in ex_data:
+            try:  rxn = self.model.reactions.get_by_id(rxnID)
+            except:  continue
+            rxn.lower_bound, rxn.upper_bound = (-flux/max_ex_data, flux/max_ex_data)
+
     def simulate(self):
         sol = self.util.model.optimize()
         # calculate the inconsistency score
         inconsistency_score = 0
         for rxn, flux in sol.fluxes.items():
-            if rxn.id in self.coefs:
-                inconsistency_score += flux*self.coefs[rxn.id]
+            if rxn.id in self.coefs:  inconsistency_score += flux*self.coefs[rxn.id]
+        return inconsistency_score
 
     # def build_variable(self, cobra_obj, direction):
     #     pass
