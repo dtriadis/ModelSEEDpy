@@ -186,12 +186,10 @@ class MSCommunity:
 
     #Utility functions
     def print_lp(self, filename=None):
-        if not filename:
-            filename = self.lp_filename
-        if filename:
-            with open(filename+".lp", 'w') as out:
-                out.write(str(self.util.model.solver))
-                out.close()
+        filename = filename or self.lp_filename
+        with open(filename+".lp", 'w') as out:
+            out.write(str(self.util.model.solver))
+            out.close()
 
     #Analysis functions
     def gapfill(self, media = None, target = None, minimize = False, default_gapfill_templates=None, default_gapfill_models=None,
@@ -204,15 +202,12 @@ class MSCommunity:
         if not target:  target = self.primary_biomass.id
         self.set_objective(target, minimize)
         gfname = FBAHelper.medianame(media) + "-" + target
-        if suffix:
-            gfname += f"-{suffix}"
+        if suffix:  gfname += f"-{suffix}"
         self.gapfillings[gfname] = MSGapfill(self.util.model, default_gapfill_templates, default_gapfill_models,
                                              test_conditions, reaction_scores, blacklist, solver)
         gfresults = self.gapfillings[gfname].run_gapfilling(media, target)
         if not gfresults:
-            logger.critical(
-                "Gapfilling failed with the specified model, media, and target reaction."
-            )
+            logger.critical("Gapfilling failed with the specified model, media, and target reaction.")
             return None
         return self.gapfillings[gfname].integrate_gapfill_solution(gfresults)
 
@@ -226,16 +221,11 @@ class MSCommunity:
                 #If no interaction allowed, iterate over all other species and disable them
                 if not allow_cross_feeding:
                     for indtwo in self.members:
-                        if indtwo != individual:
-                            indtwo.disable_species()
-                if (
-                    run_biomass
-                ):  # If testing biomass, setting objective to individual species biomass and optimizing
-                    data["Biomass"].append(individual.compute_max_biomass())
-                if (
-                    run_atp
-                ):  # If testing atp, setting objective to individual species atp and optimizing
-                    data["ATP"].append(individual.compute_max_atp())
+                        if indtwo != individual:  indtwo.disable_species()
+                # If testing biomass, setting objective to individual species biomass and optimizing
+                if run_biomass:   data["Biomass"].append(individual.compute_max_biomass())
+                # If testing atp, setting objective to individual species atp and optimizing
+                if run_atp:  data["ATP"].append(individual.compute_max_atp())
         df = DataFrame(data)
         logger.info(df)
         return df
@@ -244,21 +234,15 @@ class MSCommunity:
         self.atpcorrect = MSATPCorrection(self.util.model,core_template, atp_medias,
                                           atp_objective="bio2", max_gapfilling=None, gapfilling_delta=0)
 
+    # TODO evaluate the comparison of this method with MICOM
     def predict_abundances(self,media=None,pfba=True,kinetic_coeff = None):
         with self.util.model:   # WITH, here, discards changes after each simulation
-            if not kinetic_coeff:
-                kinetic_coeff = self.kinetic_coeff
-            if not kinetic_coeff: #Kinetic coefficients must be used for this formulation to work
-                kinetic_coeff = 2000
+            kinetic_coeff = kinetic_coeff or self.kinetic_coeff or 2000
             self.pkgmgr.getpkg("CommKineticPkg").build_package(kinetic_coeff,self)
-
-            objcoef = {}
-            for species in self.members:
-                objcoef[species.biomasses[0].forward_variable] = 1
-            new_objective = self.util.model.problem.Objective(Zero,direction="max")
-            self.util.model.objective = new_objective
-            new_objective.set_linear_coefficients(objcoef)
-            self.run(media, pfba)
+            self.util.model.objective = self.util.model.problem.Objective(Zero,direction="max")
+            self.util.model.objective .set_linear_coefficients(
+                {species.biomasses[0].forward_variable: 1 for species in self.members})
+            self.run_fba(media, pfba)
             return self._compute_relative_abundance_from_solution()
 
     def run_fba(self, media=None, pfba=False, fva_reactions=None):

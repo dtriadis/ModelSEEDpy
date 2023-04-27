@@ -1,0 +1,26 @@
+digraph "Test network" {
+	node [color=lightblue2 shape=rectangle style=filled]
+	S1 [label=Species1]
+	subgraph mets {
+		rank=same
+		node [color=green shape=circle style=filled]
+		A
+		B
+		C
+		D
+	}
+	subgraph members {
+		rank=same
+		node [color=lightblue2 shape=rectangle style=filled]
+		S2 [label=Species2]
+	}
+	S1 -> A [arrowsize=0.24125230202578268]
+	A -> S2 [arrowsize=0.2430939226519337]
+	S2 -> B [arrowsize=0.26151012891344383]
+	B -> S1 [arrowsize=0.22283609576427257]
+	S1 -> C [arrowsize=0.09944751381215469]
+	C -> S2 [arrowsize=0.6316758747697975]
+	S2 -> D [arrowsize=1]
+	D -> S1 [arrowsize=0.5911602209944752]
+	overlap=false
+}

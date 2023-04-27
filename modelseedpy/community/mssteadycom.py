@@ -6,7 +6,7 @@ from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterErro
 from optlang import Constraint, Variable
 from itertools import combinations
 from optlang.symbolics import Zero
-from pandas import DataFrame
+from pandas import DataFrame, concat
 from matplotlib import pyplot
 from numpy import array
 import networkx
@@ -26,7 +26,8 @@ class MSSteadyCom:
 
     @staticmethod
     def run_fba(mscommodel, media, pfba=False, fva_reactions=None, ava=False, minMemGrwoth:float=1, interactions=True):
-        # define a minimal growth for all members
+        # TODO constrain fluxes to be proportional to the relative abundance
+        ## and define a minimal growth for all members
         # minGrowth = Constraint(name="minMemGrowth", lb=, ub=None)
         # mscommodel.model.add_cons_vars
         if not mscommodel.abundances_set:
@@ -36,7 +37,7 @@ class MSSteadyCom:
             all_metabolites.update({mem.biomass_cpd: 1 / len(mscommodel.members) for mem in mscommodel.members})
             mscommodel.primary_biomass.add_metabolites(all_metabolites, combine=False)
         sol = mscommodel.run_fba(media, pfba, fva_reactions)
-        if interactions:  MSSteadyCom.interactions(mscommodel, sol)
+        if interactions:  return MSSteadyCom.interactions(mscommodel, sol)
         if ava:  return MSSteadyCom.abundance_variability_analysis(mscommodel, sol)
 
     @staticmethod
@@ -208,8 +209,30 @@ class MSSteadyCom:
         return cross_feeding_df, exMets_df
 
     @staticmethod
+    def visual_interactions(cross_feeding_df):
+        # define the cross-fed metabolites
+        cross_feeding_rows = []
+        for index, row in cross_feeding_df.iterrows():
+            positive = negative = False
+            for col, val in row.items():
+                if "Species" in col:
+                    if val > 1e-4:  positive = True
+                    elif val < -1e-4:  negative = True
+                if negative and positive:  cross_feeding_rows.append(row);  break
+        metabolites_df = concat(cross_feeding_rows, axis=1).T
+        metabolites_df.index = metabolites_df["Metabolite/Donor ID"]
+        metabolites_df = metabolites_df.drop(["Metabolite/Donor ID"], axis=1)
+        metabolites = metabolites_df.index.tolist()
+        # define the community members that participate in cross-feeding
+        members = metabolites_df.loc[:, (metabolites_df != 0).any(axis=0)].columns.tolist()
+
+        # define network nodes
+
+
+
+    @staticmethod
     def _visualize_cross_feeding(cross_feeding_df, exMets_df, filename, export_directory,
-            species, node_metabolites = True, x_offset = 0.15, show_figure = True):
+                                 species, node_metabolites = True, x_offset = 0.15, show_figure = True):
         # define species and the metabolite fluxes
         graph = networkx.Graph()
         species_nums = {}
@@ -249,5 +272,5 @@ class MSSteadyCom:
         csv_filename = re.sub(r"(\.\w+)", ".csv", filename)
         csv_filename = csv_filename.replace("_diagram", "")
         cross_feeding_df.to_csv(os.path.join(export_directory, csv_filename))
-        if show_figure:
-            pyplot.show()
+        if show_figure:  pyplot.show()
+        return cross_feeding_df
