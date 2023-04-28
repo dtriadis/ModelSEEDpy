@@ -157,8 +157,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # print(dir(newutl.model))
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
-    if cobra_model:
-        return newutl.model
+    if cobra_model:  return newutl.model
     return newutl.model, names or [], abundances
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):

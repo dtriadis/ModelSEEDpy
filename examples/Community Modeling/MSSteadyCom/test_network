@@ -4,16 +4,16 @@ digraph "Test network" {
 	subgraph mets {
 		rank=same
 		node [color=green shape=circle style=filled]
-		1 [URL="https://modelseed.org/biochem/compounds/cpd00001" fixedsize=true height=0.5 tooltip=cpd00001]
-		9 [URL="https://modelseed.org/biochem/compounds/cpd00009" fixedsize=true height=0.5 tooltip=cpd00009]
-		20 [URL="https://modelseed.org/biochem/compounds/cpd00020" fixedsize=true height=0.5 tooltip=cpd00020]
-		39 [URL="https://modelseed.org/biochem/compounds/cpd00039" fixedsize=true height=0.5 tooltip=cpd00039]
-		54 [URL="https://modelseed.org/biochem/compounds/cpd00054" fixedsize=true height=0.5 tooltip=cpd00054]
-		65 [URL="https://modelseed.org/biochem/compounds/cpd00065" fixedsize=true height=0.5 tooltip=cpd00065]
-		107 [URL="https://modelseed.org/biochem/compounds/cpd00107" fixedsize=true height=0.5 tooltip=cpd00107]
-		119 [URL="https://modelseed.org/biochem/compounds/cpd00119" fixedsize=true height=0.5 tooltip=cpd00119]
-		132 [URL="https://modelseed.org/biochem/compounds/cpd00132" fixedsize=true height=0.5 tooltip=cpd00132]
-		221 [URL="https://modelseed.org/biochem/compounds/cpd00221" fixedsize=true height=0.5 tooltip=cpd00221]
+		1 [URL="https://modelseed.org/biochem/compounds/cpd00001" fixedsize=true height=0.4 tooltip=H2O]
+		9 [URL="https://modelseed.org/biochem/compounds/cpd00009" fixedsize=true height=0.4 tooltip=Phosphate]
+		20 [URL="https://modelseed.org/biochem/compounds/cpd00020" fixedsize=true height=0.4 tooltip=Pyruvate]
+		39 [URL="https://modelseed.org/biochem/compounds/cpd00039" fixedsize=true height=0.4 tooltip="L-Lysine"]
+		54 [URL="https://modelseed.org/biochem/compounds/cpd00054" fixedsize=true height=0.4 tooltip="L-Serine"]
+		65 [URL="https://modelseed.org/biochem/compounds/cpd00065" fixedsize=true height=0.4 tooltip="L-Tryptophan"]
+		107 [URL="https://modelseed.org/biochem/compounds/cpd00107" fixedsize=true height=0.4 tooltip="L-Leucine"]
+		119 [URL="https://modelseed.org/biochem/compounds/cpd00119" fixedsize=true height=0.4 tooltip="L-Histidine"]
+		132 [URL="https://modelseed.org/biochem/compounds/cpd00132" fixedsize=true height=0.4 tooltip="L-Asparagine"]
+		221 [URL="https://modelseed.org/biochem/compounds/cpd00221" fixedsize=true height=0.4 tooltip="D-Lactate"]
 	}
 	S1 [label=Species2]
 	subgraph members {

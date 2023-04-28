@@ -25,21 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class CommunityMembers:
-    def __init__(self,
-                 community,         # MSCommunity environment
-                 biomass_cpd,       # metabolite in the biomass reaction
-                 names=None,        # names of the community species
-                 name=None,         # the name of a species
-                 index=None         # the index of the species
-                 ):
+    def __init__(self, community, biomass_cpd, name=None, index=None):
         self.community, self.biomass_cpd = community, biomass_cpd
-        self.index = int(self.biomass_cpd.compartment[1:]) # if index is None else index
+        self.index = index or int(self.biomass_cpd.compartment[1:])
         self.abundance = 0
-        print(community, biomass_cpd)
         if self.biomass_cpd in self.community.primary_biomass.metabolites:
             self.abundance = abs(self.community.primary_biomass.metabolites[self.biomass_cpd])
         if name:  self.id = name
-        elif names and self.index < len(names):  self.id = names[self.index-1]
         elif "species_name" in self.biomass_cpd.annotation:
             self.id = self.biomass_cpd.annotation["species_name"]
         else:  self.id = "Species"+str(self.index)
@@ -120,11 +112,10 @@ class MSCommunity:
             raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
-            print(self.biomass_cpd)
             if self.biomass_cpd.compartment == "c0":
                 for reaction in self.util.model.reactions:
                     if self.biomass_cpd not in reaction.metabolites:  continue
-                    print(reaction)
+                    print(self.biomass_cpd, reaction)
                     if reaction.metabolites[self.biomass_cpd] == 1 and len(reaction.metabolites) > 1:
                         if self.primary_biomass:
                             raise ObjectAlreadyDefinedError(
@@ -136,9 +127,10 @@ class MSCommunity:
                         self.biomass_drain = reaction
             elif 'c' in self.biomass_cpd.compartment:  # else does not seem to capture built model members
                 other_biomass_cpds.append(self.biomass_cpd)
-        for biomass_cpd in other_biomass_cpds:
-            print(biomass_cpd)
-            self.members.append(CommunityMembers(community=self, biomass_cpd=biomass_cpd, names=names))
+        for memIndex, biomass_cpd in enumerate(other_biomass_cpds):
+            name = names[memIndex]
+            print(name, biomass_cpd)
+            self.members.append(CommunityMembers(community=self, biomass_cpd=biomass_cpd, name=name))
         self.abundances_set = False
         if abundances:  self.set_abundance(abundances)
         self.set_objective()
@@ -176,8 +168,7 @@ class MSCommunity:
                 self.msdb_path = msdb_path
                 thermo_params.update({'modelseed_db_path':msdb_path})
                 self.pkgmgr.getpkg("FullThermoPkg").build_package(thermo_params)
-            else:
-                self.pkgmgr.getpkg("SimpleThermoPkg").build_package(thermo_params)
+            else:  self.pkgmgr.getpkg("SimpleThermoPkg").build_package(thermo_params)
 
     def interactions(self, solution=None, media=None, filename=None, export_directory=None,
                      node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
@@ -246,7 +237,7 @@ class MSCommunity:
             return self._compute_relative_abundance_from_solution()
 
     def run_fba(self, media=None, pfba=False, fva_reactions=None):
-        self.util.add_medium(media)
+        if media is not None:  self.util.add_medium(media)
         return self._set_solution(self.util.run_fba(None, pfba, fva_reactions))
 
     def _compute_relative_abundance_from_solution(self,solution = None):
