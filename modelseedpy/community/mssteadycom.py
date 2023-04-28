@@ -209,7 +209,7 @@ class MSSteadyCom:
         return cross_feeding_df, exMets_df
 
     @staticmethod
-    def visual_interactions(cross_feeding_df):
+    def visual_interactions(cross_feeding_df, export_format="svg"):
         # define the cross-fed metabolites
         cross_feeding_rows = []
         for index, row in cross_feeding_df.iterrows():
@@ -225,9 +225,47 @@ class MSSteadyCom:
         metabolites = metabolites_df.index.tolist()
         # define the community members that participate in cross-feeding
         members = metabolites_df.loc[:, (metabolites_df != 0).any(axis=0)].columns.tolist()
+        members.remove("Environment")
+        members_cluster1, members_cluster2 = members[:int(len(members) / 2)], members[int(len(members) / 2):]
 
-        # define network nodes
+        # TODO define a third tier of just the environment as a rectangle that spans the width of the members
+        ## which may alleviate much of the ambiguity about mass imbalance between the member fluxes
+        import graphviz
+        dot = graphviz.Digraph('Test network', format=export_format)  # directed graph
+        # define nodes
+        ## top-layer members
+        dot.attr('node', shape='rectangle', color="lightblue2", style="filled")
+        for mem in members_cluster1:
+            index = members.index(mem)
+            dot.node(f"S{index}", mem)
+        ## mets in the middle layer
+        with dot.subgraph(name="mets") as mets_subgraph:
+            mets_subgraph.attr(rank="same")
+            mets_subgraph.attr('node', shape='circle', color="green", style="filled")
+            for metIndex, metID in enumerate(metabolites):
+                cpdNum = str(int(metID.replace("cpd", "").replace("_e0", "")))
+                mets_subgraph.node(cpdNum, fixedsize="true", height="0.5", tooltip=metID.replace('_e0', ''),
+                                   URL=f"https://modelseed.org/biochem/compounds/{metID.replace('_e0', '')}")
+        ## bottom-layer members
+        with dot.subgraph(name="members") as members_subgraph:
+            members_subgraph.attr(rank="same")
+            for mem in members_cluster2:
+                index = members.index(mem)
+                dot.node(f"S{index}", mem)
+        # define the edges by parsing the interaction DataFrame
+        for metID, row in metabolites_df.iterrows():
+            cpdNum = str(int(metID.replace("cpd", "").replace("_e0", "")))
+            for col, val in row.items():
+                if col == "Environment":  continue
+                index = members.index(col)
+                # 0 < arrowsize <= 2
+                # TODO color carbon sources red
+                if val > 0:  dot.edge(f"S{index}", cpdNum, arrowsize=f"{val / 500}", edgetooltip=str(val))
+                if val < 0:  dot.edge(cpdNum, f"S{index}", arrowsize=f"{abs(val / 500)}", edgetooltip=str(val))
 
+        # render and export the source
+        dot.render('test_network', view=True)
+        return dot.source
 
 
     @staticmethod
