@@ -3,8 +3,8 @@
 from scipy.constants import milli, hour, minute, day, femto
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy import MSModelUtil
-
-# from modelseedpy.core.fbahelper import FBAHelper
+from optlang import Constraint
+from modelseedpy.core.fbahelper import FBAHelper
 from collections import OrderedDict
 from optlang.symbolics import Zero
 from numpy import log10, nan, mean
@@ -14,43 +14,18 @@ from pprint import pprint
 from datetime import date
 from math import inf
 import pandas
-
-# import cython
 import json, re, os
-
-
-def isnumber(string):
-    try:
-        float(string)
-        remainder = re.sub("([0-9.\-eE])", "", str(string))
-    except:
-        try:
-            int(string)
-            remainder = re.sub("[0-9.-eE])", "", str(string))
-        except:
-            return False
-    if remainder == "":
-        return True
 
 
 class MetaboliteError(Exception):
     pass
 
-
 def _x_axis_determination(total_time):
-    scalar = minute
-    time = total_time * scalar
-    unit = "s"
-    if time > 600:
-        unit = "min"
-        scalar = 1
-        if time > 7200:
-            unit = "hr"
-            scalar = 1 / hour
-            if time > 2e5:
-                scalar = 1 / day
-                unit = "days"
-    return scalar, unit
+    time = total_time * minute
+    if time <= 600:  return minute, "s"
+    if time > 600:  return 1, "min"
+    if time > 7200:  return 1/hour, "hr"
+    return 1/day, "days"
 
 class dFBAPkg(BaseFBAPkg):
     # TODO code conventionally defined dFBA (only exchange kinetics) or make this is a special case of the same package as the Kinetics model
@@ -59,19 +34,14 @@ class dFBAPkg(BaseFBAPkg):
 
 
 class KineticsPkg(BaseFBAPkg):
-    def __init__(self, 
-                 model,
-                 msdb_path:str,
-                 solver: str = 'glpk',
-                 warnings: bool = True, verbose: bool = False, printing: bool = False, jupyter: bool = False
-                 ):
+    def __init__(self, model, msdb_path:str, warnings: bool = True, verbose: bool = False,
+                 printing: bool = False, jupyter: bool = False):
         # define the parameter and variable dictionaries
         BaseFBAPkg.__init__(self, model, "BasedFBA", {"met": "metabolite"}, {"conc": "metabolite"})
         # self.pkgmgr.addpkgs(["FullThermoPkg"])
         # self.parameters["modelseed_api"] = FBAHelper.get_modelseed_db_api(self.parameters["msdb_path"])
         self.warnings, self.verbose, self.printing, self.jupyter = warnings, verbose, printing, jupyter
         self.model_util = MSModelUtil(model)
-        self.model_util.model.solver = solver
         if msdb_path:
             self.pkgmgr.addpkgs(["FullThermoPkg"])
             self.pkgmgr.getpkg("FullThermoPkg").build_package({"modelseed_db_path": msdb_path})
@@ -82,111 +52,135 @@ class KineticsPkg(BaseFBAPkg):
     def print_lp(self, filename=None):
         BaseFBAPkg.print_lp(self, filename.removesuffix(".lp"))
 
-    def simulate(
-        self,
-        kinetics_path: str = None,              # the path of the kinetics data JSON file
-        kinetics_data: dict = None,             # A dictionary of custom kinetics data
-        initial_concentrations_M: dict = None,  # a dictionary of the initial metabolic concentrations, which supplants concentrations from the defined kinetics data
-        total_time: float = 200,
-        timestep: float = 20,                   # total simulation time and the simulation timestep in minutes
-        export_name: str = None,
-        export_directory: str = None,           # the location to which simulation content will be exported
-        chemostat_L: float = None,
-        feed_profile: dict = {},                # the volume (l) and feed profile for a chemostat simulation, where None ignores a chemostat
-        exchange_rate: float = None,            # the flow rate (Molar/Liter) of addition to and removal from the chemostat system
-        thermo_constraints: bool = False,       # specifies whether thermodynamic constraints will be layered with the kinetic constraints
-        temperature: float = 25,
-        p_h: float = 7,                         # simulation conditions
-        cellular_dry_mass_fg: float = 222,      # mass of the simulated cell in femtograms
-        cellular_fL: float = 1,                 # volume of the simulated cell in femtoliters
-        figure_title: str = "Metabolic perturbation",  # title of the concentrations figure
-        included_metabolites: list = [],        # A list of the metabolites that will be graphically displayed
-        labeled_plots: bool = True,             # specifies whether plots will be individually labeled
-        visualize: bool = True,
-        export: bool = True,                    # specifies whether simulation content will be visualized or exported, respectively
-    ):
+    def _check_datum(self, datum):
+        if "substituted_rate_law" not in datum:
+            print(f"RateLawError: The {datum} datum lacks a rate law.")
+            return False
+        remainder = re.sub("([0-9A-Za-z/()e\-\+\.\*])", "", datum["substituted_rate_law"])
+        if remainder != "":
+            print(f'RateLawError: The {datum["substituted_rate_law"]}'
+                  f' rate law contains unknown characters: {remainder}')
+            return False
+
+    def simulate(self, kinetics_path: str = None, kinetics_data: dict = None, initial_concentrations_M: dict = None,  # a dictionary of the initial metabolic concentrations, which supplants concentrations from the defined kinetics data
+                 total_time_min: float = 200, timestep_min: float = 20, export_name = None, export_directory = None,
+                 chemostat_L: float = None, feed_profile: dict = None, chemo_exchange_rate_L_hr: float = None,
+                 temperature: float = 25, p_h: float = 7, cellular_dry_mass_fg: float = 222, cellular_fL: float = 1,
+                 conc_figure_title = "Metabolic perturbation", included_metabolites: list = None,labeled_plots = True,
+                 visualize = True, export = True):
         # define the dataframe for the time series content
-        self.cellular_dry_mass_fg = cellular_dry_mass_fg*femto
-        self.cellular_fL = cellular_fL*femto
-        self.parameters["timesteps"] = int(total_time/timestep)
-        self.timestep_value, self.total_time = timestep, total_time
+        feed_profile = feed_profile or {}
+        included_metabolites, self.solutions = included_metabolites or [], []
+        self.cellular_dry_mass_fg, self.cellular_fL = cellular_dry_mass_fg*femto, cellular_fL*femto
+        self.parameters["timesteps"] = int(total_time_min/timestep_min)
+        self.timestep_min, self.total_time_min = timestep_min, total_time_min
         self.constrained = OrderedDict()
-        self.solutions = []
         self.minimum = inf
 
         # define experimental conditions
-        self.parameters["pH"], self.parameters["temperature"] = p_h, temperature
-        self.variables["elapsed_time"] = 0
-
+        self.parameters["pH"], self.parameters["temperature"], self.variables["elapsed_time"] = p_h, temperature, 0
         # define initial concentrations
-        self.initial_concentrations_M = initial_concentrations_M
-        self._initial_concentrations(kinetics_path, kinetics_data)
-
-        # apply constraints and system specifications
-        chemostat_requirements = [isnumber(chemostat_L), feed_profile != {}, isnumber(exchange_rate)]
-        if any(chemostat_requirements) and not all(chemostat_requirements):
-            warn(f"The chemostat_L ({chemostat_L}), feed_profile ({feed_profile}), and exchange_rate"
-                 f" ({exchange_rate}) parameters must all be defined to simulate a chemostat.")
-
+        self._initial_concentrations(initial_concentrations_M, kinetics_path, kinetics_data)
+        chemostat_requirements = [chemostat_L is not None, feed_profile != {}, chemo_exchange_rate_L_hr is not None]
         # determine the reactions for which kinetics are predefined
         self.defined_reactions = {rxn.name:rxn for rxn in self.model_util.model.reactions if rxn.name in kinetics_data}
-        # execute FBA for each timestep, and then calculate custom fluxes, constrain the model, and update concentrations
+        # execute FBA for each timestep, then calculate custom fluxes, constrain the model, and update concentrations
         for self.timestep in range(1, self.parameters["timesteps"] + 1):
-            self.col = f"{self.timestep * self.timestep_value} min"
-            self.previous_col = f"{(self.timestep - 1) * self.timestep_value} min"
+            self.col = f"{self.timestep_min * self.timestep_min} min"
+            self.previous_col = f"{(self.timestep_min - 1) * self.timestep_min} min"
             self.concentrations[self.col] = [float(0)] * len(self.concentrations.index)
             self.fluxes[self.col] = [nan] * len(self.fluxes.index)
-            self._build_constraints()
-            self._calculate_flux()
-            self._execute_cobra()
-            self._update_concentrations()
+            # create a metabolite variable that prevents negative concentrations
+            timestep_hr = self.timestep_min * (minute / hour)
+            for met in self.model_util.model.metabolites:
+                if met.id not in self.initial_concentrations_M:  continue
+                coef = {}
+                for rxn in met.reactions:
+                    ## The product of the reaction stoichiometry and the timestep
+                    stoich = abs(timestep_hr * rxn.metabolites[met])
+                    coef[rxn.forward_variable], coef[rxn.reverse_variable] = stoich, -stoich
+                ## build the metabolite constraint
+                concentration = -self.concentrations.at[met.name, self.previous_col]
+                if met.id in self.constraints["conc"]:
+                    self.constraints["conc"][met.id].lb = concentration
+                    continue
+                self.constraints["conc"][met.id] = Constraint(Zero, lb=concentration, ub=None, name=f"{met.id}_conc")
+                self.model_util.create_constraint(self.constraints["conc"][met.id], coef)
+                # var = BaseFBAPkg.build_variable(self,"met",0,None,"continuous",met)
+                # BaseFBAPkg.build_constraint(self,"conc",0,None,{met:1},met)
+            # calculate the flux
+            for reaction_name in self.kinetics_data:
+                fluxes = []
+                for source in self.kinetics_data[reaction_name]:
+                    datum = self.kinetics_data[reaction_name][source]
+                    if not self._check_datum(datum):  continue
+                    # define each variable concentration
+                    conc_dict = {var: self.concentrations.at[self.met_ids[datum["met_id"][var]], self.previous_col]*milli
+                                 for var in datum["met_id"] if len(var) == 1}
+                    # define rate law variables; calculate flux; average or overwrite the flux based on data criteria
+                    locals().update(conc_dict)
+                    flux = eval(datum["substituted_rate_law"])
+                    if ("metadata" not in self.kinetics_data[reaction_name][source]
+                        or self.__find_data_match(reaction_name, source) == 'a'):  fluxes.append(flux)
+                    else:  fluxes = [flux]
+
+                flux = mean(fluxes)
+                if reaction_name in self.defined_reactions:
+                    self.__set_constraints(reaction_name, flux)
+                    self.fluxes.at[reaction_name, self.col] = flux
+                    if self.printing:   print("\n")
+                elif self.warnings:  warn(f"ReactionError: The {reaction_name} reaction, with a"
+                                          f" flux of {flux}, is not described by the model.")
+            # execute the COBRA model
+            solution = self.model_util.model.optimize()
+            self.solutions.append(solution)
+            ## add previously undefined concentrations
+            self.fluxes[self.col] = [solution.fluxes[rxn.id] for rxn in self.fluxes.index
+                                     if not FBAHelper.isnumber(self.fluxes.at[rxn.name, self.col])]
+            for met in self.model_util.model.metabolites:
+                self.concentrations.at[self.met_ids[met.id], self.col] = 0
+                for rxn in met.reactions:  # flux units: mmol/(g_(dry weight)*hour)
+                    stoich = rxn.metabolites[met]
+                    flux = self.fluxes.at[rxn.name, self.col]
+                    delta_conc = stoich * flux * self.timestep_min * (minute / hour) * (
+                                self.cellular_dry_mass_fg / self.cellular_fL)
+                    self.concentrations.at[self.met_ids[met.id], self.col] += delta_conc
             if all(chemostat_requirements):
                 self.chemical_moles[self.col] = (self.concentrations[self.col] * milli * chemostat_L)
-                self._chemostat(feed_profile, exchange_rate, chemostat_L)
-            self.variables["elapsed_time"] += self.timestep
+                self._chemostat(feed_profile, chemo_exchange_rate_L_hr, chemostat_L)
+            elif any(chemostat_requirements): warn("The < chemostat_L > , < feed_profile >, and < chemo_exchange_rate_L_hr >"
+                                                   " parameters must all be defined to simulate a chemostat.")
+            self.variables["elapsed_time"] += self.timestep_min
             if self.printing:
-                print(f"\nobjective value for timestep {self.timestep}: ", self.solutions[-1].objective_value)
+                print(f"\nobjective value for timestep {self.timestep_min}: ", self.solutions[-1].objective_value)
 
         # identify the chemicals that dynamically changed in concentrations
         self.changed, self.unchanged = set(), set()
         for met_name in self.met_names:
             first = self.concentrations.at[met_name, "0 min"]
             final = self.concentrations.at[met_name, self.col]
-            if first != final:      self.changed.add(met_name)
-            else:                   self.unchanged.add(met_name)
+            if first != final:  self.changed.add(met_name)
+            else:  self.unchanged.add(met_name)
 
         # visualize concentration changes over time
-        if visualize:   self._visualize(figure_title, included_metabolites, labeled_plots)
+        if visualize:   self._visualize(conc_figure_title, included_metabolites, labeled_plots)
         if export:      self._export(export_name, export_directory)
-        if self.verbose:
-            print("\n\nChanged metabolite  concentrations\n",
-                  "=" * 2 * len("changed metabolites"), f"\n{self.changed}",
-                  "\nConstrained reactions:", self.constrained.keys())
+        if self.verbose:  print("\n\nChanged metabolite  concentrations\n",
+                                "=" * 2 * len("changed metabolites"), f"\n{self.changed}",
+                                "\nConstrained reactions:", self.constrained.keys())
         elif self.printing:
-            if self.jupyter:
-                pandas.set_option("max_rows", None)
-                display(self.concentrations, self.fluxes)
-            if self.unchanged == set():
-                print("\nAll of the metabolites changed concentration over the simulation")
-            else:
-                print("\n\nUnchanged metabolite concentrations\n",
-                      "=" * 2 * len("unchanged metabolites"), f"\n{self.unchanged}")
-
+            if self.jupyter:  pandas.set_option("max_rows", None)  ; display(self.concentrations, self.fluxes)
+            if self.unchanged == set():  print("\nAll of the metabolites changed concentration over the simulation")
+            else:  print("\n\nUnchanged metabolite concentrations\n",
+                         "=" * 2 * len("unchanged metabolites"), f"\n{self.unchanged}")
         return self.concentrations, self.fluxes
 
     # utility functions
-    def _initial_concentrations(
-        self,
-        kinetics_path: str = None,   # the absolute path to a JSON file of kinetics data
-        kinetics_data: dict = None,  # a dictionary of kinetics data, which supplants imported data from the kinetics_path
-    ):
+    def _initial_concentrations(self, initial_concentrations_M, kinetics_path: str = None, kinetics_data: dict = None):
         # define kinetics of the system
         self.kinetics_data = {}
         if kinetics_path:
-            if not os.path.exists(kinetics_path):
-                raise ValueError(f"The path {kinetics_data} is not a valid path")
-            with open(kinetics_path) as data:
-                self.kinetics_data = json.load(data)
+            with open(kinetics_path) as data:  self.kinetics_data = json.load(data)
         elif kinetics_data:         self.kinetics_data = kinetics_data.copy()
         if not self.kinetics_data:  raise ValueError("Kinetics data must be defined.")
 
@@ -209,95 +203,34 @@ class KineticsPkg(BaseFBAPkg):
                     if name in self.met_names:
                         self.concentrations.at[name, self.col] += conc/milli
                         initial_concentrations[met_id] = self.concentrations.at[name, self.col]
-                    elif self.warnings:
-                        warn(f"KineticsError: The {name} reagent ({var}) in the"
-                             f" {datum['substituted_rate_law']} rate law is not defined by the model.")
+                    elif self.warnings:  warn(f"KineticsError: The {name} reagent ({var}) in the"
+                                              f" {datum['substituted_rate_law']} rate law is not defined by the model.")
 
         # incorporate custom initial concentrations
+        self.initial_concentrations_M = initial_concentrations_M
         if self.initial_concentrations_M:
             for met_id in self.initial_concentrations_M:
                 met_name = self.met_ids[met_id]
                 if met_name not in self.concentrations.index:
-                    if self.warnings:
-                        warn(f"InitialConcError: The {met_id} ({met_name})"
-                             f" metabolite is not defined by the model.")
+                    if self.warnings:  warn(f"InitialConcError: The {met_id} ({met_name})"
+                                            f" metabolite is not defined by the model.")
                 else:
                     self.concentrations.at[met_name, self.col] = (self.initial_concentrations_M[met_id] * milli)
                     initial_concentrations[met_id] = self.concentrations.at[name, self.col]
         self.initial_concentrations_M = initial_concentrations
 
-    def _calculate_flux(self):
-        for reaction_name in self.kinetics_data:
-            fluxes = []
-            for source in self.kinetics_data[reaction_name]:
-                datum = self.kinetics_data[reaction_name][source]
-                if "substituted_rate_law" not in datum:  #!!! Statistics of aggregating each condition should be provided for provenance.
-                    print(f"RateLawError: The {datum} datum lacks a rate law.")
-                    continue
-
-                remainder = re.sub("([0-9A-Za-z/()e\-\+\.\*])", "", datum["substituted_rate_law"])
-                if remainder != "":
-                    print(f'RateLawError: The {datum["substituted_rate_law"]}'
-                          f' rate law contains unknown characters: {remainder}')
-                    continue
-
-                # define each variable concentration
-                conc_dict = {var: self.concentrations.at[self.met_ids[datum["met_id"][var]], self.previous_col]*milli
-                             for var in datum["met_id"] if len(var) == 1}
-                if not conc_dict:
-                    print(f"MetaboliteError: The {reaction_name} reaction possesses unpredictable chemicals.")
-                    continue
-
-                # define rate law variables; calculate flux; average or overwrite the flux based on data & simulation agreement
-                locals().update(conc_dict)
-                flux = eval(datum["substituted_rate_law"])
-                add_or_write = "a" if "metadata" not in self.kinetics_data[reaction_name][source] else \
-                    self.__find_data_match(reaction_name, source)
-                if add_or_write == "a":     fluxes.append(flux)
-                elif add_or_write == "w":   fluxes = [flux]
-
-            flux = mean(fluxes)
-            if reaction_name in self.defined_reactions:
-                self.__set_constraints(reaction_name, flux)
-                self.fluxes.at[reaction_name, self.col] = flux
-                if self.printing:   print("\n")
-            elif self.warnings:
-                warn(f"ReactionError: The {reaction_name} reaction, with a"
-                     f" flux of {flux}, is not described by the model.")
-
-    def _execute_cobra(self):
-        # execute the COBRA model
-        solution = self.model_util.model.optimize()
-        self.solutions.append(solution)
-        self.fluxes[self.col] = [solution.fluxes[rxn.id] for rxn in self.fluxes.index
-                                 if not isnumber(self.fluxes.at[rxn.name, self.col])]
-
-    def _update_concentrations(self):
-        for met in self.model_util.model.metabolites:
-            self.concentrations.at[self.met_ids[met.id], self.col] = 0
-            for rxn in met.reactions:  # flux units: mmol/(g_(dry weight)*hour)
-                stoich = rxn.metabolites[met]
-                flux = self.fluxes.at[rxn.name, self.col]
-                delta_conc = stoich * flux * self.timestep_value*(minute/hour) * (self.cellular_dry_mass_fg/self.cellular_fL)
-                self.concentrations.at[self.met_ids[met.id], self.col] += delta_conc
-
-    def _visualize(
-        self,
-        figure_title,           # defines the title of the concentrations figure
-        included_metabolites,   # specifies which metabolites will be included in the figure
-        labeled_plots,          # specifies which plots will be labeled in the figure
-    ):
+    def _visualize(self, conc_fig_title, included_metabolites, labeled_plots):
         # define the figure
         pyplot.rcParams['figure.figsize'] = (11, 7)
         pyplot.rcParams['figure.dpi'] = 150
         self.figure, ax = pyplot.subplots()
-        ax.set_title(figure_title)
+        ax.set_title(conc_fig_title)
         ax.set_ylabel("Concentrations (mM)")
 
-        x_axis_scalar, unit = _x_axis_determination(self.total_time)
+        x_axis_scalar, unit = _x_axis_determination(self.total_time_min)
         ax.set_xlabel("Time " + unit)
         legend_list = []
-        times = [t * self.timestep_value * x_axis_scalar for t in range(self.parameters["timesteps"] + 1)]
+        times = [t * self.timestep_min * x_axis_scalar for t in range(self.parameters["timesteps"] + 1)]
 
         # determine the plotted metabolites and the scale of the figure axis
         bbox = (1, 1)
@@ -325,7 +258,7 @@ class KineticsPkg(BaseFBAPkg):
             if not labeled_plots:   continue
             for i, conc in enumerate(concentrations):
                 if conc <= 1e-9:    continue
-                x_value = i * self.timestep_value
+                x_value = i * self.timestep_min
                 vertical_adjustment = 0
                 if x_value in printed_concentrations:
                     vertical_adjustment = (maximum - minimum) * 0.05
@@ -341,15 +274,11 @@ class KineticsPkg(BaseFBAPkg):
         ax.legend(legend_list, title="Changed chemicals", loc="upper right",
                   bbox_to_anchor=bbox, title_fontsize="x-large", fontsize="large")
 
-    def _export(
-        self,
-        export_name: str,  # the folder name to which the simulation content will be exported
-        export_directory: str,  # the directory within which the simulation folder will be created
-    ):
+    def _export(self, export_name: str, export_directory: str):
         # define a unique simulation name
         directory = os.getcwd() if export_directory is None else os.path.dirname(export_directory)
-        if not export_name:     export_name = "-".join(
-            [re.sub(" ", "_", str(x)) for x in [date.today(), "dFBA", self.model_util.model.name, f"{self.total_time} min"]])
+        if not export_name:     export_name = "-".join([re.sub(" ", "_", str(x)) for x in [
+            date.today(), "dFBA", self.model_util.model.name, f"{self.total_time_min} min"] ])
         simulation_number = -1
         while os.path.exists(os.path.join(directory, export_name)):
             simulation_number += 1
@@ -369,7 +298,7 @@ class KineticsPkg(BaseFBAPkg):
                 obj_val.write(f"\n{time},{sol.objective_value}")
 
         # export the parameters
-        parameters = {"parameter": [p for p in self.parameters], "value": [v for v in self.parameters.values()]}
+        parameters = {"parameter": list(self.parameters.key()), "value": list(self.parameters.values())}
         parameters_table = pandas.DataFrame(parameters)
         parameters_table.to_csv(os.path.join(self.simulation_path, "parameters.csv"))
 
@@ -377,34 +306,8 @@ class KineticsPkg(BaseFBAPkg):
         self.figure.savefig(os.path.join(self.simulation_path, "changed_concentrations.svg"))
         if self.verbose and not self.jupyter:   self.figure.show()
 
-    def _build_constraints(self):
-        # create a metabolite variable that prevents negative concentrations
-        timestep_hr = self.timestep_value * (minute/hour)
-        for met in self.model_util.model.metabolites:
-            if met.id not in self.initial_concentrations_M:     continue
-            coef = {}
-            for rxn in met.reactions:
-                ## The product of the reaction stoichiometry and the timestep
-                stoich = abs(timestep_hr * rxn.metabolites[met])
-                coef[rxn.forward_variable] = stoich
-                coef[rxn.reverse_variable] = -stoich
-            ## build the metabolite constraint
-            if met.id in self.constraints["conc"]:
-                self.constraints["conc"][met.id].lb = -self.concentrations.at[met.name, self.previous_col]
-                continue
-            self.constraints["conc"][met.id] = self.model_util.model.problem.Constraint(
-                Zero, lb=-self.concentrations.at[met.name, self.previous_col], ub=None, name=f"{met.id}_conc")
-            self.model_util.create_constraint(self.constraints["conc"][met.id], coef)
-            # var = BaseFBAPkg.build_variable(self,"met",0,None,"continuous",met)
-            # BaseFBAPkg.build_constraint(self,"conc",0,None,{met:1},met)
-
-    def _chemostat(
-        self,
-        feed_profile,  # a dictionary of the chemicals and their concentrations in the influent feed
-        exchange_rate,  # the L/hr flow rate of the feed and extraction of the chemostat
-        chemostat_L,  # the volume (l) of the chemostat
-    ):
-        L_changed = exchange_rate * self.timestep_value
+    def _chemostat(self, feed_profile:dict, chemo_exchange_rate_L_hr, chemostat_L):
+        L_changed = chemo_exchange_rate_L_hr * self.timestep_min
         # chemostat addition
         for chem_id, conc in feed_profile.items():
             chem_name = self.met_ids[chem_id]
@@ -416,24 +319,21 @@ class KineticsPkg(BaseFBAPkg):
         for met in self.model_util.model.metabolites:
             if met.compartment[0] != "e":   continue
             ## update the chemical moles
-            self.chemical_moles.at[met.name, self.col] -= (
-                self.concentrations.at[met.name, self.col] * L_changed)
+            self.chemical_moles.at[met.name, self.col] -= (self.concentrations.at[met.name, self.col] * L_changed)
             ## define the chemical concentration
             self.concentrations.at[met.name, self.col] = (
-                self.chemical_moles.at[met.name, self.col] / milli / chemostat_L)
+                    self.chemical_moles.at[met.name, self.col] / milli / chemostat_L)
 
     # nested functions
-    def __find_data_match(
-        self,
-        reaction_name: str,  # specifies the name of the given reaction
-        source: str,  # specifies which datum of the enzymatic data will be used, where multiple data entries are present
-    ):
+    def __find_data_match(self, reaction_name: str,
+                          source: str,  # specifies which enzymatic datum among many will be used
+                          ):
         # identifies the datum whose experimental conditions most closely matches the simulation conditions
         temperature_deviation = ph_deviation = 0
-        if isnumber(self.kinetics_data[reaction_name][source]["metadata"]["Temperature"]):
+        if FBAHelper.isnumber(self.kinetics_data[reaction_name][source]["metadata"]["Temperature"]):
             temp = float(self.kinetics_data[reaction_name][source]["metadata"]["Temperature"])
             temperature_deviation = (abs(self.parameters["temperature"] - temp) / self.parameters["temperature"])
-        if isnumber(self.kinetics_data[reaction_name][source]["metadata"]["pH"]):
+        if FBAHelper.isnumber(self.kinetics_data[reaction_name][source]["metadata"]["pH"]):
             pH = float(self.kinetics_data[reaction_name][source]["metadata"]["pH"])
             ph_deviation = (abs(self.parameters["pH"] - pH) / self.parameters["pH"])
 

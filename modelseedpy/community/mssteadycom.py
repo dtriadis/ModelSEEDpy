@@ -249,6 +249,7 @@ class MSSteadyCom:
         dot = graphviz.Digraph(filename, format=export_format)  # directed graph
         # define nodes
         ## top-layer members
+        # TODO hyperlink the member nodes with their Narrative link
         dot.attr('node', shape='rectangle', color="lightblue2", style="filled")
         for mem in members_cluster1:
             index = members.index(mem)
