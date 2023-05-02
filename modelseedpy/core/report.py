@@ -201,16 +201,20 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
     heatmap_df.index.name = "model1 ++ model2"
+    if "media" in heatmap_df.columns:
+        media_list = heatmap_df['media'].tolist()
+        new_index = [f"{models} in {media_list[i]}" for i, models in enumerate(heatmap_df.index)]
+        heatmap_df.index = new_index
+        heatmap_df.index.name = "model1 ++ model2 in Media"
     heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
+    if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
     heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
     heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
     heatmap_df = heatmap_df.astype(float)
     heatmap_df["mip"] = heatmap_df["mip"].astype(int)
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
-    content = {'table': df.to_html(),
-               "heatmap": heatmap_df.style.background_gradient().to_html(),
-               "mets": mets}
+    content = {'table': df.to_html(), "mets": mets, "heatmap": heatmap_df.style.background_gradient().to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
     html_report = env.get_template("smetana_template.html").render(content)

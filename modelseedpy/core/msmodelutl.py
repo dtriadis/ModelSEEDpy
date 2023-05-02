@@ -1052,13 +1052,18 @@ class MSModelUtil:
 
     def costless_excreta(self, pfba=False):
         # the double optimization is intended to truly find the maximal biomass growth
-        self.add_cons_vars([Constraint(self.model.objective.expression, lb=self.model.slim_optimize())])
+        original_objective = self.model.objective
+        minObj_cons = Constraint(self.model.objective.expression, lb=self.model.slim_optimize(), name="minObj")
+        self.add_cons_vars([minObj_cons])
         if pfba:
-            self.add_cons_vars([Constraint(self.model.objective.expression, lb=self.model.slim_optimize())])
+            self.model.problem.constraints.minObj_cons.lb = self.model.slim_optimize()
             # pFBA
             reaction_variables = ((rxn.forward_variable, rxn.reverse_variable) for rxn in self.model.reactions)
             self.model.problem.Objective(sum(chain(*reaction_variables)), direction="min")
         sol = self.model.optimize()
+        # revert conditions to before the simulation
+        self.model.objective = original_objective
+        self.remove_cons_vars([minObj_cons])
         return [rxnID for rxnID, flux in sol.fluxes.items() if "EX_" in rxnID and flux > 0]
 
     @staticmethod

@@ -33,7 +33,7 @@ class dFBAPkg(BaseFBAPkg):
 
 
 
-class KineticsPkg(BaseFBAPkg):
+class MSKineticsFBA(BaseFBAPkg):
     def __init__(self, model, msdb_path:str, warnings: bool = True, verbose: bool = False,
                  printing: bool = False, jupyter: bool = False):
         # define the parameter and variable dictionaries
@@ -86,8 +86,8 @@ class KineticsPkg(BaseFBAPkg):
         self.defined_reactions = {rxn.name:rxn for rxn in self.model_util.model.reactions if rxn.name in kinetics_data}
         # execute FBA for each timestep, then calculate custom fluxes, constrain the model, and update concentrations
         for self.timestep in range(1, self.parameters["timesteps"] + 1):
-            self.col = f"{self.timestep_min * self.timestep_min} min"
-            self.previous_col = f"{(self.timestep_min - 1) * self.timestep_min} min"
+            colNum = self.timestep_min * self.timestep_min
+            self.col, self.previous_col = f"{colNum} min", f"{colNum-1} min"
             self.concentrations[self.col] = [float(0)] * len(self.concentrations.index)
             self.fluxes[self.col] = [nan] * len(self.fluxes.index)
             # create a metabolite variable that prevents negative concentrations
