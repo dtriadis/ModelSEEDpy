@@ -114,140 +114,6 @@ class MSSmetana:
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana,
                 "gyd":gyd, "rfc":rfc}
 
-    @staticmethod
-    def _good_model(model, model_str, pairs):
-        obj_val = model.slim_optimize()
-        if model is None or obj_val == 0 or not FBAHelper.isnumber(obj_val):
-            model1_str = list(pairs.keys()).index(model) if "model1_str" not in locals().keys() else model_str
-            print(f"The {model1_str} model input does not yield an operational model.")
-            return False
-        return True
-
-    @staticmethod
-    def _load(model, kbase_obj):
-        model_str = model
-        if len(model) == 2:  model = kbase_obj.get_from_ws(*model)
-        else:  model = kbase_obj.get_from_ws(model)
-        return model, model_str
-
-    @staticmethod
-    def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None,
-                         lazy_load=False, kbase_obj=None, cip_score=True):
-        from pandas import Series
-
-        if isinstance(pairs, list):
-            pairs, models_media, environments, RAST_genomes, kbase_obj, lazy_load = pairs  ;  pairs = dict([pairs])
-        series, mets = [], []
-        environments = [environments] if not isinstance(environments, (list, set, tuple)) else environments
-        pid = current_process().name
-        model_utils = {}
-        count = 0
-        for model1, models in pairs.items():
-            if lazy_load:  model1, model1_str = MSSmetana._load(model1, kbase_obj)
-            else:  model1_str = str(list(pairs.keys()).index(model1))
-            models_media[model1.id] = models_media.get(model1.id, {"media": _get_media(model_s_=model1)})
-            if cip_score:  model_utils[model1.id] = model_utils.get(model1.id, MSModelUtil(model1))
-            if not MSSmetana._good_model(model1, model1_str, pairs):  continue
-            for model2 in models:
-                if lazy_load:  model2, model2_str = MSSmetana._load(model2, kbase_obj)
-                else:  model2_str = f"{model1_str}_{pairs[model1].index(model2)}"
-                models_media[model2.id] = models_media.get(model2.id, {"media": _get_media(model_s_=model2)})
-                if cip_score:  model_utils[model2.id] = model_utils.get(model2.id, MSModelUtil(model2))
-                # TODO possibly always recreate ModelUtils each loop to prevent bleedover of edits to models
-                if not MSSmetana._good_model(model2, model2_str, pairs):  continue
-                grouping = [model1, model2]
-                modelIDs = [model.id for model in grouping]
-                print(f"{pid}~~{count}\t{modelIDs}")
-                for envIndex, environ in enumerate(environments):
-                    print(f"\tEnvironment{envIndex}: {environ}", end="\t")
-                    # initiate the KBase output
-                    kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
-                    kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
-                    # define the MRO content
-                    mro_values = MSSmetana.mro(grouping, models_media, raw_content=True, environment=environ)
-                    kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
-                                      f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
-                                      for models_string, (intersection, memMedia) in mro_values.items()})
-                    print("MRO done", end="\t")
-                    # define the MIP content
-                    mip_values = MSSmetana.mip(None, grouping, environment=environ, compatibilized=True)
-                    kbase_dic.update({"mip": mip_values[1]})
-                    print("MIP done", end="\t")
-                    # define the CIP content
-                    if cip_score:
-                        cip_values = MSSmetana.cip(modelutils=[model_utils[mem.id] for mem in grouping])
-                        kbase_dic.update({"cip": cip_values[1]})
-                        print("CIP done", end="\t")
-                    # determine the growth diff content
-                    kbase_dic.update({"gyd": list(MSSmetana.gyd(grouping, environment=environ).values())[0]})
-                    print("GYD done\t\t", end="\t" if RAST_genomes is not None else "\n")
-                    # determine the RAST Functional Complementarity content
-                    if kbase_obj is not None and RAST_genomes is not None:
-                        kbase_dic.update({"RFC": list(MSSmetana.rfc(
-                            grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
-                        print("RFC done\t\t")
-
-                    # return a pandas Series, which can be easily aggregated with other results into a DataFrame
-                    series.append(Series(kbase_dic))
-                    mets.append({"mro_mets": list(mro_values.values())})
-                    if mip_values[0] is not None:
-                        mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
-                count += 1
-        return series, mets
-
-    @staticmethod
-    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
-                     exclude_pairs:list=None, kbase_obj=None, RAST_genomes:dict=None, see_media:bool=True,
-                     environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True):
-        from pandas import concat
-        lazy_load = isinstance(all_models[0], (list,set,tuple))
-        if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
-        if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
-        elif all_models is not None:
-            model_pairs = array(list(combinations(all_models, 2)))
-            if pair_limit is not None:
-                shuffle(model_pairs)
-                new_pairs = []
-                for index, pair in enumerate(model_pairs):
-                    if set(pair) not in exclude_pairs and index < pair_limit:  new_pairs.append(pair)
-                    elif index >= pair_limit:  break
-                model_pairs = array(new_pairs)
-            if isinstance(model_pairs[0], str):  model_pairs = unique(sort(model_pairs, axis=1))
-            pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1]
-                     for first in model_pairs[:, 0]}
-        else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
-        if not lazy_load:
-            if pairs:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
-            if not mem_media:  models_media = _get_media(model_s_=all_models)
-            else:
-                missing_models = set()
-                for model in all_models:
-                    modelID = model if not hasattr(model, "id") else model.id
-                    if model is not None and modelID not in mem_media:
-                        missing_models.add(modelID)
-                models_media = mem_media.copy()
-                if missing_models != set():
-                    print(f"Media of the {missing_models} models are not defined, and will be calculated separately.")
-                    models_media.update(_get_media(model_s_=missing_models))
-            if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
-        else:  models_media = {}
-        print(f"\nExamining the {len(list(model_pairs))} model pairs")
-        if pool_size is not None:
-            from datetime import datetime
-            from multiprocess import Pool
-
-            print(f"Loading {int(pool_size)} workers and computing the scores", datetime.now())
-            pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
-            args = [[pair, models_media, environments, RAST_genomes, kbase_obj, lazy_load]
-                    for pair in list(pairs.items())]
-            output = pool.map(MSSmetana.calculate_scores, args)
-            series = chain.from_iterable([ele[0] for ele in output])
-            mets = chain.from_iterable([ele[1] for ele in output])
-        else:  series, mets = MSSmetana.calculate_scores(pairs, models_media, environments,
-                                                         RAST_genomes, lazy_load, kbase_obj, cip_score)
-        return concat(series, axis=1).T, mets
-
     def mro_score(self):
         self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
                                      self.media, self.raw_content, self.environment, self.printing, True)
@@ -364,6 +230,142 @@ class MSSmetana:
     ###### STATIC METHODS OF THE SMETANA SCORES, WHICH ARE APPLIED IN THE ABOVE CLASS OBJECT ######
 
     @staticmethod
+    def _good_model(model, model_str, pairs):
+        obj_val = model.slim_optimize()
+        if model is None or obj_val == 0 or not FBAHelper.isnumber(obj_val):
+            model1_str = list(pairs.keys()).index(model) if "model1_str" not in locals().keys() else model_str
+            print(f"The {model1_str} model input does not yield an operational model.")
+            return False
+        return True
+
+    @staticmethod
+    def _load(model, kbase_obj):
+        model_str = model
+        if len(model) == 2:  model = kbase_obj.get_from_ws(*model)
+        else:  model = kbase_obj.get_from_ws(model)
+        return model, model_str
+
+    @staticmethod
+    def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None,
+                         lazy_load=False, kbase_obj=None, cip_score=True, costless=True, dual_output=True):
+        from pandas import Series
+
+        if isinstance(pairs, list):
+            pairs, models_media, environments, RAST_genomes, kbase_obj, lazy_load = pairs  ;  pairs = dict([pairs])
+        series, mets = [], []
+        environments = [environments] if not isinstance(environments, (list, set, tuple)) else environments
+        pid = current_process().name
+        model_utils = {}
+        count = 0
+        for model1, models in pairs.items():
+            if lazy_load:  model1, model1_str = MSSmetana._load(model1, kbase_obj)
+            else:  model1_str = str(list(pairs.keys()).index(model1))
+            models_media[model1.id] = models_media.get(model1.id, {"media": _get_media(model_s_=model1)})
+            if cip_score:  model_utils[model1.id] = model_utils.get(model1.id, MSModelUtil(model1))
+            if not MSSmetana._good_model(model1, model1_str, pairs):  continue
+            for model2 in models:
+                if lazy_load:  model2, model2_str = MSSmetana._load(model2, kbase_obj)
+                else:  model2_str = f"{model1_str}_{pairs[model1].index(model2)}"
+                models_media[model2.id] = models_media.get(model2.id, {"media": _get_media(model_s_=model2)})
+                if cip_score:  model_utils[model2.id] = model_utils.get(model2.id, MSModelUtil(model2))
+                # TODO possibly always recreate ModelUtils each loop to prevent bleedover of edits to models
+                if not MSSmetana._good_model(model2, model2_str, pairs):  continue
+                grouping = [model1, model2]
+                modelIDs = [model.id for model in grouping]
+                print(f"{pid}~~{count}\t{modelIDs}")
+                for envIndex, environ in enumerate(environments):
+                    print(f"\tEnvironment{envIndex}: {environ}", end="\t")
+                    # initiate the KBase output
+                    kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
+                    kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
+                    # define the MRO content
+                    mro_values = MSSmetana.mro(grouping, models_media, raw_content=True, environment=environ)
+                    kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
+                                      f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
+                                      for models_string, (intersection, memMedia) in mro_values.items()})
+                    print("MRO done", end="\t")
+                    # define the MIP content
+                    mip_values = MSSmetana.mip(None, grouping, environment=environ, compatibilized=True,
+                                               costless=costless, dual_output=dual_output)
+                    if dual_output:
+                        kbase_dic.update({"costless_mip": mip_values[0][1], "mip": mip_values[1][1]})
+                    else:  kbase_dic.update({"mip": mip_values[1]})
+                    print("MIP done", end="\t")
+                    # define the CIP content
+                    if cip_score:
+                        cip_values = MSSmetana.cip(modelutils=[model_utils[mem.id] for mem in grouping])
+                        kbase_dic.update({"cip": cip_values[1]})
+                        print("CIP done", end="\t")
+                    # determine the growth diff content
+                    kbase_dic.update({"gyd": list(MSSmetana.gyd(grouping, environment=environ).values())[0]})
+                    print("GYD done\t\t", end="\t" if not RAST_genomes else "\n")
+                    # determine the RAST Functional Complementarity content
+                    if kbase_obj is not None and RAST_genomes:
+                        kbase_dic.update({"RFC": list(MSSmetana.rfc(
+                            grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
+                        print("RFC done\t\t")
+
+                    # return a pandas Series, which can be easily aggregated with other results into a DataFrame
+                    series.append(Series(kbase_dic))
+                    mets.append({"mro_mets": list(mro_values.values())})
+                    if mip_values[0] is not None:
+                        mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
+                count += 1
+        return series, mets
+
+    @staticmethod
+    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+                     exclude_pairs:list=None, kbase_obj=None,
+                     RAST_genomes:dict=True, # True triggers internal acquisition of the genomes, where None
+                     see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
+                     pool_size:int=None, cip_score=True, costless=True, dual_output=True):
+        from pandas import concat
+        lazy_load = isinstance(all_models[0], (list,set,tuple))
+        if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
+        if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
+        elif all_models is not None:
+            model_pairs = array(list(combinations(all_models, 2)))
+            if pair_limit is not None:
+                shuffle(model_pairs)
+                new_pairs = []
+                for index, pair in enumerate(model_pairs):
+                    if set(pair) not in exclude_pairs and index < pair_limit:  new_pairs.append(pair)
+                    elif index >= pair_limit:  break
+                model_pairs = array(new_pairs)
+            if isinstance(model_pairs[0], str):  model_pairs = unique(sort(model_pairs, axis=1))
+            pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1]
+                     for first in model_pairs[:, 0]}
+        else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
+        if not lazy_load:
+            if pairs:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
+            if not mem_media:  models_media = _get_media(model_s_=all_models)
+            else:
+                missing_models = set()
+                for model in all_models:
+                    modelID = model if not hasattr(model, "id") else model.id
+                    if model is not None and modelID not in mem_media:
+                        missing_models.add(modelID)
+                models_media = mem_media.copy()
+                if missing_models != set():
+                    print(f"Media of the {missing_models} models are not defined, and will be calculated separately.")
+                    models_media.update(_get_media(model_s_=missing_models))
+            if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
+        else:  models_media = {}
+        print(f"\nExamining the {len(list(model_pairs))} model pairs")
+        if pool_size is not None:
+            from datetime import datetime  ;  from multiprocess import Pool
+            print(f"Loading {int(pool_size)} workers and computing the scores", datetime.now())
+            pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
+            args = [[pair, models_media, environments, RAST_genomes, kbase_obj, lazy_load]
+                    for pair in list(pairs.items())]
+            output = pool.map(MSSmetana.calculate_scores, args)
+            series = chain.from_iterable([ele[0] for ele in output])
+            mets = chain.from_iterable([ele[1] for ele in output])
+        else:  series, mets = MSSmetana.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
+                                                         kbase_obj, cip_score, costless, dual_output)
+        return concat(series, axis=1).T, mets
+
+    @staticmethod
     def mro(member_models:Iterable=None, mem_media:dict=None, min_growth=0.1, media_dict=None,
             raw_content=False, environment=None, printing=False, compatibilized=False):
         """Determine the overlap of nutritional requirements (minimal media) between member organisms."""
@@ -387,26 +389,30 @@ class MSSmetana:
 
     @staticmethod
     def mip(com_model=None, member_models:Iterable=None, min_growth=0.1, interacting_media_dict=None,
-            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False, costless=False):
+            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False,
+            costless=False, cgr=True, multi_output:bool=False,):
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
-        member_models, community = _load_models(
-            member_models, com_model, not compatibilized, printing=printing)
+        member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
-        noninteracting_medium = _get_media(noninteracting_media_dict, community,
-                                           None, min_growth, environment, False)
-        if "community_media" in noninteracting_medium:
-            noninteracting_medium = noninteracting_medium["community_media"]
+        noninteracting_medium = _get_media(noninteracting_media_dict, community, None, min_growth, environment, False)
+        if "community_media" in noninteracting_medium:  noninteracting_medium = noninteracting_medium["community_media"]
         interacting_medium = _get_media(interacting_media_dict, community, None, min_growth, environment, True)
-        if "community_media" in interacting_medium:
-            interacting_medium = interacting_medium["community_media"]
+        if "community_media" in interacting_medium:  interacting_medium = interacting_medium["community_media"]
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
         if "dictionary_item_removed" in interact_diff:
             cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
+            outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
             if costless:
                 costless_mets, numMets = MSSmetana.cip(member_models=member_models)
                 costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
-                return costless_cross_fed, len(costless_cross_fed)
+                outputs.append((costless_cross_fed, len(costless_cross_fed)))
+                if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
+            if cgr:
+                cgr_val = MSSmetana.cgr(com_model=community)
+                outputs.append((cgr_val))
+                if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
+
             return cross_fed_exIDs, len(cross_fed_exIDs)
         return None, 0
 
@@ -593,6 +599,12 @@ class MSSmetana:
         return diffs
 
     @staticmethod
+    def cgr(com_model=None, member_models: Iterable = None, printing=True, compatibilized=False):
+        # TODO the ratio of community growth to the sum of member growths, where >1 indicates synergism
+        member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
+        return (community.slim_optimize()/sum([model.slim_optimize() for model in member_models]))
+
+    @staticmethod
     def _calculate_jaccard_score(set1, set2):
         if set1 == set2:  print(f"The sets are identical, with a length of {len(set1)}.")
         return len(set1.intersection(set2)) / len(set1.union(set2))
@@ -620,7 +632,7 @@ class MSSmetana:
     @staticmethod
     def rfc(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,  # RAST Functional Complementarity
             kbase_token_path:str=None, RAST_genomes:dict=None, printing=False):
-        if not RAST_genomes:
+        if not isinstance(RAST_genomes, dict):
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
                 with open(kbase_token_path) as token_file:  kbase_object = cobrakbase.KBaseAPI(token_file.readline())
