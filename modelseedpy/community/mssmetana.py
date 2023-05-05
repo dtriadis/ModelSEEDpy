@@ -306,7 +306,7 @@ class MSSmetana:
                         elif pc and not costless:
                             kbase_dic.update({"mip": mip_values[0][1], "pc": mip_values[1]})
                         else:  kbase_dic.update({"mip": mip_values[0][1], "costless_mip": mip_values[1][1],
-                                                 "pc": mip_values[2]})  ;  print("PC done", end="\t")
+                                                 "pc": mip_values[2]})  ;  print("PC  done", end="\t")
                         mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0][0]]})
                     else:
                         kbase_dic.update({"mip": mip_values[1]})
@@ -611,8 +611,7 @@ class MSSmetana:
         # TODO the ratio of community growth to the sum of member growths, where >1 indicates synergism
         if com_model: community = com_model
         else:  member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
-        com_obj_val = community.slim_optimize()  ;  print(com_obj_val)
-        return (com_obj_val/sum([model.slim_optimize() for model in member_models]))
+        return (community.slim_optimize()/sum([model.slim_optimize() for model in member_models]))
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):

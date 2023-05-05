@@ -220,6 +220,11 @@ class MSKineticsFBA(BaseFBAPkg):
         self.initial_concentrations_M = initial_concentrations
 
     def _visualize(self, conc_fig_title, included_metabolites, labeled_plots):
+        # TODO construct a Vega visualization with a range bind that permits scanning over a time series
+        ## and accordingly adjusting arrowhead widths to reflect flux at the particularly timestep.
+        ## The heatmap may likewise be dynamic for each timestep over a bind range.
+
+
         # define the figure
         pyplot.rcParams['figure.figsize'] = (11, 7)
         pyplot.rcParams['figure.dpi'] = 150
