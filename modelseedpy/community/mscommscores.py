@@ -69,7 +69,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
     return {"community_media":com_media, "members":members_media}
 
 
-class MSSmetana:
+class MSCommScores:
     def __init__(self, member_models, min_growth=0.1, n_solutions=100, environment=None,
                  abstol=1e-3, media_dict=None, printing=True, raw_content=False, antismash_json_path:str=None,
                  antismash_zip_path:str=None, minimal_media_method="minFlux"):
@@ -116,8 +116,8 @@ class MSSmetana:
                 "gyd":gyd, "rfc":rfc}
 
     def mro_score(self):
-        self.mro_val = MSSmetana.mro(self.models, self.media["members"], self.min_growth,
-                                     self.media, self.raw_content, self.environment, self.printing, True)
+        self.mro_val = MSCommScores.mro(self.models, self.media["members"], self.min_growth,
+                                        self.media, self.raw_content, self.environment, self.printing, True)
         if not self.printing:  return self.mro_val
         if self.raw_content:
             for pair, (interaction, media) in self.mro_val.items():
@@ -134,15 +134,15 @@ class MSSmetana:
 
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
         interacting_media = interacting_media or self.media or None
-        diff, self.mip_val = MSSmetana.mip(self.community.model, self.models, self.min_growth, interacting_media,
-                                           noninteracting_media, self.environment, self.printing, True)
+        diff, self.mip_val = MSCommScores.mip(self.community.model, self.models, self.min_growth, interacting_media,
+                                              noninteracting_media, self.environment, self.printing, True)
         if not self.printing:  return self.mip_val
         print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
         if self.raw_content:  pprint(diff)
         return self.mip_val
 
     def gyd_score(self, coculture_growth=False):
-        self.gyd_val = MSSmetana.gyd(self.models, environment=self.environment, coculture_growth=coculture_growth)
+        self.gyd_val = MSCommScores.gyd(self.models, environment=self.environment, coculture_growth=coculture_growth)
         if not self.printing:  return self.gyd
         growth_type = "monocultural" if not coculture_growth else "cocultural"
         for pair, score in self.gyd_val.items():
@@ -151,7 +151,7 @@ class MSSmetana:
         return self.gyd
 
     def rfc_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, RAST_genomes:dict=None):
-        self.rfc_val = MSSmetana.rfc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
+        self.rfc_val = MSCommScores.rfc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
         if not self.printing:  return self.rfc
         for pair, score in self.rfc_val.items():
             print(f"\nRFC Score: The similarity of RAST functional SSO ontology "
@@ -160,7 +160,7 @@ class MSSmetana:
 
     def mp_score(self):
         print("executing MP")
-        self.mp_val = MSSmetana.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
+        self.mp_val = MSCommScores.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
         if not self.printing:  return self.mp_val
         if self.raw_content:
             print("\n(MP) The possible contributions of each member in the member media include:\n")
@@ -173,8 +173,8 @@ class MSSmetana:
 
     def mu_score(self):
         member_excreta = self.mp_score() if not hasattr(self, "mp_val") else self.mp_val
-        self.mu_val = MSSmetana.mu(self.models, self.environment, member_excreta, self.n_solutions,
-                               self.abstol, True, self.printing)
+        self.mu_val = MSCommScores.mu(self.models, self.environment, member_excreta, self.n_solutions,
+                                      self.abstol, True, self.printing)
         if not self.printing:  return self.mu_val
         print("\nMU score:\t\t\tThe fraction of solutions in which each member is the "
               "syntrophic receiver that contain a respective metabolite:\n")
@@ -182,8 +182,8 @@ class MSSmetana:
         return self.mu_val
 
     def sc_score(self):
-        self.sc_val = MSSmetana.sc(self.models, self.community.model, self.min_growth,
-                               self.n_solutions, self.abstol, True, self.printing)
+        self.sc_val = MSCommScores.sc(self.models, self.community.model, self.min_growth,
+                                      self.n_solutions, self.abstol, True, self.printing)
         if not self.printing:  return self.sc_val
         print("\nSC score:\t\t\tThe fraction of community members who syntrophically contribute to each species:\n")
         pprint(self.sc_val)
@@ -195,14 +195,14 @@ class MSSmetana:
         if not hasattr(self, "mu_val"):  self.mu_val = self.mu_score()
         if not hasattr(self, "mp_val"):  self.mp_val = self.mp_score()
 
-        self.smetana = MSSmetana.smetana(
+        self.smetana = MSCommScores.smetana(
             self.models, self.community.model, self.min_growth, self.n_solutions, self.abstol,
             (self.sc_val, self.mu_val, self.mp_val), True, sc_coupling, self.printing)
         if self.printing:  print("\nsmetana score:\n")  ;  pprint(self.smetana)
         return self.smetana
 
     def antiSMASH_scores(self, antismash_json_path=None):
-        self.antismash = MSSmetana.antiSMASH(antismash_json_path or self.antismash_json_path)
+        self.antismash = MSCommScores.antiSMASH(antismash_json_path or self.antismash_json_path)
         if not self.printing:  return self.antismash
         if self.raw_content:
             print("\n(antismash) The biosynthetic_areas, BGCs, protein_annotations, clusterBlast, and "
@@ -261,14 +261,14 @@ class MSSmetana:
         model_utils = {}
         count = 0
         for model1, models in pairs.items():
-            if lazy_load:  model1, model1_str = MSSmetana._load(model1, kbase_obj)
+            if lazy_load:  model1, model1_str = MSCommScores._load(model1, kbase_obj)
             else:  model1_str = str(list(pairs.keys()).index(model1))
             if model1.id not in models_media: models_media[model1.id] = {"media": _get_media(model_s_=model1)}
             if model1.id not in model_utils:  model_utils[model1.id] = MSModelUtil(model1)
             # print(pid, model1)
             for model_index, model2 in enumerate(models):
                 # print(model2)
-                if lazy_load:  model2, model2_str = MSSmetana._load(model2, kbase_obj)
+                if lazy_load:  model2, model2_str = MSCommScores._load(model2, kbase_obj)
                 else:  model2_str = f"{model1_str}_{model_index}"
                 if model2.id not in models_media: models_media[model2.id] = {"media": _get_media(model_s_=model2)}
                 if model2.id not in model_utils:  model_utils[model2.id] = MSModelUtil(model2)
@@ -278,13 +278,13 @@ class MSSmetana:
                 print(f"{pid}~~{count}\t{modelIDs}")
                 for envIndex, environ in enumerate(environments):
                     print(f"\tEnvironment{envIndex}: {environ}", end="\t")
-                    model1 = MSSmetana._check_model(model_utils[model1.id], environ, model1_str)
-                    model2 = MSSmetana._check_model(model_utils[model2.id], environ, model1_str)
+                    model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
+                    model2 = MSCommScores._check_model(model_utils[model2.id], environ, model1_str)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
                     # define the MRO content
-                    mro_values = MSSmetana.mro(grouping, models_media, raw_content=True, environment=environ)
+                    mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
@@ -292,14 +292,14 @@ class MSSmetana:
                     print("MRO done", end="\t")
                     # define the CIP content
                     if cip_score:
-                        cip_values = MSSmetana.cip(modelutils=[model_utils[mem.id] for mem in grouping])
+                        cip_values = MSCommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
                         kbase_dic.update({"cip": cip_values[1]})
                         print("CIP done", end="\t")
                     # define the MIP content
                     multi_output = bool(costless or pc)
                     # print(multi_output)
-                    mip_values = MSSmetana.mip(None, grouping, environment=environ, compatibilized=True,
-                                               costless=costless, pc=pc, multi_output=multi_output)
+                    mip_values = MSCommScores.mip(None, grouping, environment=environ, compatibilized=True,
+                                                  costless=costless, pc=pc, multi_output=multi_output)
                     if multi_output:
                         if costless and not pc:
                             kbase_dic.update({"mip": mip_values[0][1], "costless_mip": mip_values[1][1]})
@@ -314,11 +314,11 @@ class MSSmetana:
 
                     print("MIP done", end="\t")
                     # determine the growth diff content
-                    kbase_dic.update({"gyd": list(MSSmetana.gyd(grouping, environment=environ).values())[0]})
+                    kbase_dic.update({"gyd": list(MSCommScores.gyd(grouping, environment=environ).values())[0]})
                     print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
                     if kbase_obj is not None and RAST_genomes:
-                        kbase_dic.update({"RFC": list(MSSmetana.rfc(
+                        kbase_dic.update({"RFC": list(MSCommScores.rfc(
                             grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
                         print("RFC done\t\t")
 
@@ -370,11 +370,11 @@ class MSSmetana:
             pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
             args = [[pair, models_media, environments, RAST_genomes, kbase_obj, lazy_load]
                     for pair in list(pairs.items())]
-            output = pool.map(MSSmetana.calculate_scores, args)
+            output = pool.map(MSCommScores.calculate_scores, args)
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
-        else:  series, mets = MSSmetana.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                         kbase_obj, cip_score, costless, pc)
+        else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
+                                                            kbase_obj, cip_score, costless, pc)
         return concat(series, axis=1).T, mets
 
     @staticmethod
@@ -416,11 +416,11 @@ class MSSmetana:
             cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
             outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
             if costless:
-                costless_mets, numMets = MSSmetana.cip(member_models=member_models)
+                costless_mets, numMets = MSCommScores.cip(member_models=member_models)
                 costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
                 if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
                 outputs.append((costless_cross_fed, len(costless_cross_fed)))
-            if pc:  outputs.append((MSSmetana.pc(member_models, community)))
+            if pc:  outputs.append((MSCommScores.pc(member_models, community)))
             return outputs
         return None, 0
 
@@ -466,13 +466,13 @@ class MSSmetana:
             org_possible_contributions = [ex_rxn for ex_rxn in model_util.exchange_list()
                                           if (ex_rxn.id not in community.medium and ex_rxn.upper_bound > 0)]
             # ic(org_possible_contributions, len(model_util.exchange_list()), len(community.medium))
-            scores, possible_contributions = MSSmetana.contributions(
+            scores, possible_contributions = MSCommScores.contributions(
                 org_possible_contributions, scores, model_util, abstol)
             while DeepDiff(org_possible_contributions, possible_contributions):
                 print("remaining possible_contributions", len(possible_contributions), end="\r")
                 ## optimize the sum of the remaining exchanges that have not surpassed the abstol
                 org_possible_contributions = possible_contributions[:]
-                scores, possible_contributions = MSSmetana.contributions(
+                scores, possible_contributions = MSCommScores.contributions(
                     org_possible_contributions, scores, model_util, abstol)
 
             ## individually checks the remaining possible contributions
@@ -498,9 +498,9 @@ class MSSmetana:
             if missing_members:
                 print(f"The {','.join(missing_members)} members are missing from the defined "
                       f"excreta list and will therefore be determined through an additional MP simulation.")
-                member_excreta.update(MSSmetana.mp(missing_members, environment))
+                member_excreta.update(MSCommScores.mp(missing_members, environment))
         else:
-            member_excreta = MSSmetana.mp(member_models, environment, None, abstol, printing)
+            member_excreta = MSCommScores.mp(member_models, environment, None, abstol, printing)
         for org_model in member_models:
             other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
                                                      if model != org_model.id]))
@@ -661,9 +661,9 @@ class MSSmetana:
                 for j in RAST_genomes[genome2].features:
                     for key, val in j.ontology_terms.items():
                         if key == 'SSO':  genome2_set.update(val)
-                distances[f"{genome1} ++ {genome2}"] = MSSmetana._calculate_jaccard_score(genome1_set, genome2_set)
+                distances[f"{genome1} ++ {genome2}"] = MSCommScores._calculate_jaccard_score(genome1_set, genome2_set)
         else:
-            distances = {f"{genome1} ++ {genome2}": MSSmetana._calculate_jaccard_score(
+            distances = {f"{genome1} ++ {genome2}": MSCommScores._calculate_jaccard_score(
                 set(list(content["SSO"].keys())[0] for dic in RAST_genomes[genome1]["cdss"]
                     for x, content in dic.items() if x == "ontology_terms" and len(content["SSO"].keys()) > 0),
                 set(list(content["SSO"].keys())[0] for dic in RAST_genomes[genome2]["cdss"]
@@ -679,10 +679,10 @@ class MSSmetana:
             member_models, com_model, compatibilized==False, printing=printing)
         sc = None
         if not prior_values:
-            mp = MSSmetana.mp(member_models, environment, com_model, abstol)
-            mu = MSSmetana.mu(member_models, environment, mp, n_solutions, abstol, compatibilized)
+            mp = MSCommScores.mp(member_models, environment, com_model, abstol)
+            mu = MSCommScores.mu(member_models, environment, mp, n_solutions, abstol, compatibilized)
             if sc_coupling:
-                sc = MSSmetana.sc(member_models, com_model, min_growth, n_solutions, abstol, compatibilized)
+                sc = MSCommScores.sc(member_models, com_model, min_growth, n_solutions, abstol, compatibilized)
         elif len(prior_values) == 3:  sc, mu, mp = prior_values
         else:  mu, mp = prior_values
 
