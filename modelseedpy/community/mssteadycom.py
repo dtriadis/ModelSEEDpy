@@ -26,16 +26,21 @@ class MSSteadyCom:
 
     @staticmethod
     def run_fba(mscommodel, media, pfba=False, fva_reactions=None, ava=False, minMemGrwoth:float=1, interactions=True):
-        # TODO constrain fluxes to be proportional to the relative abundance
-        ## and define a minimal growth for all members
+
+
         # minGrowth = Constraint(name="minMemGrowth", lb=, ub=None)
         # mscommodel.model.add_cons_vars
+
+        # fix member abundances
         if not mscommodel.abundances_set:
             for member in mscommodel.members:
                 member.biomass_cpd.lb = minMemGrwoth
             all_metabolites = {mscommodel.primary_biomass.products[0]: 1}
             all_metabolites.update({mem.biomass_cpd: 1 / len(mscommodel.members) for mem in mscommodel.members})
             mscommodel.primary_biomass.add_metabolites(all_metabolites, combine=False)
+        # TODO constrain fluxes to be proportional to the relative abundance
+
+        # TODO constrain the sum of fluxes to be proportional with the abundance
         sol = mscommodel.run_fba(media, pfba, fva_reactions)
         if interactions:  return MSSteadyCom.interactions(mscommodel, sol)
         if ava:  return MSSteadyCom.abundance_variability_analysis(mscommodel, sol)
@@ -203,13 +208,10 @@ class MSSteadyCom:
         exMets_df.drop(["Donor ID"], axis=1, inplace=True)
         exMets_df.sort_index(inplace=True)
         exMets_df.fillna(" ")
-        # logger.info(cross_feeding_df)
 
         # graph the network diagram
         if visualize:
             MSSteadyCom.visual_interactions(cross_feeding_df, filename, export_format, msdb, msdb_path, show_figure)
-            # MSSteadyCom._visualize_cross_feeding(cross_feeding_df, exMets_df, filename, export_directory,
-            #                                                 mscommodel.members, node_metabolites, x_offset, show_figure)
 
         return cross_feeding_df, exMets_df
 
@@ -285,49 +287,3 @@ class MSSteadyCom:
         # render and export the source
         dot.render(filename, view=view_figure)
         return dot.source
-
-
-    @staticmethod
-    def _visualize_cross_feeding(cross_feeding_df, exMets_df, filename, export_directory,
-                                 species, node_metabolites = True, x_offset = 0.15, show_figure = True):
-        # define species and the metabolite fluxes
-        graph = networkx.Graph()
-        species_nums = {}
-        for species in species:
-            species_nums[species.index] = set()
-            graph.add_node(species.index)
-            for col in exMets_df.columns:
-                if 'Species' in col and col != f"Species{species.index}":
-                    species_nums[species.index].update(exMets_df.at[f"Species{species.index}", col].split('; '))
-
-        # define the net fluxes for each combination of two species
-        ID_prefix = "zz_Species" if any(["zz_Species" in x for x in list(cross_feeding_df.index)]) else "Species"
-        for index1, index2 in combinations(list(species_nums.keys()), 2):
-            species_1 = min([index1, index2]) ; species_2 = max([index1, index2])
-            if not all([x in cross_feeding_df.index for x in [f'{ID_prefix}{species_1}', f'{ID_prefix}{species_2}']]):
-                continue
-            species_1_to_2 = cross_feeding_df.at[f'{ID_prefix}{species_1}', f'Species{species_2}']
-            species_2_to_1 = cross_feeding_df.at[f'{ID_prefix}{species_2}', f'Species{species_1}']
-            interaction_net_flux = sigfig.round(species_1_to_2 - species_2_to_1, 3)
-            graph.add_edge(species_1, species_2, flux=interaction_net_flux)
-
-        # compose the network diagram of net fluxes
-        pos = networkx.circular_layout(graph)
-        if node_metabolites:
-            for species in pos:
-                x, y = pos[species]
-                metabolites = '\n'.join(species_nums[species])
-                pyplot.text(x+x_offset, y, metabolites)
-        networkx.draw_networkx(graph, pos)
-        labels = networkx.get_edge_attributes(graph, 'flux')
-        networkx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
-
-        # export and view the figure
-        filename = filename or 'cross_feeding_diagram.svg'
-        export_directory = export_directory or os.getcwd()
-        pyplot.savefig(os.path.join(export_directory, filename), bbox_inches="tight", transparent=True)
-        csv_filename = re.sub(r"(\.\w+)", ".csv", filename)
-        csv_filename = csv_filename.replace("_diagram", "")
-        cross_feeding_df.to_csv(os.path.join(export_directory, csv_filename))
-        if show_figure:  pyplot.show()
-        return cross_feeding_df

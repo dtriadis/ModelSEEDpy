@@ -186,8 +186,7 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
     html_report = env.get_template("steadycom_template.html").render(content)
-    with open(export_html_path, "w") as out:
-        out.writelines(html_report)
+    with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report
 
 def smetana_report(df, mets, export_html_path="smetana_report.html"):
@@ -205,7 +204,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
         media_list = heatmap_df['media'].tolist()
         new_index = [f"{models} in {media_list[i]}" for i, models in enumerate(heatmap_df.index)]
         heatmap_df.index = new_index
-        heatmap_df.index.name = "model1 ++ model2 in Media"
+        heatmap_df.index.name = "model1 ++ model2 ___ Media"
     heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
@@ -218,8 +217,7 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
     html_report = env.get_template("smetana_template.html").render(content)
-    with open(export_html_path, "w") as out:
-        out.writelines(html_report)
+    with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report
 
 def msdb_justification_report(proposed_changes, export_html_path="msdb_correction_report.html"):
@@ -235,6 +233,5 @@ def msdb_justification_report(proposed_changes, export_html_path="msdb_correctio
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "biochem")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
     html_report = env.get_template("msdb_template.html").render(content)
-    with open(export_html_path, "w") as out:
-        out.writelines(html_report)
+    with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report

@@ -142,7 +142,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
     metabolites.update({cpd: -1 / len(biomass_compounds) for cpd in biomass_compounds})
-    comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=100)
+    comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
     newmodel.add_reactions([comm_biorxn])
 
