@@ -1,5 +1,3 @@
-from optlang import Objective
-
 from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
 from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
 from modelseedpy.community.mscompatibility import MSCompatibility
@@ -58,8 +56,6 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
         model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
         model_index += 1
-        # print([rxn.id for rxn in model.reactions if "bio" in rxn.id])
-        # print(model_index, model.id)
         # Rename metabolites
         for met in model_util.model.metabolites:
             # Renaming compartments
@@ -83,7 +79,6 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                     met.id = name + "_" + met.compartment
             new_metabolites.add(met)
             if "cpd11416_c" in met.id:
-                # print(met.id, model_util.model.id)
                 biomass_compounds.append(met)
                 member_biomasses[org_model.id] = met.id
         # Rename reactions
@@ -97,11 +92,9 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                             biomass_index += 1
                     if index not in biomass_indices and index >= minimal_biomass_index:
                         biomass_indices.append(index)
-                        # print(rxn.id, '2')
                     else:  # biomass indices can be decoupled from the respective reaction indices of the same model
                         rxn.id = "bio" + str(biomass_index)
                         if rxn.id not in model_reaction_ids:
-                            # print(rxn.id, '1')
                             biomass_indices.append(biomass_index)
                         else:
                             index = minimal_biomass_index
@@ -110,7 +103,6 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                                 index += 1
                                 rxn.id = "bio" + str(index)
                             biomass_indices.append(index)
-                            # print(rxn.id, '3')
                     biomass_index += 1
                 ## non-biomass reactions
                 else:
@@ -131,7 +123,6 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                     if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
                         print(initialID, string_diff)
             new_reactions.add(rxn)
-        # print(biomass_indices)
     # adds only unique reactions and metabolites to the community model
     newmodel = Model(model_id or "+".join([model.id for model in models]),
                      name or "+".join([model.name for model in models]))
@@ -148,13 +139,8 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
 
     # update model components
     newutl = MSModelUtil(newmodel)
-    # msid_cobraid_hash = newutl.msid_hash()
-    # print(msid_cobraid_hash["cpd11416"])
     newutl.add_objective(comm_biorxn.flux_expression)
-    # newmodel.remove_reactions(newmodel.sinks)
     newmodel.add_boundary(comm_biomass, "sink")
-    # newutl.add_exchanges_for_metabolites([comm_biomass], 0, 100, 'SK_')
-    # print(dir(newutl.model))
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     if cobra_model:  return newutl.model
@@ -221,7 +207,6 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
             pheno_util.add_objective(Zero, "min", coef={
                 ex.reverse_variable: 1000 if ex.id != phenoRXN.id else 1
                 for ex in pheno_util.carbon_exchange_list()})
-                # if ex.id != phenoRXN.id})
             # export_lp(pheno_util.model, f"minimize_cInFlux_{phenoRXN.id}")
             sol = pheno_util.model.optimize()
             if sol.status != "optimal":
@@ -347,7 +332,3 @@ def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"
     fluxes_df.astype(str)
     # fluxes_df.to_csv("fluxes.csv")
     return fluxes_df, comm_members
-
-
-# class CommHelper:
-#     pass

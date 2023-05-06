@@ -27,8 +27,7 @@ class ExpressionPkg(BaseFBAPkg):
         sol = self.util.model.optimize()
         return sum([sol.fluxes[rxnID] for rxnID in rxnIDs])
 
-    def build_gimme(self, ex_data, required_functionalities, minFunctionality=0.5,
-                    threshold_percentile=25, reversibility=False):
+    def build_gimme(self, ex_data, required_functionalities, minFunctionality=0.5, threshold_percentile=25):
         # determine the maximum flux for each required functionality
         required_functionalities = required_functionalities or self.util.bio_rxns_list()
         max_req_funcs = {list(rxnIDs): self.maximize_functionality(rxnIDs) for rxnIDs in required_functionalities}
@@ -64,9 +63,3 @@ class ExpressionPkg(BaseFBAPkg):
         for rxn, flux in sol.fluxes.items():
             if rxn.id in self.coefs:  inconsistency_score += flux*self.coefs[rxn.id]
         return inconsistency_score
-
-    # def build_variable(self, cobra_obj, direction):
-    #     pass
-    #
-    # def build_constraint(self, cobra_obj, reversibility):
-    #     pass
