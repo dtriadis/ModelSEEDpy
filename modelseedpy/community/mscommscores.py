@@ -1,5 +1,3 @@
-import os
-
 from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.core.msminimalmedia import MSMinimalMedia
 from modelseedpy.community.commhelper import build_from_species_models
@@ -29,8 +27,7 @@ warnings.simplefilter("ignore", category=DeprecationWarning)
 def _compatibilize(member_models: Iterable, printing=False):
     # return member_models
     models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
-    if not isinstance(member_models, (set, list, tuple)):
-        return models[0]
+    if not isinstance(member_models, (set, list, tuple)):  return models[0]
     return models
 
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
@@ -38,11 +35,9 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
     if not com_model and member_models:
         model = build_from_species_models(member_models, name="SMETANA_pair", cobra_model=True)
         return member_models, model  # (model, names=names, abundances=abundances)
-    # models = PARSING_FUNCTION(community_model) # TODO the individual models of a community model can be parsed
-    if compatibilize:
-        # return _compatibilize(member_models, printing), MSCommunity(_compatibilize([com_model], printing)[0])
-        return _compatibilize(member_models, printing), _compatibilize([com_model], printing)[0]
-    return member_models, com_model  # MSCommunity(com_model)
+    # models = PARSING_FUNCTION(community_model)  # TODO the individual models of a community model can be parsed
+    if compatibilize:  return _compatibilize(member_models, printing), _compatibilize([com_model], printing)[0]
+    return member_models, com_model
 
 def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, environment=None,
                interacting=True, printing=False, minimization_method="minFlux"):
@@ -279,7 +274,7 @@ class MSCommScores:
                 for envIndex, environ in enumerate(environments):
                     print(f"\tEnvironment{envIndex}: {environ}", end="\t")
                     model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
-                    model2 = MSCommScores._check_model(model_utils[model2.id], environ, model1_str)
+                    model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
@@ -413,6 +408,7 @@ class MSCommScores:
         # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
         if "dictionary_item_removed" in interact_diff:
+            # TODO parse the interactions between each member direction, and produce two MIP's, analogous to the MRO's
             cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
             outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
             if costless:
@@ -452,15 +448,13 @@ class MSCommScores:
         """Discover the metabolites that each species can contribute to a community"""
         community = _compatibilize(com_model) if com_model else build_from_species_models(
             member_models, cobra_model=True, standardize=True)
-        # TODO support parsing the individual members through the MSCommunity object
         community.medium = minimal_media or MSMinimalMedia.minimize_flux(community)
         scores = {}
-        for org_model in member_models:
+        for org_model in member_models:  # TODO support parsing the individual members through the MSCommunity object
             model_util = MSModelUtil(org_model)
             model_util.compatibilize(printing=printing)
             if environment:
                 model_util.add_medium(environment)
-            # TODO leverage extant minimal media as the default instead of the community complete media
             scores[model_util.model.id] = set()
             # determines possible member contributions in the community environment, where the excretion of media compounds is irrelevant
             org_possible_contributions = [ex_rxn for ex_rxn in model_util.exchange_list()
@@ -499,8 +493,7 @@ class MSCommScores:
                 print(f"The {','.join(missing_members)} members are missing from the defined "
                       f"excreta list and will therefore be determined through an additional MP simulation.")
                 member_excreta.update(MSCommScores.mp(missing_members, environment))
-        else:
-            member_excreta = MSCommScores.mp(member_models, environment, None, abstol, printing)
+        else:  member_excreta = MSCommScores.mp(member_models, environment, None, abstol, printing)
         for org_model in member_models:
             other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
                                                      if model != org_model.id]))
@@ -598,9 +591,9 @@ class MSCommScores:
             else:
                 mscom = MSCommunity(models=[model1_util.model, model2_util.model],
                                     names=[mem.id for mem in member_models])
-                sol = mscom.run_fba()
-                # TODO parse the community FBA solution for the individual member growths.
-                ## This may require converting the biomasses into growth fluxes.
+                mscom.run_fba()
+                member_growths = mscom.parse_member_growths()
+                G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
             if G_m2 <= 0 and G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = None  ;  continue
             if G_m2 <= 0 or G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = 1e5  ;  continue
             diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = abs(G_m1-G_m2) / min([G_m1, G_m2])
@@ -608,10 +601,30 @@ class MSCommScores:
 
     @staticmethod
     def pc(member_models, com_model=None, printing=True, compatibilized=False):
-        # TODO the ratio of community growth to the sum of member growths, where >1 indicates synergism
         if com_model: community = com_model
         else:  member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
         return (community.slim_optimize()/sum([model.slim_optimize() for model in member_models]))
+
+    @staticmethod
+    def interaction_type(member_models=None, com_model=None, member_models_sols=None, com_members_sols=None,
+                         interaction_threshold=0.1):
+        # TODO It may be possible to also quantify the degree of each type
+        ## based on the magnitude of change between the monocultural and co-cultural growths.
+        if member_models_sols is None:  member_models_sols = {member.id: member.optimize() for member in member_models}
+        if com_members_sols is None:
+            com_model_sol = com_model.optimize()
+            com_members_sols = {member.name: com_model_sol.fluxes[member.primary_biomass.id] for member in member_models}
+        # track the effects of communal growth upon each
+        rel_comm_growth = {member.id: (com_members_sols[member.id]/member_models_sols[member.id])
+                           for member in com_members_sols}
+        growth_diffs = array(list(rel_comm_growth.values()))
+        mutualism_bound, competitive_bound = 1+interaction_threshold, 1-interaction_threshold
+        if all(growth_diffs > mutualism_bound):  return "mutualism"
+        if all(growth_diffs < competitive_bound):  return "competitive"
+        if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):  return "commensalism"
+        if all(mutualism_bound > growth_diffs > competitive_bound):  return "neutral"
+        if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):  return "amensalism"
+        if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):
@@ -731,7 +744,7 @@ class MSCommScores:
                                  " for these scores to be determined.")
         # Parse data and scores from the antiSMASH report
         biosynthetic_areas = data["records"][0]['areas']
-        BGCs = set(numpy.array([data["records"][0]['areas'][i]['products'] for i in range(biosynthetic_areas)]).flatten())
+        BGCs = set(array([data["records"][0]['areas'][i]['products'] for i in range(biosynthetic_areas)]).flatten())
         len_proteins = len(data["records"][0]['modules']['antismash.modules.clusterblast']['knowncluster']['proteins'])
         protein_annotations = [data["records"][0]['modules']['antismash.modules.clusterblast']['knowncluster']['proteins'][i]['annotations']
                            for i in range(len_proteins)]

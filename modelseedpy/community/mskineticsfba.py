@@ -23,24 +23,25 @@ def _x_axis_determination(total_time):
     if time > 7200:  return 1/hour, "hr"
     return 1/day, "days"
 
-class MSKineticsFBA(BaseFBAPkg):
+def _check_datum(datum):
+    if "substituted_rate_law" not in datum:
+        print(f"RateLawError: The {datum} datum lacks a rate law.")
+        return False
+    remainder = re.sub("([0-9A-Za-z/()e\-\+\.\*])", "", datum["substituted_rate_law"])
+    if remainder != "":
+        print(f'RateLawError: The {datum["substituted_rate_law"]}'
+              f' rate law contains unknown characters: {remainder}')
+        return False
+
+
+class MSKineticsFBA:
     def __init__(self, model, warnings: bool = True, verbose: bool = False,
                  printing: bool = False, jupyter: bool = False):
         self.warnings, self.verbose, self.printing, self.jupyter = warnings, verbose, printing, jupyter
         self.model_util = MSModelUtil(model)
         self.met_ids = OrderedDict({met.id: met.id for met in self.model_util.model.metabolites})
 
-    def _check_datum(self, datum):
-        if "substituted_rate_law" not in datum:
-            print(f"RateLawError: The {datum} datum lacks a rate law.")
-            return False
-        remainder = re.sub("([0-9A-Za-z/()e\-\+\.\*])", "", datum["substituted_rate_law"])
-        if remainder != "":
-            print(f'RateLawError: The {datum["substituted_rate_law"]}'
-                  f' rate law contains unknown characters: {remainder}')
-            return False
-
-    def simulate(self, kinetics_path: str = None, kinetics_data: dict = None, 
+    def simulate(self, kinetics_path: str = None, kinetics_data: dict = None,
                  initial_M: dict = None,  # a dictionary of the initial metabolic concentrations, which supplants concentrations from the defined kinetics data
                  total_min: float = 200, ts_min: float = 20, export_name = None, export_directory = None,
                  chemostat_L: float = None, feed_profile: dict = None, chemostat_L_hr: float = None,
@@ -108,7 +109,7 @@ class MSKineticsFBA(BaseFBAPkg):
                 fluxes = []
                 for source in self.kinetics_data[rxnID]:
                     datum = self.kinetics_data[rxnID][source]
-                    if not self._check_datum(datum):  continue
+                    if not _check_datum(datum):  continue
                     ### define each variable concentration
                     conc_dict = {var: self.conc.at[self.met_ids[datum["met_id"][var]], self.previous_col]*milli
                                  for var in datum["met_id"] if len(var) == 1}
@@ -154,14 +155,30 @@ class MSKineticsFBA(BaseFBAPkg):
         # visualize concentration changes over time
         if visualize:   self._visualize(conc_figure_title, included_mets, labeled_plots)
         if export:      self._export(export_name, export_directory, total_min)
-        if self.verbose:  print("\n\nChanged metabolite  concentrations\n",
-                                "=" * 2 * len("changed metabolites"), f"\n{self.changed}",
-                                "\nConstrained reactions:", constrained.keys())
+        if self.verbose:  print(f"\nChanged concentrations:\t{self.changed}",
+                                f"\nConstrained reactions:\t{constrained.keys()}")
         elif self.printing:
             if self.jupyter:  pandas.set_option("max_rows", None)  ; display(self.conc, self.fluxes)
-            if self.unchanged == set():  print("\nAll of the metabolites changed concentration over the simulation")
-            else:  print(f"\n\nUnchanged metabolite concentrations\t{self.unchanged}")
+            if self.unchanged == set():  print("All of the metabolites changed concentration over the simulation")
+            else:  print(f"\nUnchanged metabolite concentrations\t{self.unchanged}")
         return self.conc, self.fluxes
+
+    def _chemostat(self, feed_profile:dict, chemostat_L_hr, chemostat_L):
+        L_changed = chemostat_L_hr * self.ts_min
+        # chemostat addition
+        for met_id, conc in feed_profile.items():
+            self.chemical_moles.at[met_id, self.col] += conc * L_changed
+            self.conc.at[met_id, self.col] = (
+                self.chemical_moles.at[met_id, self.col] / milli / chemostat_L)  # normalize to the chemostat volume
+
+        # chemostat subtraction
+        for met in self.model_util.model.metabolites:
+            if met.compartment[0] != "e":   continue
+            ## update the chemical moles
+            self.chemical_moles.at[met.id, self.col] -= (self.conc.at[met.id, self.col] * L_changed)
+            ## define the chemical concentration
+            self.conc.at[met.id, self.col] = (
+                    self.chemical_moles.at[met.id, self.col] / milli / chemostat_L)
 
     # nested functions
     def __find_data_match(self, rxnID: str, source: str):
@@ -265,20 +282,3 @@ class MSKineticsFBA(BaseFBAPkg):
         # export the figure
         self.figure.savefig(os.path.join(self.simulation_path, "changed_concentrations.svg"))
         if self.verbose and not self.jupyter:   self.figure.show()
-
-    def _chemostat(self, feed_profile:dict, chemostat_L_hr, chemostat_L):
-        L_changed = chemostat_L_hr * self.ts_min
-        # chemostat addition
-        for met_id, conc in feed_profile.items():
-            self.chemical_moles.at[met_id, self.col] += conc * L_changed
-            self.conc.at[met_id, self.col] = (
-                self.chemical_moles.at[met_id, self.col] / milli / chemostat_L)  # normalize to the chemostat volume
-
-        # chemostat subtraction
-        for met in self.model_util.model.metabolites:
-            if met.compartment[0] != "e":   continue
-            ## update the chemical moles
-            self.chemical_moles.at[met.id, self.col] -= (self.conc.at[met.id, self.col] * L_changed)
-            ## define the chemical concentration
-            self.conc.at[met.id, self.col] = (
-                    self.chemical_moles.at[met.id, self.col] / milli / chemostat_L)

@@ -146,24 +146,18 @@ class FBAHelper:
     @staticmethod
     def sum_dict(d1,d2):
         for key, value in d1.items():
-            if key in d2:
-                d2[key] += value
-            else:
-                d2[key] = value
+            if key in d2:  d2[key] += value
+            else:  d2[key] = value
         return d2
 
     @staticmethod
     def rxn_compartment(reaction):
         compartments = list(reaction.compartments)
-        if len(compartments) == 1:
-            return compartments[0]
-        cytosol = None
+        if len(compartments) == 1:  return compartments[0]
         for comp in compartments:
-            if comp[0:1] == "c":
-                cytosol = comp
-            elif comp[0:1] != "e":
-                return comp
-        return cytosol
+            if comp[0:1] != "e":  return comp
+            elif comp[0:1] == "e":  extracellular = comp
+        return extracellular
 
     @staticmethod
     def compartment_id(string):
@@ -175,9 +169,8 @@ class FBAHelper:
         return array[-1]
 
     @staticmethod
-    def medianame(media):
-        if media == None:
-            return "Complete"
+    def mediaName(media):
+        if media == None:  return "Complete"
         return media.id
 
     @staticmethod

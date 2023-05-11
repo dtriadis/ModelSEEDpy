@@ -722,6 +722,13 @@ class MSModelUtil:
             return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
         return self.model.optimize()
 
+    def resource_balance_constraint(self, flux_limit=140):
+        vars_coef = {}
+        for rxn in self.model.reactions:
+            if "EX_" not in rxn.id:
+                vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
+        self.create_constraint(Constraint(Zero, lb=0, ub=flux_limit, name="resource_balance_limit"), coef=vars_coef)
+
     def apply_test_condition(self, condition, model=None):
         """Applies constraints and objective of specified condition to model
 
