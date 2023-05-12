@@ -19,10 +19,9 @@ from icecream import ic
 import re
 # from math import prod
 
-# silence deprecation warnings from DeepDiff parsing the
+# silence deprecation warnings from DeepDiff parsing the syntrophy
 import warnings
 warnings.simplefilter("ignore", category=DeprecationWarning)
-
 
 def _compatibilize(member_models: Iterable, printing=False):
     # return member_models
@@ -49,7 +48,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
         elif com_model is not None:  return media["community_media"]
         return media
     # model_s_ is either a singular model or a list of models
-    if com_model is not None:  com_media = MSMinimalMedia.determine_min_media(
+    if com_model is not None:  com_media, media_sol = MSMinimalMedia.determine_min_media(
         com_model, minimization_method, min_growth, None, interacting, 5, printing)
     if model_s_ is not None:
         if not isinstance(model_s_, (list,set,tuple,ndarray)):  return MSMinimalMedia.determine_min_media(
@@ -57,10 +56,10 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
         members_media = {}
         for model in model_s_:
             members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
-                model, minimization_method, min_growth, environment, interacting, printing)}
+                model, minimization_method, min_growth, environment, interacting, printing)[0]}
         # print(members_media)
         if com_model is None:  return members_media
-    else:  return com_media
+    else:  return com_media, media_sol
     return {"community_media":com_media, "members":members_media}
 
 
@@ -401,24 +400,41 @@ class MSCommScores:
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
-        noninteracting_medium = _get_media(noninteracting_media_dict, community, None, min_growth, environment, False)
+        noninteracting_medium, noninteracting_sol = _get_media(
+            noninteracting_media_dict, community, None, min_growth, environment, False)
         if "community_media" in noninteracting_medium:  noninteracting_medium = noninteracting_medium["community_media"]
-        interacting_medium = _get_media(interacting_media_dict, community, None, min_growth, environment, True)
+        interacting_medium, interacting_sol = _get_media(
+            interacting_media_dict, community, None, min_growth, environment, True)
         if "community_media" in interacting_medium:  interacting_medium = interacting_medium["community_media"]
-        # differentiate the community media
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
-        if "dictionary_item_removed" in interact_diff:
-            # TODO parse the interactions between each member direction, and produce two MIP's, analogous to the MRO's
-            cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
-            outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
-            if costless:
-                costless_mets, numMets = MSCommScores.cip(member_models=member_models)
-                costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
-                if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
-                outputs.append((costless_cross_fed, len(costless_cross_fed)))
-            if pc:  outputs.append((MSCommScores.pc(member_models, community)))
-            return outputs
-        return None, 0
+        if "dictionary_item_removed" not in interact_diff:  return None, 0
+        cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
+        # TODO parse the interacting and non-interacting solutions to acquire exchanges in each direction,
+        ## and produce two MIP's, analogous to the MRO's. This may obviate the DeepDiff approach of determining
+        ## the number of cross-fed compounds.
+        comm_util = MSModelUtil(com_model)
+        cross_fed_metIDs = [ex.replace("EX_", "") for ex in cross_fed_exIDs]
+        comm_transports = {}
+        for metID in cross_fed_metIDs:
+            for rxn in comm_util.transport_list():
+                if metID not in [met.id for met in rxn.metabolites]:  continue
+                if metID not in comm_transports:
+                    comm_transports[metID] = {f"{rxn.id}_interacting": interacting_sol.fluxes[rxn.id],
+                                              f"{rxn.id}_non_interacting": noninteracting_sol.fluxes[rxn.id]}
+                else:  comm_transports[metID].update({f"{rxn.id}_interacting": interacting_sol.fluxes[rxn.id],
+                                                      f"{rxn.id}_non_interacting": noninteracting_sol.fluxes[rxn.id]})
+        # TODO loop over the captured reactions, which presumably retain compartment information that specifies
+        ## each member, and count the number of exchanges from model1 -> model2 and visa versa. This may be
+        ## also accomplished by executing our MSCommunity method to acquire the precise exchanges.
+
+        outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
+        if costless:
+            costless_mets, numMets = MSCommScores.cip(member_models=member_models)
+            costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
+            if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
+            outputs.append((costless_cross_fed, len(costless_cross_fed)))
+        if pc:  outputs.append((MSCommScores.pc(member_models, community)))
+        return outputs
 
     @staticmethod
     def cip(modelutils=None, member_models=None):  # costless interaction potential
@@ -608,8 +624,6 @@ class MSCommScores:
     @staticmethod
     def interaction_type(member_models=None, com_model=None, member_models_sols=None, com_members_sols=None,
                          interaction_threshold=0.1):
-        # TODO It may be possible to also quantify the degree of each type
-        ## based on the magnitude of change between the monocultural and co-cultural growths.
         if member_models_sols is None:  member_models_sols = {member.id: member.optimize() for member in member_models}
         if com_members_sols is None:
             com_model_sol = com_model.optimize()
@@ -619,12 +633,15 @@ class MSCommScores:
                            for member in com_members_sols}
         growth_diffs = array(list(rel_comm_growth.values()))
         mutualism_bound, competitive_bound = 1+interaction_threshold, 1-interaction_threshold
-        if all(growth_diffs > mutualism_bound):  return "mutualism"
-        if all(growth_diffs < competitive_bound):  return "competitive"
-        if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):  return "commensalism"
-        if all(mutualism_bound > growth_diffs > competitive_bound):  return "neutral"
-        if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):  return "amensalism"
-        if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
+        if all(growth_diffs > mutualism_bound):  return "mutualism", sum(growth_diffs)/len(growth_diffs)
+        if all(growth_diffs < competitive_bound):  return "competitive", sum(growth_diffs)/len(growth_diffs)
+        if ((mutualism_bound > growth_diffs) & (growth_diffs > competitive_bound)).all():  return "neutral"
+        if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):
+            return "commensalism", max(growth_diffs)-min(growth_diffs)
+        if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):
+            return "amensalism", max(growth_diffs)-min(growth_diffs)
+        if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):
+            return "parasitism", max(growth_diffs)-min(growth_diffs)
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):

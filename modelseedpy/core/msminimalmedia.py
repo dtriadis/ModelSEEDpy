@@ -76,9 +76,7 @@ class MSMinimalMedia:
                 influxes.append(rxn.reverse_variable)
             elif any(["e0" in met.id for met in rxn.products]):  # this captures edge cases or transporters
                 influxes.append(rxn.forward_variable)
-            else:
-                logger.critical(f"The reaction {rxn} lacks any exchange metabolites, "
-                                f"and thus is indicative of an error.")
+            else: logger.critical(f"The reaction {rxn} lacks exchange metabolites, which indicates an error.")
         return influxes
 
     @staticmethod
@@ -103,7 +101,7 @@ class MSMinimalMedia:
         if printing:
             print(f"The minimal flux media consists of {len(min_media)} compounds and a {total_flux} total influx,"
                   f" with a growth value of {simulated_sol.objective_value}")
-        return min_media
+        return min_media, sol
 
     @staticmethod
     def _min_consumption_objective(model_util, interacting):
