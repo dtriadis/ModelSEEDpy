@@ -160,7 +160,7 @@ class FBAHelper:
         return extracellular
 
     @staticmethod
-    def compartment_id(string):
+    def compartment_index(string):
         return int(re.search(r"(?<=\_|\w)(\d+)(?=$)", string).group())
 
     @staticmethod

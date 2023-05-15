@@ -24,8 +24,7 @@ def export_lp(model, name):
     with open(f"{name}.lp", 'w') as out:
         out.write(model.solver.to_lp())
 
-def build_from_species_models(org_models, model_id=None, name=None, names=None,
-                              abundances=None, cobra_model=False, standardize=False, copy_models=True):
+def build_from_species_models(org_models, model_id=None, name=None, abundances=None, standardize=False, copy_models=True):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -48,7 +47,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # construct the new model
     models = org_models if not standardize else MSCompatibility.standardize(
         org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
-    biomass_compounds, biomass_indices = [], []
+    biomass_indices = []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
     member_biomasses = {}
@@ -63,24 +62,19 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
             if output is None:
                 index = 0 if met.compartment[0] == "e" else model_index
                 met.compartment = met.compartment[0] + str(index)
-                if "_" in met.id:
-                    # print(met.id)
-                    met.id = "_".join([met.id.split("_")[:-1], met.compartment])
+                if "_" in met.id:  met.id = "_".join([met.id.split("_")[:-1], met.compartment])
             else:
                 name, compartment, out_index = output
                 index = 0 if compartment == "e" else model_index
                 if out_index == "":
                     met.id += str(index)
                     met.compartment += str(index)
-                elif compartment == "e":
-                    met.compartment = "e0"
+                elif compartment == "e":  met.compartment = "e0"
                 else:
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
             new_metabolites.add(met)
-            if "cpd11416_c" in met.id:
-                biomass_compounds.append(met)
-                member_biomasses[org_model.id] = met.id
+            if "cpd11416_c" in met.id:  member_biomasses[org_model.id] = met
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
             if rxn.id[0:3] != "EX_":
@@ -88,14 +82,11 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                 if re.search('^(bio)(\d+)$', rxn.id):
                     index = int(re.sub(r"(^bio)", "", rxn.id))
                     if biomass_index == 2:
-                        while f"bio{biomass_index}" in model_reaction_ids:
-                            biomass_index += 1
-                    if index not in biomass_indices and index >= minimal_biomass_index:
-                        biomass_indices.append(index)
+                        while f"bio{biomass_index}" in model_reaction_ids:  biomass_index += 1
+                    if index not in biomass_indices and index >= minimal_biomass_index:  biomass_indices.append(index)
                     else:  # biomass indices can be decoupled from the respective reaction indices of the same model
                         rxn.id = "bio" + str(biomass_index)
-                        if rxn.id not in model_reaction_ids:
-                            biomass_indices.append(biomass_index)
+                        if rxn.id not in model_reaction_ids:  biomass_indices.append(biomass_index)
                         else:
                             index = minimal_biomass_index
                             rxn.id = "bio" + str(index)
@@ -114,7 +105,7 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
                     else:
                         name, compartment, index = output
                         if compartment != "e":
-                            rxn.name = name + "_" + compartment + str(model_index)
+                            rxn.name = f"{name}_{compartment}{model_index}"
                             rxn_id = re.search(r"(.+\_\w)(?=\d+)", rxn.id).group()
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
@@ -132,19 +123,20 @@ def build_from_species_models(org_models, model_id=None, name=None, names=None,
     # Create community biomass
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
-    metabolites.update({cpd: -1 / len(biomass_compounds) for cpd in biomass_compounds})
+    if abundances:  abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
+    else:  abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
+    metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
     newmodel.add_reactions([comm_biorxn])
-
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
     newmodel.add_boundary(comm_biomass, "sink")
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
-    if cobra_model:  return newutl.model
-    return newutl.model, names or [], abundances
+    return newutl.model
+
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):
     # log information of each respective model

@@ -69,9 +69,7 @@ class MSSteadyCom:
             visualize: bool = True,              # specifies whether the net flux will be depicted in a network diagram
             filename: str = 'cross_feeding',  # Cross-feeding figure export name
             export_format: str = "svg",
-            export_directory: str = None,        # specifies the directory to which the network diagram and associated datatable will be exported, where None does not export the content
             node_metabolites: bool = True,       # specifies whether the metabolites of each node will be printed
-            x_offset: float = 0.15,              # specifies the x-axis buffer between each species node and its metabolite list in the network diagram
             show_figure: bool = True,            # specifies whether the figure will be printed to the console
             ignore_mets=None                     # cross-fed exchanges that will not be displayed in the graphs
             ):
@@ -87,7 +85,7 @@ class MSSteadyCom:
 
         #Initialize data
         metabolite_data, species_data, species_collection = {}, {"Environment":{}}, {"Environment":{}}
-        data = {"IDs":[],"Metabolites/Donor":[], "Environment":[]}
+        data = {"IDs":[], "Metabolites/Donor":[], "Environment":[]}
         species_list = {}
 
         # track extracellularly exchanged metabolites
@@ -147,15 +145,12 @@ class MSSteadyCom:
                         normalized_flux = abs(metabolite_data[met.id][individual.id]
                                               * metabolite_data[met.id][other.id])/total
                         species_data[individual.id][other.id] += normalized_flux
-                        # print(met.name, normalized_flux > flux_threshold, not any(
-                        #         [re.search(x, met.name, flags=re.IGNORECASE) for x in ignore_mets]))
                         species_collection = add_collection_item(met.name, normalized_flux, flux_threshold, ignore_mets,
                                                                  species_collection, individual.id, other.id)
                     ## calculate donations to the environment
                     if metabolite_data[met.id]["Environment"] >= Zero:  continue
                     normalized_flux = abs(metabolite_data[met.id][individual.id]
                                           * metabolite_data[met.id]["Environment"])/total
-                    # ic(normalized_flux)
                     species_data[individual.id]["Environment"] += normalized_flux
                     species_collection = add_collection_item(met.name, normalized_flux, flux_threshold, ignore_mets,
                                                              species_collection, individual.id, "Environment")
@@ -210,25 +205,26 @@ class MSSteadyCom:
         exMets_df.fillna(" ")
 
         # graph the network diagram
-        if visualize:
-            MSSteadyCom.visual_interactions(cross_feeding_df, filename, export_format, msdb, msdb_path, show_figure)
+        if visualize:  MSSteadyCom.visual_interactions(cross_feeding_df, filename, export_format,
+                                                       msdb, msdb_path, show_figure, node_metabolites)
 
         return cross_feeding_df, exMets_df
 
     @staticmethod
-    def visual_interactions(cross_feeding_df, filename="cross_feeding",
-                            export_format="svg", msdb=None, msdb_path=None, view_figure=True):
+    def visual_interactions(cross_feeding_df, filename="cross_feeding", export_format="svg", msdb=None,
+                            msdb_path=None, view_figure=True, node_metabolites=True):
+        # load the MSDB
+        assert msdb or msdb_path, ValueError("Either the MSDB object or the local MSDB path must be provided")
+        from modelseedpy.biochem import from_local
+        msdb = msdb or from_local(msdb_path)
+        # construct the structure of the cross-feeding DataFrame
         if "Metabolite/Donor ID" in cross_feeding_df.columns:
             cross_feeding_df.index = [metID.replace("_e0", "") for metID in cross_feeding_df["Metabolite/Donor ID"].values]
             cross_feeding_df.index.name = "Metabolite/Donor ID"
             cross_feeding_df.drop([col for col in cross_feeding_df.columns if "ID" in col], axis=1, inplace=True)
         else:  cross_feeding_df.index = [metID.replace("_e0", "") for metID in cross_feeding_df.index]
-        # load the MSDB
-        from modelseedpy.biochem import from_local
-        msdb = msdb or from_local(msdb_path)
         # define the cross-fed metabolites
         cross_feeding_rows = []
-        # display(cross_feeding_df)
         for index, row in cross_feeding_df.iterrows():
             positive = negative = False
             for col, val in row.items():
@@ -245,7 +241,7 @@ class MSSteadyCom:
         members.remove("Environment")
         members_cluster1, members_cluster2 = members[:int(len(members) / 2)], members[int(len(members) / 2):]
 
-        # TODO define a third tier of just the environment as a rectangle that spans the width of the members
+        # TODO define a third node tier of just the environment as a rectangle that spans the width of the members
         ## which may alleviate much of the ambiguity about mass imbalance between the member fluxes
         import graphviz
         dot = graphviz.Digraph(filename, format=export_format)  # directed graph
@@ -261,8 +257,6 @@ class MSSteadyCom:
             mets_subgraph.attr(rank="same")
             mets_subgraph.attr('node', shape='circle', color="green", style="filled")
             for metIndex, met in enumerate(metabolites):
-                # metID = metID.replace('_e0', '')
-                # cpdNum = str(int(met.id.replace("cpd", "")))
                 mets_subgraph.node(met.abbr[:3], fixedsize="true", height="0.4", tooltip=f"{met.id} ; {met.name}",
                                    URL=f"https://modelseed.org/biochem/compounds/{met.id}")
         ## bottom-layer members
@@ -274,12 +268,9 @@ class MSSteadyCom:
         # define the edges by parsing the interaction DataFrame
         for met in metabolites:
             row = metabolites_df.loc[met.id]
-        # for metID, row in metabolites_df.iterrows():
-        #     cpdNum = str(int(metID.replace("cpd", "")))
             for col, val in row.items():
                 if col == "Environment":  continue
                 index = members.index(col)
-                # 0 < arrowsize <= 2
                 # TODO color carbon sources red
                 if val > 0:  dot.edge(f"S{index}", met.abbr[:3], arrowsize=f"{val / 500}", edgetooltip=str(val))
                 if val < 0:  dot.edge(met.abbr[:3], f"S{index}", arrowsize=f"{abs(val / 500)}", edgetooltip=str(val))

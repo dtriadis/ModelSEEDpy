@@ -337,7 +337,7 @@ class MSModelUtil:
             new_reaction = Reaction(id=fullid, name=f"{rxn.name}_{comp}")
             metabolites_to_add = {}
             for met, stoich in rxn.metabolites.items():
-                comp_num = FBAHelper.compartment_id(met.id)
+                comp_num = FBAHelper.compartment_index(met.id)
                 if comp_num > len(comp_trans):
                     logger.critical(f"The compartment index {comp_num} is out of range")
                 comp_str = comp_trans[comp_num]

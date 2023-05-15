@@ -32,7 +32,7 @@ def _compatibilize(member_models: Iterable, printing=False):
 def _load_models(member_models: Iterable, com_model=None, compatibilize=True, printing=False):
     # ic(member_models, com_model, compatibilize)
     if not com_model and member_models:
-        model = build_from_species_models(member_models, name="SMETANA_pair", cobra_model=True)
+        model = build_from_species_models(member_models, name="SMETANA_pair")
         return member_models, model  # (model, names=names, abundances=abundances)
     # models = PARSING_FUNCTION(community_model)  # TODO the individual models of a community model can be parsed
     if compatibilize:  return _compatibilize(member_models, printing), _compatibilize([com_model], printing)[0]
@@ -73,7 +73,7 @@ class MSCommScores:
 
         # process the models
         self.models = _compatibilize(member_models)
-        self.community = MSModelUtil(build_from_species_models(self.models, cobra_model=True))
+        self.community = MSModelUtil(build_from_species_models(self.models))
         ## define the environment
         if environment:
             if hasattr(environment, "get_media_constraints"):
@@ -409,25 +409,24 @@ class MSCommScores:
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
         if "dictionary_item_removed" not in interact_diff:  return None, 0
         cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
-        # TODO parse the interacting and non-interacting solutions to acquire exchanges in each direction,
-        ## and produce two MIP's, analogous to the MRO's. This may obviate the DeepDiff approach of determining
-        ## the number of cross-fed compounds.
+        # Determine each direction of the MIP score interactions
         comm_util = MSModelUtil(com_model)
         cross_fed_metIDs = [ex.replace("EX_", "") for ex in cross_fed_exIDs]
-        comm_transports = {}
-        for metID in cross_fed_metIDs:
-            for rxn in comm_util.transport_list():
-                if metID not in [met.id for met in rxn.metabolites]:  continue
-                if metID not in comm_transports:
-                    comm_transports[metID] = {f"{rxn.id}_interacting": interacting_sol.fluxes[rxn.id],
-                                              f"{rxn.id}_non_interacting": noninteracting_sol.fluxes[rxn.id]}
-                else:  comm_transports[metID].update({f"{rxn.id}_interacting": interacting_sol.fluxes[rxn.id],
-                                                      f"{rxn.id}_non_interacting": noninteracting_sol.fluxes[rxn.id]})
-        # TODO loop over the captured reactions, which presumably retain compartment information that specifies
-        ## each member, and count the number of exchanges from model1 -> model2 and visa versa. This may be
-        ## also accomplished by executing our MSCommunity method to acquire the precise exchanges.
-
-        outputs = [(cross_fed_exIDs, len(cross_fed_exIDs))]
+        comm_trans, directionalMIP = {}, {mem.id:[] for mem in member_models}
+        for rxn in comm_util.transport_list():
+            metID = [met.id for met in rxn.metabolites if "_e0" in met.id and met.id != "cpd00067_e0"][0]
+            if metID not in cross_fed_metIDs:  continue
+            rxn_model = member_models[FBAHelper.compartment_index(rxn.id.split("_")[0]) - 1]
+            met = [met for met in rxn.metabolites if met.id == metID][0]
+            comm_trans[metID] = comm_trans.get(metID, {})
+            if "received" not in comm_trans[metID] and rxn.metabolites[met] < 0:
+                directionalMIP[rxn_model.id].append(metID)
+                comm_trans[metID]["received"] = rxn_model.id  ;  continue
+            if "donated" not in comm_trans[metID] and rxn.metabolites[met] > 0:
+                comm_trans[metID]["donated"] = rxn_model.id  ;  continue
+            print(f"{rxn.id} has an expected form {rxn.reaction}.")
+        # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
+        outputs = [directionalMIP]
         if costless:
             costless_mets, numMets = MSCommScores.cip(member_models=member_models)
             costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
@@ -462,38 +461,33 @@ class MSCommScores:
     @staticmethod
     def mp(member_models:Iterable, environment, com_model=None, minimal_media=None, abstol=1e-3, printing=False):
         """Discover the metabolites that each species can contribute to a community"""
-        community = _compatibilize(com_model) if com_model else build_from_species_models(
-            member_models, cobra_model=True, standardize=True)
+        community = _compatibilize(com_model) if com_model else build_from_species_models(member_models,standardize=True)
         community.medium = minimal_media or MSMinimalMedia.minimize_flux(community)
         scores = {}
         for org_model in member_models:  # TODO support parsing the individual members through the MSCommunity object
             model_util = MSModelUtil(org_model)
             model_util.compatibilize(printing=printing)
-            if environment:
-                model_util.add_medium(environment)
+            if environment:  model_util.add_medium(environment)
             scores[model_util.model.id] = set()
             # determines possible member contributions in the community environment, where the excretion of media compounds is irrelevant
-            org_possible_contributions = [ex_rxn for ex_rxn in model_util.exchange_list()
-                                          if (ex_rxn.id not in community.medium and ex_rxn.upper_bound > 0)]
+            org_possible_contr = [ex_rxn for ex_rxn in model_util.exchange_list()
+                                  if (ex_rxn.id not in community.medium and ex_rxn.upper_bound > 0)]
             # ic(org_possible_contributions, len(model_util.exchange_list()), len(community.medium))
-            scores, possible_contributions = MSCommScores.contributions(
-                org_possible_contributions, scores, model_util, abstol)
-            while DeepDiff(org_possible_contributions, possible_contributions):
-                print("remaining possible_contributions", len(possible_contributions), end="\r")
+            scores, possible_contr = MSCommScores.contributions(org_possible_contr, scores, model_util, abstol)
+            while DeepDiff(org_possible_contr, possible_contr):
+                print("remaining possible_contributions", len(possible_contr), end="\r")
                 ## optimize the sum of the remaining exchanges that have not surpassed the abstol
-                org_possible_contributions = possible_contributions[:]
-                scores, possible_contributions = MSCommScores.contributions(
-                    org_possible_contributions, scores, model_util, abstol)
+                org_possible_contr = possible_contr[:]
+                scores, possible_contr = MSCommScores.contributions(org_possible_contr, scores, model_util, abstol)
 
             ## individually checks the remaining possible contributions
-            for ex_rxn in possible_contributions:
+            for ex_rxn in possible_contr:
                 model_util.model.objective = Objective(ex_rxn.flux_expression)
                 sol = model_util.model.optimize()
                 if sol.status == 'optimal' or sol.objective_value > abstol:
                     for met in ex_rxn.metabolites:
                         if met.id in scores[model_util.model.id]:
-                            print("removing", met.id)
-                            scores[model_util.model.id].remove(met.id)
+                            scores[model_util.model.id].remove(met.id)  ;  print("removing", met.id)
         return scores
 
     @staticmethod
@@ -605,7 +599,7 @@ class MSCommScores:
                 G_m1 = G_m1 if FBAHelper.isnumber(str(G_m1)) else 0
                 G_m2 = G_m2 if FBAHelper.isnumber(str(G_m2)) else 0
             else:
-                mscom = MSCommunity(models=[model1_util.model, model2_util.model],
+                mscom = MSCommunity(member_models=[model1_util.model, model2_util.model],
                                     names=[mem.id for mem in member_models])
                 mscom.run_fba()
                 member_growths = mscom.parse_member_growths()
