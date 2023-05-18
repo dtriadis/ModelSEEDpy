@@ -55,7 +55,6 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
             model_s_, minimization_method, min_growth, environment, interacting, printing)
         members_media = {}
         for model in model_s_:
-            print(MSMinimalMedia.determine_min_media(model, minimization_method, min_growth, environment, interacting, printing))
             members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
                 model, minimization_method, min_growth, environment, interacting, printing)[0]}
         # print(members_media)
@@ -397,7 +396,7 @@ class MSCommScores:
 
     @staticmethod
     def mip(member_models: Iterable, com_model=None, min_growth=0.1, interacting_media_dict=None,
-            noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False,
+            noninteracting_media_dict=None, environment=None, printing=False, compatibilized=False,
             costless=False, multi_output=False):
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
@@ -434,7 +433,7 @@ class MSCommScores:
             if (rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0
                     or rxn.metabolites[mets[0]] > 0 and interacting_sol.fluxes[rxn.id] > 0):
                 directionalMIP[rxn_model.id].append(metID) ; cross_fed_copy.remove(metID) ; continue
-            print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
+            if printing:  print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
         if cross_fed_copy != []:  print(f"Missing directions for the {cross_fed_copy} cross-fed metabolites")
         outputs = [directionalMIP]
         # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds

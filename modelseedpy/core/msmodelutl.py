@@ -204,11 +204,13 @@ class MSModelUtil:
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
 
     def transport_list(self):
-        return [rxn for rxn in self.model.reactions if len(set([
+        all_transports = [rxn for rxn in self.model.reactions if len(set([
             met.id.split("_")[0] for met in rxn.reactants]).intersection(set([
             met.id.split("_")[0] for met in rxn.products]))) > 0]
-        # return [rxn for rxn in self.model.reactions
-        #         if any(["_e0" in met.id for met in rxn.metabolites]) and "EX_" not in rxn.id]
+        # remove biomass reactions
+        for rxn in all_transports:
+            if "cpd11416" in [met.id.split("_")[0] for met in rxn.metabolites]:  all_transports.remove(rxn)
+        return all_transports
 
     def carbon_mets(self):
         return [met for met in self.model.metabolites if 'C' in met.elements]
@@ -1067,7 +1069,6 @@ class MSModelUtil:
         self.add_cons_vars([minObj_cons])
         if pfba:
             self.model.problem.constraints.minObj_cons.lb = self.model.slim_optimize()
-            # pFBA
             reaction_variables = ((rxn.forward_variable, rxn.reverse_variable) for rxn in self.model.reactions)
             self.model.problem.Objective(sum(chain(*reaction_variables)), direction="min")
         sol = self.model.optimize()
