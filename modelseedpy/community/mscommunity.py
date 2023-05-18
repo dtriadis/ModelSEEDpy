@@ -89,7 +89,9 @@ class MSCommunity:
         self.solution = self.biomass_cpd = self.primary_biomass = self.biomass_drain = None
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
         # defining the models
-        model = model if not member_models else build_from_species_models(member_models, abundances=abundances)
+        if member_models is not None and model is None:
+            model = build_from_species_models(member_models, abundances=abundances)
+        if names is None and member_models is not None:  names = [mem.id for mem in member_models]
         self.id = model.id
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)

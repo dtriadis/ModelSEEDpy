@@ -227,7 +227,7 @@ class MSCommScores:
     @staticmethod
     def _check_model(model_util, media, model_str):
         default_media = model_util.model.medium
-        model_util.add_medium(media)
+        if media is not None:  model_util.add_medium(media)
         obj_val = model_util.model.slim_optimize()
         if obj_val == 0 or not FBAHelper.isnumber(obj_val):
             print(f"The {model_str} model input does not yield an operational model, and will therefore be gapfilled.")
@@ -295,18 +295,18 @@ class MSCommScores:
                     mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
                                                   costless=costless, multi_output=costless)
                     kbase_dic.update({f"mip_model{modelIDs.index(models_name)+1}": len(received)
-                                      for models_name, received in mro_values[0].items()})
+                                      for models_name, received in mip_values[0].items()})
                     mets.append({"mip_mets": mip_values[0]})
                     if costless:
                         kbase_dic.update({f"costless_mip_model{modelIDs.index(models_name)+1}": len(received)
-                                          for models_name, received in mro_values[1].items()})
+                                          for models_name, received in mip_values[1].items()})
                         print("costless_mip  done", end="\t")
                     print("MIP done", end="\t")
-                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_sol=comm_sol)[0]})
+                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol)[0]})
                     print("PC  done", end="\t")
-                    interaction_info = MSCommScores.bit(grouping, comm_sol=comm_sol)
-                    kbase_dic.update({"interaction": f"{interaction_info[0]} ({interaction_info[1]})"})
-                    print("Interaction done", end="\t")
+                    interaction_info = MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol)
+                    kbase_dic.update({"bit": f"{interaction_info[0]} ({interaction_info[1]})"})
+                    print("BIT done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"gyd": list(MSCommScores.gyd(grouping, environment=environ).values())[0]})
                     print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
@@ -369,7 +369,7 @@ class MSCommScores:
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless, pc)
+                                                            kbase_obj, cip_score, costless)
         return concat(series, axis=1).T, mets
 
     @staticmethod
@@ -432,17 +432,20 @@ class MSCommScores:
             # comm_trans[metID] = comm_trans.get(f"{metID}_c{rxn_index}", {})
             if (rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0
                     or rxn.metabolites[mets[0]] > 0 and interacting_sol.fluxes[rxn.id] > 0):
-                directionalMIP[rxn_model.id].append(metID) ; cross_fed_copy.remove(metID) ; continue
+                directionalMIP[rxn_model.id].append(metID)
+                if metID in cross_fed_copy:  cross_fed_copy.remove(metID) ; continue
             if printing:  print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
-        if cross_fed_copy != []:  print(f"Missing directions for the {cross_fed_copy} cross-fed metabolites")
+        if cross_fed_copy != [] and printing:  print(f"Missing directions for the {cross_fed_copy} cross-fed metabolites")
         outputs = [directionalMIP]
         # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
         if costless:
             costless_exs, numExs = MSCommScores.cip(member_models=member_models)
-            costless_cross_fed = [exID.replace("EX_", "").replace("_e0", "") for exID in cross_fed_exIDs
-                                  if exID.replace("EX_", "").replace("_e0", "") in costless_exs]
-            if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
-            outputs.append((costless_cross_fed, len(costless_cross_fed)))
+            costless_cross_fed = set(exID.replace("EX_", "").replace("_e0", "") for exID in cross_fed_exIDs
+                                     if exID.replace("EX_", "").replace("_e0", "") in costless_exs)
+            costlessDirectionalMIP = {member_name: set(receive_mets).intersection(costless_cross_fed)
+                                      for member_name, receive_mets in directionalMIP.items()}
+            if not multi_output:  return costlessDirectionalMIP
+            outputs.append(costlessDirectionalMIP)
         return outputs
 
     @staticmethod
@@ -622,15 +625,17 @@ class MSCommScores:
     @staticmethod
     def pc(member_models, com_model=None, comm_sol=None, comm_effects=True, printing=True, compatibilized=False):
         assert com_model is not None if comm_effects else True, "The < com_model > is needed for < comm_effects >."
-        if comm_sol is not None:
-            member_models, com_model = _load_models(member_models, com_model, not compatibilized, printing=printing)
+        if comm_sol is None:
+            if com_model is None:  member_models, com_model = _load_models(
+                member_models, com_model, not compatibilized, printing=printing)
             comm_sol = com_model.optimize()
-        comm_obj = comm_sol.objective_value if comm_sol is not None and not comm_effects else com_model.slim_optimize()
+        comm_obj = comm_sol.objective_value if com_model is None or not comm_effects else com_model.slim_optimize()
         member_growths = {model.id: model.slim_optimize() for model in member_models}
-        pc_score = (comm_obj/sum([member_growths.values()]))
+        pc_score = (comm_obj/sum(list(member_growths.values())))
         if not comm_effects:  return pc_score
         # TODO possibly leverage the ineraction_type() function instead of duplicated the following logic
-        comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass] for mem in com_model.members}
+        community = MSCommunity(com_model, member_models)
+        comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass] for mem in community.members}
         comm_growth_effect = {mem.id: comm_member_growths[mem.id]/member_growths[mem.id] for mem in member_growths}
         return (pc_score, comm_growth_effect)
 
