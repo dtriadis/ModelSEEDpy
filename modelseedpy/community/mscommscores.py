@@ -55,6 +55,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
             model_s_, minimization_method, min_growth, environment, interacting, printing)
         members_media = {}
         for model in model_s_:
+            print(MSMinimalMedia.determine_min_media(model, minimization_method, min_growth, environment, interacting, printing))
             members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
                 model, minimization_method, min_growth, environment, interacting, printing)[0]}
         # print(members_media)
@@ -128,7 +129,7 @@ class MSCommScores:
 
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
         interacting_media = interacting_media or self.media or None
-        diff, self.mip_val = MSCommScores.mip(self.community.model, self.models, self.min_growth, interacting_media,
+        diff, self.mip_val = MSCommScores.mip(self.models, self.community.model, self.min_growth, interacting_media,
                                               noninteracting_media, self.environment, self.printing, True)
         if not self.printing:  return self.mip_val
         print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
@@ -244,7 +245,7 @@ class MSCommScores:
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None, lazy_load=False,
-                         kbase_obj=None, cip_score=True, costless=True, pc=True):
+                         kbase_obj=None, cip_score=True, costless=True):
         from pandas import Series
 
         if isinstance(pairs, list):
@@ -268,6 +269,8 @@ class MSCommScores:
                 if model2.id not in model_utils:  model_utils[model2.id] = MSModelUtil(model2)
                 # print(model2)
                 grouping = [model1, model2]
+                comm_model = build_from_species_models(grouping)
+                comm_sol = comm_model.optimize()
                 modelIDs = [model.id for model in grouping]
                 print(f"{pid}~~{count}\t{modelIDs}")
                 for envIndex, environ in enumerate(environments):
@@ -290,23 +293,21 @@ class MSCommScores:
                         kbase_dic.update({"cip": cip_values[1]})
                         print("CIP done", end="\t")
                     # define the MIP content
-                    multi_output = bool(costless or pc)
-                    # print(multi_output)
-                    mip_values = MSCommScores.mip(None, grouping, environment=environ, compatibilized=True,
-                                                  costless=costless, pc=pc, multi_output=multi_output)
-                    if multi_output:
-                        if costless and not pc:
-                            kbase_dic.update({"mip": mip_values[0][1], "costless_mip": mip_values[1][1]})
-                        elif pc and not costless:
-                            kbase_dic.update({"mip": mip_values[0][1], "pc": mip_values[1]})
-                        else:  kbase_dic.update({"mip": mip_values[0][1], "costless_mip": mip_values[1][1],
-                                                 "pc": mip_values[2]})  ;  print("PC  done", end="\t")
-                        mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0][0]]})
-                    else:
-                        kbase_dic.update({"mip": mip_values[1]})
-                        mets.append({"mip_mets": [re.search(r"(cpd[0-9]{5})", cpd).group() for cpd in mip_values[0]]})
-
+                    mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
+                                                  costless=costless, multi_output=costless)
+                    kbase_dic.update({f"mip_model{modelIDs.index(models_name)+1}": len(received)
+                                      for models_name, received in mro_values[0].items()})
+                    mets.append({"mip_mets": mip_values[0]})
+                    if costless:
+                        kbase_dic.update({f"costless_mip_model{modelIDs.index(models_name)+1}": len(received)
+                                          for models_name, received in mro_values[1].items()})
+                        print("costless_mip  done", end="\t")
                     print("MIP done", end="\t")
+                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_sol=comm_sol)[0]})
+                    print("PC  done", end="\t")
+                    interaction_info = MSCommScores.bit(grouping, comm_sol=comm_sol)
+                    kbase_dic.update({"interaction": f"{interaction_info[0]} ({interaction_info[1]})"})
+                    print("Interaction done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"gyd": list(MSCommScores.gyd(grouping, environment=environ).values())[0]})
                     print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
@@ -315,7 +316,6 @@ class MSCommScores:
                         kbase_dic.update({"RFC": list(MSCommScores.rfc(
                             grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
                         print("RFC done\t\t")
-
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))
                 count += 1
@@ -323,14 +323,16 @@ class MSCommScores:
 
     @staticmethod
     def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
-                     exclude_pairs:list=None, kbase_obj=None,
+                     exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
                      pool_size:int=None, cip_score=True, costless=True, pc=True):
         from pandas import concat
+
+        all_models = list(set(all_models))
         if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
         elif all_models is not None:
-            model_pairs = array(list(combinations(all_models, 2)))
+            model_pairs = array(list(permutations(all_models, 2) if directional_pairs else combinations(all_models, 2)))
             if pair_limit is not None:
                 shuffle(model_pairs)
                 new_pairs = []
@@ -394,9 +396,9 @@ class MSCommScores:
         # return mean(list(map(len, pairs.values()))) / mean(list(map(len, mem_media.values())))
 
     @staticmethod
-    def mip(com_model=None, member_models:Iterable=None, min_growth=0.1, interacting_media_dict=None,
+    def mip(member_models: Iterable, com_model=None, min_growth=0.1, interacting_media_dict=None,
             noninteracting_media_dict=None, environment=None, printing=True, compatibilized=False,
-            costless=False, pc=False, multi_output=False):
+            costless=False, multi_output=False):
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
@@ -410,36 +412,45 @@ class MSCommScores:
         if "dictionary_item_removed" not in interact_diff:  return None, 0
         cross_fed_exIDs = [re.sub("(root\['|'\])", "", x) for x in interact_diff["dictionary_item_removed"]]
         # Determine each direction of the MIP score interactions
-        comm_util = MSModelUtil(com_model)
-        cross_fed_metIDs = [ex.replace("EX_", "") for ex in cross_fed_exIDs]
-        comm_trans, directionalMIP = {}, {mem.id:[] for mem in member_models}
+        comm_util = MSModelUtil(community)
+        cross_fed_metIDs = [ex.replace("EX_", "").replace("_e0", "") for ex in cross_fed_exIDs]
+        cross_fed_copy = cross_fed_metIDs[:]
+        directionalMIP = {mem.id:[] for mem in member_models}
         for rxn in comm_util.transport_list():
-            metID = [met.id for met in rxn.metabolites if "_e0" in met.id and met.id != "cpd00067_e0"][0]
+            # print(rxn.reaction, "\t", [met.id for met in rxn.metabolites if "_e0" in met.id])
+            metIDs = list(set([met.id.split("_")[0] for met in rxn.reactants]).intersection(
+                set([met.id.split("_")[0] for met in rxn.products])))
+            if len(metIDs) == 1:  metID = metIDs[0]
+            else:
+                if "cpd00067" in metIDs:  metIDs.remove("cpd00067")
+                metID = metIDs[0]
             if metID not in cross_fed_metIDs:  continue
-            rxn_model = member_models[FBAHelper.compartment_index(rxn.id.split("_")[0]) - 1]
-            met = [met for met in rxn.metabolites if met.id == metID][0]
-            comm_trans[metID] = comm_trans.get(metID, {})
-            if "received" not in comm_trans[metID] and rxn.metabolites[met] < 0:
-                directionalMIP[rxn_model.id].append(metID)
-                comm_trans[metID]["received"] = rxn_model.id  ;  continue
-            if "donated" not in comm_trans[metID] and rxn.metabolites[met] > 0:
-                comm_trans[metID]["donated"] = rxn_model.id  ;  continue
-            print(f"{rxn.id} has an expected form {rxn.reaction}.")
-        # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
+            rxn_index = FBAHelper.compartment_index(rxn.id.split("_")[-1])
+            if rxn_index == 0:  continue
+            mets = [met for met in rxn.metabolites if met.id == f"{metID}_c{rxn_index}"]
+            if mets == []: print(f"The {metID}_c{rxn_index} is missing in {rxn.reaction}.") ; continue
+            rxn_model = member_models[rxn_index-1]
+            # comm_trans[metID] = comm_trans.get(f"{metID}_c{rxn_index}", {})
+            if (rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0
+                    or rxn.metabolites[mets[0]] > 0 and interacting_sol.fluxes[rxn.id] > 0):
+                directionalMIP[rxn_model.id].append(metID) ; cross_fed_copy.remove(metID) ; continue
+            print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
+        if cross_fed_copy != []:  print(f"Missing directions for the {cross_fed_copy} cross-fed metabolites")
         outputs = [directionalMIP]
+        # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
         if costless:
-            costless_mets, numMets = MSCommScores.cip(member_models=member_models)
-            costless_cross_fed = [exID for exID in cross_fed_exIDs if exID in costless_mets]
+            costless_exs, numExs = MSCommScores.cip(member_models=member_models)
+            costless_cross_fed = [exID.replace("EX_", "").replace("_e0", "") for exID in cross_fed_exIDs
+                                  if exID.replace("EX_", "").replace("_e0", "") in costless_exs]
             if not multi_output:  return costless_cross_fed, len(costless_cross_fed)
             outputs.append((costless_cross_fed, len(costless_cross_fed)))
-        if pc:  outputs.append((MSCommScores.pc(member_models, community)))
         return outputs
 
     @staticmethod
     def cip(modelutils=None, member_models=None):  # costless interaction potential
         if not modelutils:  modelutils = {MSModelUtil(model) for model in member_models}
-        costless_mets = set(chain.from_iterable([modelutil.costless_excreta() for modelutil in modelutils]))
-        return costless_mets, len(costless_mets)
+        costless_exs = set(chain.from_iterable([modelutil.costless_excreta() for modelutil in modelutils]))
+        return costless_exs, len(costless_exs)
 
     @staticmethod
     def contributions(org_possible_contributions, scores, model_util, abstol):
@@ -610,32 +621,42 @@ class MSCommScores:
         return diffs
 
     @staticmethod
-    def pc(member_models, com_model=None, printing=True, compatibilized=False):
-        if com_model: community = com_model
-        else:  member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
-        return (community.slim_optimize()/sum([model.slim_optimize() for model in member_models]))
+    def pc(member_models, com_model=None, comm_sol=None, comm_effects=True, printing=True, compatibilized=False):
+        assert com_model is not None if comm_effects else True, "The < com_model > is needed for < comm_effects >."
+        if comm_sol is not None:
+            member_models, com_model = _load_models(member_models, com_model, not compatibilized, printing=printing)
+            comm_sol = com_model.optimize()
+        comm_obj = comm_sol.objective_value if comm_sol is not None and not comm_effects else com_model.slim_optimize()
+        member_growths = {model.id: model.slim_optimize() for model in member_models}
+        pc_score = (comm_obj/sum([member_growths.values()]))
+        if not comm_effects:  return pc_score
+        # TODO possibly leverage the ineraction_type() function instead of duplicated the following logic
+        comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass] for mem in com_model.members}
+        comm_growth_effect = {mem.id: comm_member_growths[mem.id]/member_growths[mem.id] for mem in member_growths}
+        return (pc_score, comm_growth_effect)
 
     @staticmethod
-    def interaction_type(member_models=None, com_model=None, member_models_sols=None, com_members_sols=None,
-                         interaction_threshold=0.1):
-        if member_models_sols is None:  member_models_sols = {member.id: member.optimize() for member in member_models}
-        if com_members_sols is None:
-            com_model_sol = com_model.optimize()
-            com_members_sols = {member.name: com_model_sol.fluxes[member.primary_biomass.id] for member in member_models}
+    def bit(member_models=None, com_model=None, member_models_sols=None, comm_sol=None,
+            interaction_threshold=0.1):
+        if member_models_sols is None:  member_models_sols = {mem.id: mem.optimize() for mem in member_models}
+        if comm_sol is None:  com_model_sol = com_model.optimize()
+        com_members_sols = {mem.id: com_model_sol.fluxes[mem.primary_biomass.id] for mem in member_models}
         # track the effects of communal growth upon each
-        rel_comm_growth = {member.id: (com_members_sols[member.id]/member_models_sols[member.id])
-                           for member in com_members_sols}
+        rel_comm_growth = {mem.id: (com_members_sols[mem.id]/member_models_sols[mem.id]) for mem in com_members_sols}
         growth_diffs = array(list(rel_comm_growth.values()))
         mutualism_bound, competitive_bound = 1+interaction_threshold, 1-interaction_threshold
-        if all(growth_diffs > mutualism_bound):  return "mutualism", sum(growth_diffs)/len(growth_diffs)
-        if all(growth_diffs < competitive_bound):  return "competitive", sum(growth_diffs)/len(growth_diffs)
-        if ((mutualism_bound > growth_diffs) & (growth_diffs > competitive_bound)).all():  return "neutral"
+        if all(growth_diffs > mutualism_bound):
+            return "mutualism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
+        if all(growth_diffs < competitive_bound):
+            return "competitive", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
+        if ((mutualism_bound > growth_diffs) & (growth_diffs > competitive_bound)).all():
+            return "neutral", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
         if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):
-            return "commensalism", max(growth_diffs)-min(growth_diffs)
+            return "commensalism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
         if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):
-            return "amensalism", max(growth_diffs)-min(growth_diffs)
+            return "amensalism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
         if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):
-            return "parasitism", max(growth_diffs)-min(growth_diffs)
+            return "parasitism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):

@@ -204,8 +204,11 @@ class MSModelUtil:
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
 
     def transport_list(self):
-        return [rxn for rxn in self.model.reactions
-                if any(["_e0" in met.id for met in rxn.metabolites]) and "EX_" not in rxn.id]
+        return [rxn for rxn in self.model.reactions if len(set([
+            met.id.split("_")[0] for met in rxn.reactants]).intersection(set([
+            met.id.split("_")[0] for met in rxn.products]))) > 0]
+        # return [rxn for rxn in self.model.reactions
+        #         if any(["_e0" in met.id for met in rxn.metabolites]) and "EX_" not in rxn.id]
 
     def carbon_mets(self):
         return [met for met in self.model.metabolites if 'C' in met.elements]
