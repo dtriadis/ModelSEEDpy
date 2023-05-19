@@ -81,7 +81,7 @@ class CommunityMembers:
 
 class MSCommunity:
     def __init__(self, model=None, member_models: list = None, ids=None, abundances=None, kinetic_coeff=2000,
-                 flux_limit=300, lp_filename=None):
+                 flux_limit=300, lp_filename=None, printing=False):
         self.lp_filename = lp_filename
         self.gapfillings = {}
 
@@ -102,13 +102,13 @@ class MSCommunity:
             if self.biomass_cpd.compartment == "c0":
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
-                    print(self.biomass_cpd, rxn)
+                    if printing:  print(self.biomass_cpd, rxn)
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
                         if self.primary_biomass:
                             raise ObjectAlreadyDefinedError(
                                 f"The primary biomass {self.primary_biomass} is already defined,"
                                 f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
-                        print('primary biomass defined', rxn.id)
+                        if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:
                         self.biomass_drain = rxn
