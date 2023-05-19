@@ -305,17 +305,16 @@ class MSCommScores:
                     print("MIP done", end="\t")
                     kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     print("PC  done", end="\t")
-                    interaction_info = MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)
-                    kbase_dic.update({"bit": f"{interaction_info[0]} ({interaction_info[1]:.5f})"})
+                    kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     print("BIT done", end="\t")
                     # determine the growth diff content
-                    kbase_dic.update({"gyd": list(MSCommScores.gyd(
-                        grouping, environment=environ, community=community).values())[0]})
+                    kbase_dic.update({"gyd": f"""{list(MSCommScores.gyd(
+                        grouping, environment=environ, community=community).values())[0]:.5f}"""})
                     print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
                     if kbase_obj is not None and RAST_genomes:
-                        kbase_dic.update({"RFC": list(MSCommScores.rfc(
-                            grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]})
+                        kbase_dic.update({"RFC": f"""{list(MSCommScores.rfc(
+                            grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]:.5f}"""})
                         print("RFC done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))
@@ -429,11 +428,11 @@ class MSCommScores:
             rxn_index = FBAHelper.compartment_index(rxn.id.split("_")[-1])
             if rxn_index == 0:  continue
             mets = [met for met in rxn.metabolites if met.id == f"{metID}_c{rxn_index}"]
-            if mets == []: print(f"The {metID}_c{rxn_index} is missing in {rxn.reaction}.") ; continue
+            if mets == []:  print(f"The {metID}_c{rxn_index} is missing in {rxn.reaction}.") ; continue
             rxn_model = member_models[rxn_index-1]
             # comm_trans[metID] = comm_trans.get(f"{metID}_c{rxn_index}", {})
-            if (rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0
-                    or rxn.metabolites[mets[0]] > 0 and interacting_sol.fluxes[rxn.id] > 0):
+            if (rxn.metabolites[mets[0]] > 0 and interacting_sol.fluxes[rxn.id] > 0
+                    or rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0):  # donor
                 directionalMIP[rxn_model.id].append(metID)
                 if metID in cross_fed_copy:  cross_fed_copy.remove(metID) ; continue
             if printing:  print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
@@ -652,18 +651,12 @@ class MSCommScores:
         rel_comm_growth = {memID: (com_members_sols[memID] / member_mono_growths[memID]) for memID in com_members_sols}
         growth_diffs = array(list(rel_comm_growth.values()))
         mutualism_bound, competitive_bound = 1+interaction_threshold, 1-interaction_threshold
-        if all(growth_diffs > mutualism_bound):
-            return "mutualism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
-        if all(growth_diffs < competitive_bound):
-            return "competitive", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
-        if ((mutualism_bound > growth_diffs) & (growth_diffs > competitive_bound)).all():
-            return "neutral", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
-        if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):
-            return "commensalism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
-        if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):
-            return "amensalism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
-        if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):
-            return "parasitism", (max(growth_diffs)-min(growth_diffs))/min(growth_diffs)
+        if all(growth_diffs > mutualism_bound):  return "mutualism"
+        if all(growth_diffs < competitive_bound):  return "competitive"
+        if ((mutualism_bound > growth_diffs) & (growth_diffs > competitive_bound)).all():  return "neutral"
+        if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):  return "commensalism"
+        if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):  return "amensalism"
+        if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):
