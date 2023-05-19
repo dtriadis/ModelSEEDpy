@@ -295,18 +295,18 @@ class MSCommScores:
                     # define the MIP content
                     mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
                                                   costless=costless, multi_output=costless)
-                    kbase_dic.update({f"mip_model{modelIDs.index(models_name)+1}": len(received)
+                    kbase_dic.update({f"mip_model{modelIDs.index(models_name)+1}": str(len(received))
                                       for models_name, received in mip_values[0].items()})
                     mets.append({"mip_mets": mip_values[0]})
                     if costless:
-                        kbase_dic.update({f"costless_mip_model{modelIDs.index(models_name)+1}": len(received)
-                                          for models_name, received in mip_values[1].items()})
+                        for models_name, received in mip_values[1].items():
+                            kbase_dic[f"mip_model{modelIDs.index(models_name)+1}"] += f" ({len(received)})"
                         print("costless_mip  done", end="\t")
                     print("MIP done", end="\t")
                     kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     print("PC  done", end="\t")
                     interaction_info = MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)
-                    kbase_dic.update({"bit": f"{interaction_info[0]} ({interaction_info[1]})"})
+                    kbase_dic.update({"bit": f"{interaction_info[0]} ({interaction_info[1]:.5f})"})
                     print("BIT done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"gyd": list(MSCommScores.gyd(
@@ -325,7 +325,7 @@ class MSCommScores:
     @staticmethod
     def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
-                     RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None
+                     RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
                      pool_size:int=None, cip_score=True, costless=True, pc=True):
         from pandas import concat
