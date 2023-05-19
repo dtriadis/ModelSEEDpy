@@ -1075,7 +1075,8 @@ class MSModelUtil:
         # revert conditions to before the simulation
         self.model.objective = original_objective
         self.remove_cons_vars([minObj_cons])
-        return [rxnID for rxnID, flux in sol.fluxes.items() if "EX_" in rxnID and flux > 0]
+        return [rxnID.replace("EX_", "").replace("_e0", "") for rxnID, flux in sol.fluxes.items()
+                if "EX_" in rxnID and flux > 0]
 
     @staticmethod
     def parse_id(cobra_obj):

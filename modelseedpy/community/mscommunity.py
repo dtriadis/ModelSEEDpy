@@ -80,7 +80,7 @@ class CommunityMembers:
 
 
 class MSCommunity:
-    def __init__(self, model=None, member_models: list = None, names=None, abundances=None, kinetic_coeff=2000,
+    def __init__(self, model=None, member_models: list = None, ids=None, abundances=None, kinetic_coeff=2000,
                  flux_limit=300, lp_filename=None):
         self.lp_filename = lp_filename
         self.gapfillings = {}
@@ -91,7 +91,7 @@ class MSCommunity:
         # defining the models
         if member_models is not None and model is None:
             model = build_from_species_models(member_models, abundances=abundances)
-        if names is None and member_models is not None:  names = [mem.id for mem in member_models]
+        if ids is None:  ids = [mem.id for mem in member_models]
         self.id = model.id
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
@@ -117,7 +117,7 @@ class MSCommunity:
         # assign community members and their abundances
         abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)
         self.members = DictList(
-            CommunityMembers(community=self, biomass_cpd=biomass_cpd, name=names[memIndex], abundance=abundances)
+            CommunityMembers(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances)
             for memIndex, biomass_cpd in enumerate(other_biomass_cpds))
         # assign the MSCommunity constraints and objective
         self.abundances_set = False
@@ -129,7 +129,7 @@ class MSCommunity:
                 if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
                     vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
             self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
-                                                   name="resource_balance_limit"), coef=vars_coef)
+                                                   name=f"{member.id}_resource_balance"), coef=vars_coef)
 
     #Manipulation functions
     def set_abundance(self, abundances):

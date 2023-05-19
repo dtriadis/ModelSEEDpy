@@ -269,6 +269,7 @@ class MSCommScores:
                 # print(model2)
                 grouping = [model1, model2]
                 comm_model = build_from_species_models(grouping)
+                community = MSCommunity(comm_model, grouping)
                 comm_sol = comm_model.optimize()
                 modelIDs = [model.id for model in grouping]
                 print(f"{pid}~~{count}\t{modelIDs}")
@@ -302,13 +303,14 @@ class MSCommScores:
                                           for models_name, received in mip_values[1].items()})
                         print("costless_mip  done", end="\t")
                     print("MIP done", end="\t")
-                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol)[0]})
+                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     print("PC  done", end="\t")
-                    interaction_info = MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol)
+                    interaction_info = MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)
                     kbase_dic.update({"bit": f"{interaction_info[0]} ({interaction_info[1]})"})
                     print("BIT done", end="\t")
                     # determine the growth diff content
-                    kbase_dic.update({"gyd": list(MSCommScores.gyd(grouping, environment=environ).values())[0]})
+                    kbase_dic.update({"gyd": list(MSCommScores.gyd(
+                        grouping, environment=environ, community=community).values())[0]})
                     print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
                     if kbase_obj is not None and RAST_genomes:
@@ -439,10 +441,9 @@ class MSCommScores:
         outputs = [directionalMIP]
         # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
         if costless:
-            costless_exs, numExs = MSCommScores.cip(member_models=member_models)
-            costless_cross_fed = set(exID.replace("EX_", "").replace("_e0", "") for exID in cross_fed_exIDs
-                                     if exID.replace("EX_", "").replace("_e0", "") in costless_exs)
-            costlessDirectionalMIP = {member_name: set(receive_mets).intersection(costless_cross_fed)
+            costless_mets, numExs = MSCommScores.cip(member_models=member_models)
+            # print(list(directionalMIP.values()), costless_mets)
+            costlessDirectionalMIP = {member_name: set(receive_mets).intersection(costless_mets)
                                       for member_name, receive_mets in directionalMIP.items()}
             if not multi_output:  return costlessDirectionalMIP
             outputs.append(costlessDirectionalMIP)
@@ -451,8 +452,8 @@ class MSCommScores:
     @staticmethod
     def cip(modelutils=None, member_models=None):  # costless interaction potential
         if not modelutils:  modelutils = {MSModelUtil(model) for model in member_models}
-        costless_exs = set(chain.from_iterable([modelutil.costless_excreta() for modelutil in modelutils]))
-        return costless_exs, len(costless_exs)
+        costless_mets = set(chain.from_iterable([modelutil.costless_excreta() for modelutil in modelutils]))
+        return costless_mets, len(costless_mets)
 
     @staticmethod
     def contributions(org_possible_contributions, scores, model_util, abstol):
@@ -600,7 +601,8 @@ class MSCommScores:
         return scores
 
     @staticmethod
-    def gyd(member_models:Iterable=None, model_utils:Iterable=None, environment=None, coculture_growth=False):
+    def gyd(member_models:Iterable=None, model_utils:Iterable=None, environment=None, coculture_growth=False,
+            community=None):
         diffs = {}
         for combination in combinations(model_utils or member_models, 2):
             if model_utils is None:
@@ -612,10 +614,10 @@ class MSCommScores:
                 G_m1 = G_m1 if FBAHelper.isnumber(str(G_m1)) else 0
                 G_m2 = G_m2 if FBAHelper.isnumber(str(G_m2)) else 0
             else:
-                mscom = MSCommunity(member_models=[model1_util.model, model2_util.model],
-                                    names=[mem.id for mem in member_models])
-                mscom.run_fba()
-                member_growths = mscom.parse_member_growths()
+                community = community or MSCommunity(member_models=[model1_util.model, model2_util.model],
+                                                     ids=[mem.id for mem in member_models])
+                community.run_fba()
+                member_growths = community.parse_member_growths()
                 G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
             if G_m2 <= 0 and G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = None  ;  continue
             if G_m2 <= 0 or G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = 1e5  ;  continue
@@ -623,30 +625,31 @@ class MSCommScores:
         return diffs
 
     @staticmethod
-    def pc(member_models, com_model=None, comm_sol=None, comm_effects=True, printing=True, compatibilized=False):
+    def pc(member_models, com_model=None, comm_sol=None, comm_effects=True, community=None, compatibilized=False):
         assert com_model is not None if comm_effects else True, "The < com_model > is needed for < comm_effects >."
         if comm_sol is None:
             if com_model is None:  member_models, com_model = _load_models(
-                member_models, com_model, not compatibilized, printing=printing)
+                member_models, com_model, not compatibilized, printing=False)
             comm_sol = com_model.optimize()
         comm_obj = comm_sol.objective_value if com_model is None or not comm_effects else com_model.slim_optimize()
         member_growths = {model.id: model.slim_optimize() for model in member_models}
         pc_score = (comm_obj/sum(list(member_growths.values())))
         if not comm_effects:  return pc_score
         # TODO possibly leverage the ineraction_type() function instead of duplicated the following logic
-        community = MSCommunity(com_model, member_models)
-        comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass] for mem in community.members}
-        comm_growth_effect = {mem.id: comm_member_growths[mem.id]/member_growths[mem.id] for mem in member_growths}
+        community = community or MSCommunity(com_model, member_models)
+        comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass.id] for mem in community.members}
+        comm_growth_effect = {memID: comm_member_growths[memID]/member_growths[memID] for memID in member_growths}
         return (pc_score, comm_growth_effect)
 
     @staticmethod
-    def bit(member_models=None, com_model=None, member_models_sols=None, comm_sol=None,
+    def bit(member_models=None, com_model=None, member_mono_growths=None, comm_sol=None, community=None,
             interaction_threshold=0.1):
-        if member_models_sols is None:  member_models_sols = {mem.id: mem.optimize() for mem in member_models}
-        if comm_sol is None:  com_model_sol = com_model.optimize()
-        com_members_sols = {mem.id: com_model_sol.fluxes[mem.primary_biomass.id] for mem in member_models}
+        if member_mono_growths is None:  member_mono_growths = {mem.id: mem.slim_optimize() for mem in member_models}
+        comm_sol = comm_sol or com_model.optimize()
+        community = community or MSCommunity(com_model, member_models)
+        com_members_sols = {mem.id: comm_sol.fluxes[mem.primary_biomass.id] for mem in community.members}
         # track the effects of communal growth upon each
-        rel_comm_growth = {mem.id: (com_members_sols[mem.id]/member_models_sols[mem.id]) for mem in com_members_sols}
+        rel_comm_growth = {memID: (com_members_sols[memID] / member_mono_growths[memID]) for memID in com_members_sols}
         growth_diffs = array(list(rel_comm_growth.values()))
         mutualism_bound, competitive_bound = 1+interaction_threshold, 1-interaction_threshold
         if all(growth_diffs > mutualism_bound):
