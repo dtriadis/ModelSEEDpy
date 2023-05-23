@@ -244,11 +244,10 @@ class MSCommScores:
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None, lazy_load=False,
-                         kbase_obj=None, cip_score=True, costless=True):
+                         kbase_obj=None, cip_score=True, costless=True, print_progress=False):
         from pandas import Series
 
-        if isinstance(pairs, list):
-            pairs, models_media, environments, RAST_genomes, kbase_obj, lazy_load = pairs  ;  pairs = dict([pairs])
+        if isinstance(pairs, list):  pairs, models_media, environments, RAST_genomes, lazy_load, kbase_obj = pairs
         series, mets = [], []
         environments = [environments] if not isinstance(environments, (list, set, tuple)) else environments
         pid = current_process().name
@@ -274,24 +273,25 @@ class MSCommScores:
                 modelIDs = [model.id for model in grouping]
                 print(f"{pid}~~{count}\t{modelIDs}")
                 for envIndex, environ in enumerate(environments):
-                    print(f"\tEnvironment{envIndex}: {environ}", end="\t")
+                    if print_progress:  print(f"\tEnvironment{envIndex}: {environ}", end="\t")
                     model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
                     model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
+                    if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
                     # define the MRO content
                     mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
                     mets.append({"mro_mets": list(mro_values.values())})
-                    print("MRO done", end="\t")
+                    if print_progress:  print("MRO done", end="\t")
                     # define the CIP content
                     if cip_score:
                         cip_values = MSCommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
                         kbase_dic.update({"cip": cip_values[1]})
-                        print("CIP done", end="\t")
+                        if print_progress:  print("CIP done", end="\t")
                     # define the MIP content
                     mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
                                                   costless=costless, multi_output=costless)
@@ -301,21 +301,21 @@ class MSCommScores:
                     if costless:
                         for models_name, received in mip_values[1].items():
                             kbase_dic[f"mip_model{modelIDs.index(models_name)+1}"] += f" ({len(received)})"
-                        print("costless_mip  done", end="\t")
-                    print("MIP done", end="\t")
+                        if print_progress:  print("costless_mip  done", end="\t")
+                    if print_progress:  print("MIP done", end="\t")
                     kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
-                    print("PC  done", end="\t")
+                    if print_progress:  print("PC  done", end="\t")
                     kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
-                    print("BIT done", end="\t")
+                    if print_progress:  print("BIT done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"gyd": f"""{list(MSCommScores.gyd(
                         grouping, environment=environ, community=community).values())[0]:.5f}"""})
-                    print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
+                    if print_progress:  print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
                     if kbase_obj is not None and RAST_genomes:
                         kbase_dic.update({"RFC": f"""{list(MSCommScores.rfc(
                             grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]:.5f}"""})
-                        print("RFC done\t\t")
+                        if print_progress:  print("RFC done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))
                 count += 1
@@ -326,7 +326,7 @@ class MSCommScores:
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True, pc=True):
+                     pool_size:int=None, cip_score=True, costless=True):
         from pandas import concat
 
         all_models = list(set(all_models))
@@ -364,7 +364,7 @@ class MSCommScores:
             from datetime import datetime  ;  from multiprocess import Pool
             print(f"Loading {int(pool_size)} workers and computing the scores", datetime.now())
             pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
-            args = [[pair, models_media, environments, RAST_genomes, kbase_obj, lazy_load]
+            args = [[dict([pair]), models_media, environments, RAST_genomes, lazy_load, kbase_obj]
                     for pair in list(pairs.items())]
             output = pool.map(MSCommScores.calculate_scores, args)
             series = chain.from_iterable([ele[0] for ele in output])
