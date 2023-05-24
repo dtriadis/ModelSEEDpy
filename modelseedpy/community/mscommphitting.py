@@ -87,18 +87,17 @@ def parse_primals(primal_values, entity_labels=None, coefs=None, kcat_vals=None)
         for trial, content in primal_values.items():
             for primal, time_value in content.items():
                 if "bin" not in primal:  continue
-                for tsBin, value in time_value.items():
-                    name, trial = primal.split("-")
-                    number = re.search(r"(\d)", name).group()
-                    species, pheno = re.sub(r"(bin\d_)", "", name).split("_")
-                    if "stationary" in pheno:  continue
-                    if species not in kcat_primal:  kcat_primal[species] = {}
-                    if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = {}
-                    if tsBin not in kcat_primal[species][pheno]:  kcat_primal[species][pheno][tsBin] = 0
-                    # kcat_(k,new) = sum_z^Z ( kcat_z * bin_k^z ) * kcat_(k,old) < 10
-                    if value == 0 and kcat_primal[species][pheno][tsBin] < 10:
-                        kcat_primal[species][pheno][tsBin] += coefs[int(number)-1]*kcat_vals[species][pheno]
-                    kcat_primal[species][pheno][tsBin] = clamp(kcat_primal[species][pheno][tsBin], 1e-4, 10)
+                name, trial = primal.split("-")
+                number = re.search(r"(\d)", name).group()
+                species, pheno = re.sub(r"(bin\d_)", "", name).split("_")
+                if "stationary" in pheno:  continue
+                if species not in kcat_primal:  kcat_primal[species] = {}
+                if pheno not in kcat_primal[species]:  kcat_primal[species][pheno] = 0
+                # kcat_(k,new) = sum_z^Z ( kcat_z * bin_k^z ) * kcat_(k,old) < 10
+                if time_value == 0 and kcat_primal[species][pheno] < 10:
+                    kcat_primal[species][pheno] += coefs[int(number)-1]*kcat_vals[species][pheno]
+                kcat_primal[species][pheno] = clamp(kcat_primal[species][pheno], 1e-4, 10)
+
         return kcat_primal
     select_primals = {}
     for trial, entities in primal_values.items():
@@ -208,23 +207,20 @@ class MSCommPhitting:
                           self.variables['b3_' + pheno][short_code][timestep],
                           self.variables['b4_' + pheno][short_code][timestep],
                           self.variables['b5_' + pheno][short_code][timestep]])
-        for tsBin in self.time_ranges:
-            if tsBin not in self.variables[f"bin1_{pheno}"][short_code]:
-                self.variables[f"bin1_{pheno}"][short_code][tsBin] = tupVariable(
-                    _name("bin1_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin2_{pheno}"][short_code][tsBin] = tupVariable(
-                    _name("bin2_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin3_{pheno}"][short_code][tsBin] = tupVariable(
-                    _name("bin3_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin4_{pheno}"][short_code][tsBin] = tupVariable(
-                    _name("bin4_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                self.variables[f"bin5_{pheno}"][short_code][tsBin] = tupVariable(
-                    _name("bin5_", pheno, short_code, tsBin, self.names), Bounds(0, 1), "binary")
-                variables.extend([self.variables[f"bin1_{pheno}"][short_code][tsBin],
-                                  self.variables[f"bin2_{pheno}"][short_code][tsBin],
-                                  self.variables[f"bin3_{pheno}"][short_code][tsBin],
-                                  self.variables[f"bin4_{pheno}"][short_code][tsBin],
-                                  self.variables[f"bin5_{pheno}"][short_code][tsBin]])
+        if short_code not in self.variables[f"bin1_{pheno}"]:
+            self.variables[f"bin1_{pheno}"][short_code] = tupVariable(
+                _name("bin1_", pheno, short_code, "", self.names), Bounds(0, 1), "binary")
+            self.variables[f"bin2_{pheno}"][short_code] = tupVariable(
+                _name("bin2_", pheno, short_code, "", self.names), Bounds(0, 1), "binary")
+            self.variables[f"bin3_{pheno}"][short_code] = tupVariable(
+                _name("bin3_", pheno, short_code, "", self.names), Bounds(0, 1), "binary")
+            self.variables[f"bin4_{pheno}"][short_code] = tupVariable(
+                _name("bin4_", pheno, short_code, "", self.names), Bounds(0, 1), "binary")
+            self.variables[f"bin5_{pheno}"][short_code] = tupVariable(
+                _name("bin5_", pheno, short_code, "", self.names), Bounds(0, 1), "binary")
+            variables.extend([self.variables[f"bin1_{pheno}"][short_code], self.variables[f"bin2_{pheno}"][short_code],
+                              self.variables[f"bin3_{pheno}"][short_code], self.variables[f"bin4_{pheno}"][short_code],
+                              self.variables[f"bin5_{pheno}"][short_code]])
         return variables
 
     def define_b_cons(self, pheno, short_code, timestep, biomass_coefs):
@@ -284,7 +280,6 @@ class MSCommPhitting:
 
         # define the comprehensive biomass constraints
         ## coef*b{pheno,t} - b_n{pheno,t} - 1000*bin_n{pheno} <= 0
-        tsBin = self.get_timestep_bin(timestep)
         self.constraints['b1c_control_' + pheno][short_code][timestep] = tupConstraint(
             _name("b1c_control_", pheno, short_code, timestep, self.names), Bounds(None, 0), {
                 "elements": [
@@ -292,7 +287,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b1_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -304,7 +299,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b2_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -316,7 +311,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b3_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -328,7 +323,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b4_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -340,7 +335,7 @@ class MSCommPhitting:
                      "operation": "Mul"},
                     {"elements": [-1, self.variables['b5_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code].name],
                      "operation": "Mul"},
                 ],
                 "operation": "Add"
@@ -354,7 +349,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b1_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin1_{pheno}"][short_code].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -365,7 +360,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b2_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin2_{pheno}"][short_code].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -376,7 +371,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b3_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin3_{pheno}"][short_code].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -387,7 +382,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b4_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin4_{pheno}"][short_code].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -398,7 +393,7 @@ class MSCommPhitting:
                     1000,
                     {"elements": [-1, self.variables['b5_' + pheno][short_code][timestep].name],
                      "operation": "Mul"},
-                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
+                    {"elements": [-1000, self.variables[f"bin5_{pheno}"][short_code].name],
                      "operation": "Mul"}
                 ],
                 "operation": "Add"
@@ -594,18 +589,17 @@ class MSCommPhitting:
                                             len(timesteps[nth_percentile_timestep:]))
                 timestep_excess_count = 0
                 for timestep in map(int, timesteps):
-                    tsBin = self.get_timestep_bin(timestep)
                     variables = self.define_b_vars(pheno, short_code, timestep, variables)
-                    if tsBin not in self.constraints[f"binc_{pheno}"][short_code]:
-                        self.constraints[f"binc_{pheno}"][short_code][tsBin] = tupConstraint(
-                            _name("binc_", pheno, short_code, tsBin, self.names), Bounds(0, 4), {
-                                "elements": [self.variables[f"bin1_{pheno}"][short_code][tsBin].name,
-                                             self.variables[f"bin2_{pheno}"][short_code][tsBin].name,
-                                             self.variables[f"bin3_{pheno}"][short_code][tsBin].name,
-                                             self.variables[f"bin4_{pheno}"][short_code][tsBin].name,
-                                             self.variables[f"bin5_{pheno}"][short_code][tsBin].name],
+                    if short_code not in self.constraints[f"binc_{pheno}"]:
+                        self.constraints[f"binc_{pheno}"][short_code] = tupConstraint(
+                            _name("binc_", pheno, short_code, "", self.names), Bounds(0, 4), {
+                                "elements": [self.variables[f"bin1_{pheno}"][short_code].name,
+                                             self.variables[f"bin2_{pheno}"][short_code].name,
+                                             self.variables[f"bin3_{pheno}"][short_code].name,
+                                             self.variables[f"bin4_{pheno}"][short_code].name,
+                                             self.variables[f"bin5_{pheno}"][short_code].name],
                                 "operation": "Add"})
-                        constraints.append(self.constraints[f'binc_{pheno}'][short_code][tsBin])
+                        constraints.append(self.constraints[f'binc_{pheno}'][short_code])
                     constraints.extend(self.define_b_cons(pheno, short_code, timestep, biomass_coefs))
 
                     ## define the growth rate variable or primal value
@@ -653,7 +647,7 @@ class MSCommPhitting:
                                 self.variables['b5_' + pheno][short_code][timestep].name]
                     self.constraints['gc_' + pheno][short_code][timestep] = tupConstraint(
                         name=_name('gc_', pheno, short_code, timestep, self.names),
-                        expr={"elements": [*[{"elements": [-self.parameters["kcat"][species][phenotype][tsBin], b],
+                        expr={"elements": [*[{"elements": [-self.parameters["kcat"][species][phenotype], b],
                                               "operation": "Mul"} for b in b_values],
                                            self.variables['g_' + pheno][short_code][timestep].name],
                               "operation": "Add"})
