@@ -62,7 +62,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
             if output is None:
                 index = 0 if met.compartment[0] == "e" else model_index
                 met.compartment = met.compartment[0] + str(index)
-                if "_" in met.id:  met.id = "_".join([met.id.split("_")[:-1], met.compartment])
+                if "_" in met.id:  met.id = "_".join(met.id.split("_")[:-1])+"_"+met.compartment
             else:
                 name, compartment, out_index = output
                 index = 0 if compartment == "e" else model_index

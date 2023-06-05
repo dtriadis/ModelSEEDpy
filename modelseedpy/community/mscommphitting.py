@@ -975,14 +975,18 @@ class MSCommPhitting:
                 else:  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
         return dic
 
-    def _universalize(self, param, var, next_dimension=None, exclude=None):
+    def _universalize(self, param, var, next_dimension=None, exclude=None, tsBin=False):
         if not next_dimension:
             next_dimension = {}
             for organism in self.fluxes_tup.columns:
                 species, pheno = organism.split("_")
                 if pheno in exclude:  continue
-                if species in next_dimension:  next_dimension[species].update({pheno: self.time_ranges})
-                else:  next_dimension[species] = {pheno: self.time_ranges}
+                if not tsBin:
+                    if species in next_dimension:  next_dimension[species].append(pheno)
+                    else:  next_dimension[species] = [pheno]
+                else:
+                    if species in next_dimension:  next_dimension[species].update({pheno: self.time_ranges})
+                    else:  next_dimension[species] = {pheno: self.time_ranges}
         if FBAHelper.isnumber(param):  return MSCommPhitting.assign_values(param, var, next_dimension)
         elif FBAHelper.isnumber(param[var]):  return MSCommPhitting.assign_values(param[var], var, next_dimension)
         elif isinstance(param[var], dict):

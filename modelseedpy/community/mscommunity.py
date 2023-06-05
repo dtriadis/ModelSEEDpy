@@ -163,8 +163,8 @@ class MSCommunity:
 
     def interactions(self, solution=None, media=None, msdb=None, msdb_path=None, filename=None, figure_format="svg",
                      node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
-        return MSSteadyCom.interactions(self, solution, media, flux_threshold, msdb, msdb_path, visualize, filename,
-                                        figure_format, node_metabolites, True, ignore_mets)
+        return MSSteadyCom.interactions(self, solution or self.solution, media, flux_threshold, msdb, msdb_path,
+                                        visualize, filename, figure_format, node_metabolites, True, ignore_mets)
 
     #Utility functions
     def print_lp(self, filename=None):
