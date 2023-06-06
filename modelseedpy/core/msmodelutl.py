@@ -1080,9 +1080,10 @@ class MSModelUtil:
 
     @staticmethod
     def parse_id(cobra_obj):
-        if re.search("(.+)_([a-z])(\d+)$", cobra_obj.id):
-            m = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
-            return (m[1], m[2], int(m[3]))
+        MSID = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
+        if MSID is not None:  return (MSID[1], MSID[2], int(MSID[3]))
+        nonMSID = re.search("(.+)\[([a-z])\]$", cobra_obj.id)
+        if nonMSID is not None:  return (nonMSID[1], nonMSID[2])
         return None
 
     def add_kbase_media(self, kbase_media):

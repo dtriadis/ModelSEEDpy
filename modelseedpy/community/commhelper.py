@@ -24,6 +24,13 @@ def export_lp(model, name):
     with open(f"{name}.lp", 'w') as out:
         out.write(model.solver.to_lp())
 
+def correct_nonMSID(nonMSobject, output, model_index):
+    name, compartment = output
+    index = 0 if compartment == "e" else model_index
+    nonMSobject.compartment = compartment + str(index)
+    if "_" in nonMSobject.id:  return "_".join(nonMSobject.id.split("_")[:-1]) + "_" + nonMSobject.compartment
+    return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None, standardize=False, copy_models=True):
     """Merges the input list of single species metabolic models into a community metabolic model
 
@@ -59,11 +66,8 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         for met in model_util.model.metabolites:
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
-            if output is None:
-                index = 0 if met.compartment[0] == "e" else model_index
-                met.compartment = met.compartment[0] + str(index)
-                if "_" in met.id:  met.id = "_".join(met.id.split("_")[:-1])+"_"+met.compartment
-            else:
+            if len(output) == 2:  met.id = correct_nonMSID(met, output, model_index)
+            elif len(output) == 3:
                 name, compartment, out_index = output
                 index = 0 if compartment == "e" else model_index
                 if out_index == "":
@@ -73,6 +77,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
+            else:  print(f"The {met.id} ({output}) is unpredictably parsed.")
             new_metabolites.add(met)
             if "cpd11416_c" in met.id:  member_biomasses[org_model.id] = met
         # Rename reactions
@@ -99,16 +104,15 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     initialID = str(rxn.id)
                     output = MSModelUtil.parse_id(rxn)
-                    if output is None:
-                        if "e" not in rxn.compartment.id and not rxn.compartment.id[-1].isnumeric():
-                            rxn.id += str(model_index)
-                    else:
+                    if len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
+                    elif len(output) == 3:
                         name, compartment, index = output
                         if compartment != "e":
                             rxn.name = f"{name}_{compartment}{model_index}"
                             rxn_id = re.search(r"(.+\_\w)(?=\d+)", rxn.id).group()
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
+                    else:  print(f"The {rxn.id} ({output}) is unpredictably parsed.")
                     finalID = str(rxn.id)
                     string_diff = set(initialID).symmetric_difference(set(finalID))
                     if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
