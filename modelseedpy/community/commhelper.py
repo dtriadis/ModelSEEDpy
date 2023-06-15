@@ -28,10 +28,13 @@ def correct_nonMSID(nonMSobject, output, model_index):
     name, compartment = output
     index = 0 if compartment == "e" else model_index
     nonMSobject.compartment = compartment + str(index)
-    if "_" in nonMSobject.id:  return "_".join(nonMSobject.id.split("_")[:-1]) + "_" + nonMSobject.compartment
-    return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    comp = re.search(r"(_\w\d+$)", nonMSobject.id)
+    if comp is None:  return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    return "_".join([nonMSobject.id.replace(comp.group(), ""), nonMSobject.compartment])
 
-def build_from_species_models(org_models, model_id=None, name=None, abundances=None, standardize=False, copy_models=True):
+
+def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
+                              standardize=False, copy_models=True, printing=False):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -66,7 +69,11 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         for met in model_util.model.metabolites:
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
-            if len(output) == 2:  met.id = correct_nonMSID(met, output, model_index)
+            if printing:  print(met, output)
+            if output is None:
+                if printing:  print(f"The {met.id} ({output}; {hasattr(met, 'compartment')}) is unpredictable.")
+                met.id = correct_nonMSID(met, (met.id, "c"), model_index)
+            elif len(output) == 2:  met.id = correct_nonMSID(met, output, model_index)
             elif len(output) == 3:
                 name, compartment, out_index = output
                 index = 0 if compartment == "e" else model_index
@@ -77,9 +84,8 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
-            else:  print(f"The {met.id} ({output}) is unpredictably parsed.")
             new_metabolites.add(met)
-            if "cpd11416_c" in met.id:  member_biomasses[org_model.id] = met
+            if "cpd11416_c" in met.id or "biomass" in met.id:  member_biomasses[org_model.id] = met
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
             if rxn.id[0:3] != "EX_":
@@ -104,7 +110,10 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     initialID = str(rxn.id)
                     output = MSModelUtil.parse_id(rxn)
-                    if len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
+                    if output is None:
+                        if printing:  print(f"The {rxn.id} ({output}; {hasattr(rxn, 'compartment')}) is unpredictable.")
+                        rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                    elif len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
                     elif len(output) == 3:
                         name, compartment, index = output
                         if compartment != "e":
@@ -112,11 +121,10 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                             rxn_id = re.search(r"(.+\_\w)(?=\d+)", rxn.id).group()
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
-                    else:  print(f"The {rxn.id} ({output}) is unpredictably parsed.")
                     finalID = str(rxn.id)
                     string_diff = set(initialID).symmetric_difference(set(finalID))
                     if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
-                        print(initialID, string_diff)
+                        print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
     # adds only unique reactions and metabolites to the community model
     newmodel = Model(model_id or "+".join([model.id for model in models]),
@@ -136,7 +144,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
-    newmodel.add_boundary(comm_biomass, "sink")
+    newmodel.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     return newutl.model
