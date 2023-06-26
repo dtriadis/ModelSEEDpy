@@ -674,8 +674,6 @@ class MSCommScores:
                                 for rxnID in minMedia[model2_util.id]["media"].keys()])
             model1_internal = {rm_comp(met.id) for rxn in model1_util.internal_list() for met in rxn.products}
             model2_internal = {rm_comp(met.id) for rxn in model2_util.internal_list() for met in rxn.products}
-            print(model1_media)
-            print(model2_internal)
             bss_scores[f"{model1_util.id} invading {model2_util.id} in {environment}"] = (
                     len(model1_media.intersection(model2_internal)) / len(model1_media))
             bss_scores[f"{model2_util.id} invading {model1_util.id} in {environment}"] = (
