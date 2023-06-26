@@ -23,6 +23,8 @@ import re
 import warnings
 warnings.simplefilter("ignore", category=DeprecationWarning)
 
+rm_comp = FBAHelper.remove_compartment
+
 def _compatibilize(member_models: Iterable, printing=False):
     # return member_models
     models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
@@ -307,7 +309,7 @@ class MSCommScores:
                     if print_progress:  print("PC  done", end="\t")
                     bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
                                                   environments, models_media)
-                    kbase_dic.update({f"bss_model{modelIDs.index(name.split(' invading ')[0])}": val
+                    kbase_dic.update({f"bss_model{modelIDs.index(name.split(' invading ')[0])+1}": val
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
                     kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
@@ -666,10 +668,14 @@ class MSCommScores:
     @staticmethod
     def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None):
         def compute_score(environment="complete"):
-            model1_media = set([re.sub(r"(\_\w\d+$)", "", rxnID) for rxnID in minMedia[model1_util.id]["media"].keys()])
-            model1_internal = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in model1_util.internal_list()])
-            model2_media = set([re.sub(r"(\_\w\d+$)", "", rxnID) for rxnID in minMedia[model2_util.id]["media"].keys()])
-            model2_internal = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in model1_util.internal_list()])
+            model1_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
+                                for rxnID in minMedia[model1_util.id]["media"].keys()])
+            model2_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
+                                for rxnID in minMedia[model2_util.id]["media"].keys()])
+            model1_internal = {rm_comp(met.id) for rxn in model1_util.internal_list() for met in rxn.products}
+            model2_internal = {rm_comp(met.id) for rxn in model2_util.internal_list() for met in rxn.products}
+            print(model1_media)
+            print(model2_internal)
             bss_scores[f"{model1_util.id} invading {model2_util.id} in {environment}"] = (
                     len(model1_media.intersection(model2_internal)) / len(model1_media))
             bss_scores[f"{model2_util.id} invading {model1_util.id} in {environment}"] = (
