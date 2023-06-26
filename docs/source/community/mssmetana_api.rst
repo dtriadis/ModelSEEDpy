@@ -177,7 +177,7 @@ The scores can be calculated over a large range of models, either for specified 
 - *pool_size* ``int``: the number of parallel processes across which pairwise scores will be calculated, where omitting this score does not parallelize the process. Our observation is that the processes are not very CPU intensive, even when specifying the maximal number of cores, so this option should be utilized for >50 models, especially for all versus all comparisons.
 
 
-**Returns** *scores_df* & *mets* ``Pandas.DataFrame`` & ``list<dict>``: a dataframe of all scores for all computed pairs and a list of the metabolites the comprise the ``MRO`` and ``MIP`` scores, for additional information of differences between the members, respectively. These returned objects can be directly passed as inputs into the ``smetana_report`` function of ModelSEEDpy to create an HTML output of the results, which processes the DataFrame into a quantitative heatmap and will eventually include the extra metabolites as hoverover metadata for access to users.
+**Returns** *scores_df* & *mets* ``Pandas.DataFrame`` & ``list<dict>``: a dataframe of all scores for all computed pairs and a list of the metabolites the comprise the ``MRO`` and ``MIP`` scores, for additional information of differences between the members, respectively. These returned objects can be directly passed as inputs into the ``commscores_report`` function of ModelSEEDpy to create an HTML output of the results, which processes the DataFrame into a quantitative heatmap and will eventually include the extra metabolites as hoverover metadata for access to users.
 
 
 

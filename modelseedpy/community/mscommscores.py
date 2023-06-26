@@ -305,6 +305,9 @@ class MSCommScores:
                     if print_progress:  print("MIP done", end="\t")
                     kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     if print_progress:  print("PC  done", end="\t")
+                    kbase_dic.update({"bss": MSCommScores.bss(None, [
+                        model_utils[model1.id], model_utils[model2.id]], environments)})
+                    if print_progress:  print("BSS done", end="\t")
                     kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     if print_progress:  print("BIT done", end="\t")
                     # determine the growth diff content
@@ -657,6 +660,37 @@ class MSCommScores:
         if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):  return "commensalism"
         if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):  return "amensalism"
         if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
+
+    @staticmethod
+    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None):
+        def compute_score():
+            minMedia = _get_media(model_s_=[modelUtil.model for modelUtil in model_utils])
+            model1_media = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in minMedia[model1_util.id]["media"].keys()])
+            model1_internal = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in model1_util.internal_list()])
+            model2_media = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in minMedia[model2_util.id]["media"].keys()])
+            model2_internal = set([re.sub(r"(\_\w\d+$)", "", rxn.id) for rxn in model1_util.internal_list()])
+            bss_scores[f"{model1_util.id} in {model2_util.id}"] = (
+                    len(model1_media.intersection(model2_internal)) / len(model1_media))
+            bss_scores[f"{model2_util.id} in {model1_util.id}"] = (
+                    len(model2_media.intersection(model1_internal)) / len(model2_media))
+
+        bss_scores = {}
+        for combination in combinations(model_utils or member_models, 2):
+            if model_utils is None:
+                model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
+                model_utils = [model1_util, model2_util]
+            else:  model1_util = combination[0] ; model2_util = combination[1]
+            if environments:
+                for environment in environments:
+                    model1_util.add_medium(environment); model2_util.add_medium(environment)
+                    compute_score()
+            else:  compute_score()
+        return bss_scores
+
+    @staticmethod
+    def mqs():
+        pass
+
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):

@@ -202,6 +202,9 @@ class MSModelUtil:
 
     def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
+    def internal_list(self):
+        exchanges, transports = self.exchange_list(), self.transport_list()
+        return [rxn for rxn in self.model.reactions if rxn not in exchanges and rxn not in transports]
 
     def transport_list(self):
         all_transports = [rxn for rxn in self.model.reactions if len(set([

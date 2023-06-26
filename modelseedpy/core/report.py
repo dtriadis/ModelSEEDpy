@@ -189,7 +189,7 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report
 
-def smetana_report(df, mets, export_html_path="smetana_report.html"):
+def commscores_report(df, mets, export_html_path="commscores_report.html"):
     # refine the DataFrame into a heatmap
     def quantify_MRO(element):
         # print(element)
