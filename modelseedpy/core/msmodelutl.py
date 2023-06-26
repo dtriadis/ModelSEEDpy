@@ -101,6 +101,7 @@ class MSModelUtil:
 
     def __init__(self, model, copy=False):
         self.model = model
+        self.id = model.id
         if copy:
             org_obj_val = model.slim_optimize()
             self.model = model.copy()
