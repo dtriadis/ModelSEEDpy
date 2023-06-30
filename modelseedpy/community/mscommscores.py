@@ -23,6 +23,8 @@ import re
 import warnings
 warnings.simplefilter("ignore", category=DeprecationWarning)
 
+rm_comp = FBAHelper.remove_compartment
+
 def _compatibilize(member_models: Iterable, printing=False):
     # return member_models
     models = MSCompatibility.standardize(member_models, conflicts_file_name='exchanges_conflicts.json', printing=printing)
@@ -305,6 +307,11 @@ class MSCommScores:
                     if print_progress:  print("MIP done", end="\t")
                     kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     if print_progress:  print("PC  done", end="\t")
+                    bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
+                                                  environments, models_media)
+                    kbase_dic.update({f"bss_model{modelIDs.index(name.split(' invading ')[0])+1}": val
+                                      for name, val in bss_values.items()})
+                    if print_progress:  print("BSS done", end="\t")
                     kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     if print_progress:  print("BIT done", end="\t")
                     # determine the growth diff content
@@ -657,6 +664,39 @@ class MSCommScores:
         if all(growth_diffs > competitive_bound) and any(growth_diffs > mutualism_bound):  return "commensalism"
         if all(growth_diffs < mutualism_bound) and any(growth_diffs < competitive_bound):  return "amensalism"
         if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
+
+    @staticmethod
+    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None):
+        def compute_score(environment="complete"):
+            model1_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
+                                for rxnID in minMedia[model1_util.id]["media"].keys()])
+            model2_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
+                                for rxnID in minMedia[model2_util.id]["media"].keys()])
+            model1_internal = {rm_comp(met.id) for rxn in model1_util.internal_list() for met in rxn.products}
+            model2_internal = {rm_comp(met.id) for rxn in model2_util.internal_list() for met in rxn.products}
+            bss_scores[f"{model1_util.id} invading {model2_util.id} in {environment}"] = (
+                    len(model1_media.intersection(model2_internal)) / len(model1_media))
+            bss_scores[f"{model2_util.id} invading {model1_util.id} in {environment}"] = (
+                    len(model2_media.intersection(model1_internal)) / len(model2_media))
+
+        bss_scores = {}
+        for combination in combinations(model_utils or member_models, 2):
+            minMedia = minMedia or _get_media(model_s_=[modelUtil.model for modelUtil in model_utils])
+            if model_utils is None:
+                model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
+                model_utils = [model1_util, model2_util]
+            else:  model1_util = combination[0] ; model2_util = combination[1]
+            if environments:
+                for index, environment in enumerate(environments):
+                    model1_util.add_medium(environment); model2_util.add_medium(environment)
+                    compute_score(f"environment{index}")
+            else:  compute_score()
+        return bss_scores
+
+    @staticmethod
+    def mqs():
+        pass
+
 
     @staticmethod
     def _calculate_jaccard_score(set1, set2):

@@ -160,6 +160,10 @@ class FBAHelper:
         return extracellular
 
     @staticmethod
+    def remove_compartment(objID):
+        return re.sub(r"(\_\w\d+)", "", objID)
+
+    @staticmethod
     def compartment_index(string):
         return int(re.search(r"(?<=\_|\w)(\d+)(?=$)", string).group())
 

@@ -101,6 +101,7 @@ class MSModelUtil:
 
     def __init__(self, model, copy=False):
         self.model = model
+        self.id = model.id
         if copy:
             org_obj_val = model.slim_optimize()
             self.model = model.copy()
@@ -202,6 +203,9 @@ class MSModelUtil:
 
     def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
+    def internal_list(self):
+        exchanges, transports = self.exchange_list(), self.transport_list()
+        return [rxn for rxn in self.model.reactions if rxn not in exchanges and rxn not in transports]
 
     def transport_list(self):
         all_transports = [rxn for rxn in self.model.reactions if len(set([
@@ -1080,9 +1084,10 @@ class MSModelUtil:
 
     @staticmethod
     def parse_id(cobra_obj):
-        if re.search("(.+)_([a-z])(\d+)$", cobra_obj.id):
-            m = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
-            return (m[1], m[2], int(m[3]))
+        MSID = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
+        if MSID is not None:  return (MSID[1], MSID[2], int(MSID[3]))
+        nonMSID = re.search("(.+)\[([a-z])\]$", cobra_obj.id)
+        if nonMSID is not None:  return (nonMSID[1], nonMSID[2])
         return None
 
     def add_kbase_media(self, kbase_media):

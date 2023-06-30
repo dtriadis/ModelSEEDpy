@@ -189,10 +189,9 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report
 
-def smetana_report(df, mets, export_html_path="smetana_report.html"):
+def commscores_report(df, mets, export_html_path="commscores_report.html"):
     # refine the DataFrame into a heatmap
     def quantify_MRO(element):
-        # print(element)
         return float(re.sub("(\s\(.+\))", "", str(element)))
 
     # construct the Heatmap
@@ -208,10 +207,10 @@ def smetana_report(df, mets, export_html_path="smetana_report.html"):
     heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
-    heatmap_df["mro_model1"] = heatmap_df["mro_model1"].apply(quantify_MRO)
-    heatmap_df["mro_model2"] = heatmap_df["mro_model2"].apply(quantify_MRO)
+    for col in heatmap_df.columns:
+        if any([kind in col for kind in ["mro", "mip"]]):  heatmap_df[col] = heatmap_df[col].apply(quantify_MRO)
+    heatmap_df.drop("bit", axis=1, inplace=True)
     heatmap_df = heatmap_df.astype(float)
-    heatmap_df["mip"] = heatmap_df["mip"].astype(int)
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(), "mets": mets, "heatmap": heatmap_df.style.background_gradient().to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),

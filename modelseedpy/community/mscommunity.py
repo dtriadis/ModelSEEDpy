@@ -96,13 +96,14 @@ class MSCommunity:
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
         msid_cobraid_hash = self.util.msid_hash()
+        # print(msid_cobraid_hash)
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
             if self.biomass_cpd.compartment == "c0":
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
-                    if printing:  print(self.biomass_cpd, rxn)
+                    print(self.biomass_cpd, rxn, end=";\t")
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
                         if self.primary_biomass:
                             raise ObjectAlreadyDefinedError(
@@ -110,8 +111,7 @@ class MSCommunity:
                                 f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
-                    elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:
-                        self.biomass_drain = rxn
+                    elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
             elif 'c' in self.biomass_cpd.compartment:  # else does not seem to capture built model members
                 other_biomass_cpds.append(self.biomass_cpd)
         # assign community members and their abundances
@@ -163,8 +163,8 @@ class MSCommunity:
 
     def interactions(self, solution=None, media=None, msdb=None, msdb_path=None, filename=None, figure_format="svg",
                      node_metabolites=True, flux_threshold=1, visualize=True, ignore_mets=None):
-        return MSSteadyCom.interactions(self, solution, media, flux_threshold, msdb, msdb_path, visualize, filename,
-                                        figure_format, node_metabolites, True, ignore_mets)
+        return MSSteadyCom.interactions(self, solution or self.solution, media, flux_threshold, msdb, msdb_path,
+                                        visualize, filename, figure_format, node_metabolites, True, ignore_mets)
 
     #Utility functions
     def print_lp(self, filename=None):
