@@ -97,7 +97,6 @@ def parse_primals(primal_values, entity_labels=None, coefs=None, kcat_vals=None)
                 if time_value == 0 and kcat_primal[species][pheno] < 10:
                     kcat_primal[species][pheno] += coefs[int(number)-1]*kcat_vals[species][pheno]
                 kcat_primal[species][pheno] = clamp(kcat_primal[species][pheno], 1e-4, 10)
-
         return kcat_primal
     select_primals = {}
     for trial, entities in primal_values.items():
