@@ -97,7 +97,7 @@ def parse_primals(primal_values, entity_labels=None, coefs=None, kcat_vals=None)
                     if tsBin not in kcat_primal[species][pheno]:  kcat_primal[species][pheno][tsBin] = 0
                     # kcat_(k,new) = sum_z^Z ( kcat_z * bin_k^z ) * kcat_(k,old) < 10
                     if value == 0 and kcat_primal[species][pheno][tsBin] < 10:
-                        kcat_primal[species][pheno][tsBin] += coefs[int(number)-1]*kcat_vals[species][pheno]
+                        kcat_primal[species][pheno][tsBin] += coefs[int(number)-1]*kcat_vals[species][pheno][tsBin]
                     kcat_primal[species][pheno][tsBin] = clamp(kcat_primal[species][pheno][tsBin], 1e-4, 10)
         return kcat_primal
     select_primals = {}
