@@ -25,11 +25,11 @@
 
     <h4>Functional Complementarity (FC)</h4>    
     <p>
-        The FC score is calculated as the Jiccard Index of ontologies $O$ from either RAST or another annotation software
+        The FC score is calculated as the Jiccard Index of ontologies $O$ from either RAST or another annotation software available on KBase <sup><a href="#kbase">[2]</a></sup>
         <div class="latex">
             \[ FC= \left( \frac{O_1 \cap O_2}{O_1 \cup O_2} \right)~~. \]
         </div>
-        This score captures the potential for niche overlap and therefore negative interactions. The broad assessment of the entire genome further captures secondary metabolic interactions as well as the primary metabolism that is embodied in genome-scale metabolic models. 
+        This score captures the potential for niche overlap and therefore negative interactions. The broad assessment of the entire genome further captures secondary metabolic interactions as well as the primary metabolism that is embodied in genome-scale metabolic models.
     </p>
 
     <h4>Growth Yield Difference (GYD)</h4>    
@@ -38,16 +38,7 @@
         <div class="latex">
             \[ GYD = \frac{abs(G_{1}-G_{2})}{min(G_{1}, G_{2})}~~, \]
         </div>
-        by normalizing the difference in the member's growth rates by the growth rate of the slower growing member. A relatively large disparity in the isolate growth rates may foreshadow a negative interaction when the members are combined, where one member rapidly begins dominating the environment and media consumption which leaves the other member potentially starved and possibly launching antibiotic warfare in desparation to survive. 
-
-        We additionally developed a few original scores. The first of these is the <i><b>G</b>rowth <b>R</b>ate <b>D</b>ifference</i> (GRD) score, which quantifies the difference in monocultural 
-        biomass growth rate between the two groupings in the same media normalized by the growth rate of the slowest growing grouping. This score evaluates prospective dominance of one grouping relative 
-        to the other, which presumably will influence how synergistic or antagonistic that grouping interactions will be. This score is algorithmically represented as the difference in biomass flux 
-        $G$ between groupings 1 $g1$ and 2 $g2$:
-        <div class="latex">\[ GRD = \frac{abs(G_{g1}-G_{g2})}{min(G_{g1}, G_{g2})} \]</div>
-        Another original score is the <i><b>R</b>AST <b>F</b>unctional <b>C</b>omplementarity</i> (RFC) score, which determines the Jacarrd Index between the sets of genome 
-        ontologies for each grouping. This score probes functional alignment of the groupings, where presumably groupings with high functional similarity will compete and be more antagonistic than 
-        groupings with minimal similarity. The genome ontologies are sourced from the RAST annotations that are available on KBase <sup><a href="#kbase">[2]</a></sup>. 
+        by normalizing the difference in the member's growth rates by the growth rate of the slower growing member. A relatively large disparity in the isolate growth rates may foreshadow a negative interaction when the members are combined, where one member rapidly begins dominating the environment and media consumption which leaves the other member potentially starved and possibly launching antibiotic warfare in desparation to survive.
     </p>
 
     <h4>Costless Interaction Potential (CIP)</h4>    
@@ -63,8 +54,10 @@
     <p>
         The BIT score categorizes the member interaction into one of the classical descriptions -- competitive, amensalism, neutral, parasitism, commensalism, and mutualism -- based on relative growth of the members as isolates <i>G<sub>1</sub></i> versus in the community environment <i>G<sub>1,comm</sub></i>
         <div class="latex">
-            \[ BIT_1 &= G_{1,comm}-G_1 \\
-               BIT_2 &= G_{2,comm}-G_2~~, \]
+            \[ BIT_1 = G_{1,comm}-G_1 \]
+        </div>
+        <div class="latex">
+            \[ BIT_2 = G_{2,comm}-G_2 \]
         </div>
         which provides a tangible biological description of the member interaction based on growth through the primary metabolism.
     </p>
@@ -73,14 +66,14 @@
 
     <h4>MRO</h4>
     <p>
-        The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is in the SMETANA suite and several earlier published scores, albeit with slight algorithmic variations. The MRO quantifies the fraction of a member's nutritional requirements, in a given media or the complete media by default, that overlap with the other member's nutritional requirements 
+        The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is in the SMETANA suite and was published in several earlier studies as well, albeit with slight algorithmic variations. The MRO quantifies the fraction of a member's nutritional requirements, in a given media or the complete media by default, that overlap with the other member's nutritional requirements
             <div class="latex">\[ MRO= \frac{|M_1 \cap M_2|}{|M_1|} \]</div>
         and is importantly directional (by replacing the denominator member), which can capture directional dependencies of interactions (e.g. lawn versus spot). The minimal media $M$ of each member is determined by minimizing the total exchange flux.
     </p>
 
     <h4>MIP</h4>
     <p>
-        The <i><b>M</b>etabolic <b>I</b>nteraction <b>P</b>otential</i> (MIP) score is also in the SMETANA and earlier suites. This score quantifies syntrophic exchanges between the members. Our curation computes the MIP as the difference in exchanged compounds versus transported compounds in the compartmentalized community model
+        The <i><b>M</b>etabolic <b>I</b>nteraction <b>P</b>otential</i> (MIP) score is also in the SMETANA suite and earlier studies. This score quantifies syntrophic exchanges between the members. Our curation computes the MIP as the difference in exchanged compounds versus transported compounds in the compartmentalized community model
             <div class="latex">\[ MIP=M_{transports}-M_{exchanges}~~, \]</div>
         where compounds that the members are transporting but the community is not exchanging with the media must be sourced from syntrophy. The MIP compounds that are costlessly excreted can also be quantified as a subscore of the MIP, and may better represent the compounds that are favorably exchanged in the community.
     </p>
@@ -90,6 +83,13 @@
         The <i><b>P</b>otential <b>C</b>ooperation</i> (PC) score quantifies the net effect of co-growth relative to isolate growth, and in our curation is determined as the ratio of community growth to the sum of isolated member growths
             <div class="latex">\[ PC = \frac{G_{comm}}{G_1+G_2}~~, \]</div>
         and is therefore essentially a continuous quantitative representation of the discrete qualitative BIT score.
+    </p>
+
+    <h4>BSS</h4>
+    <p>
+        The <i><b>B</b>iosynthetic <b>S</b>upport <b>S</b>core</i> (BSS) score quantifies the capacity of a member to parasitize another member by topologically evaluating the proportion of a member's nutritional requirements that are in the other member's cytoplasmic metabolites
+            <div class="latex">\[ BSS = \frac{M_i \cap R_j}{M_i}~~. \]</div>
+        This score therefore quantifies the capacity or incentive for negative interaction.
     </p>
 
     <!-- <h4>MSI</h4>

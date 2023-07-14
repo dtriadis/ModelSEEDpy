@@ -284,7 +284,7 @@ class MSCommScores:
                     if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
                     # define the MRO content
                     mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
-                    kbase_dic.update({f"mro_model{modelIDs.index(models_string.split('--')[0])+1}":
+                    kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{len(intersection)/len(memMedia):.5f} ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
                     mets.append({"mro_mets": list(mro_values.values())})
@@ -292,30 +292,30 @@ class MSCommScores:
                     # define the CIP content
                     if cip_score:
                         cip_values = MSCommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
-                        kbase_dic.update({"cip": cip_values[1]})
+                        kbase_dic.update({"CIP": cip_values[1]})
                         if print_progress:  print("CIP done", end="\t")
                     # define the MIP content
                     mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
                                                   costless=costless, multi_output=costless)
-                    kbase_dic.update({f"mip_model{modelIDs.index(models_name)+1}": str(len(received))
+                    kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
                                       for models_name, received in mip_values[0].items()})
                     mets.append({"mip_mets": mip_values[0]})
                     if costless:
                         for models_name, received in mip_values[1].items():
-                            kbase_dic[f"mip_model{modelIDs.index(models_name)+1}"] += f" ({len(received)})"
-                        if print_progress:  print("costless_mip  done", end="\t")
+                            kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"] += f" ({len(received)})"
+                        if print_progress:  print("costless_MIP  done", end="\t")
                     if print_progress:  print("MIP done", end="\t")
-                    kbase_dic.update({"pc": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
+                    kbase_dic.update({"PC": MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]})
                     if print_progress:  print("PC  done", end="\t")
                     bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
                                                   environments, models_media)
-                    kbase_dic.update({f"bss_model{modelIDs.index(name.split(' invading ')[0])+1}": val
+                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": val
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
-                    kbase_dic.update({"bit": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
+                    kbase_dic.update({"BIT": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     if print_progress:  print("BIT done", end="\t")
                     # determine the growth diff content
-                    kbase_dic.update({"gyd": f"""{list(MSCommScores.gyd(
+                    kbase_dic.update({"GYD": f"""{list(MSCommScores.gyd(
                         grouping, environment=environ, community=community).values())[0]:.5f}"""})
                     if print_progress:  print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
