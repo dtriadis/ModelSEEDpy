@@ -320,9 +320,9 @@ class MSCommScores:
                     if print_progress:  print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
                     if kbase_obj is not None and RAST_genomes:
-                        kbase_dic.update({"RFC": f"""{list(MSCommScores.rfc(
+                        kbase_dic.update({"FC": f"""{list(MSCommScores.rfc(
                             grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]:.5f}"""})
-                        if print_progress:  print("RFC done\t\t")
+                        if print_progress:  print("FC done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))
                 count += 1

@@ -20,7 +20,6 @@
               }
             }
           </script>
-        
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
@@ -43,12 +42,13 @@
     <body class="container">
         <h1>CommScores Results</h1>
         <ul class="nav nav-tabs" id="nav-tab" role="tablist">
-            <li><a class="nav-item nav-link active" id="nav-table-tab" data-toggle="tab" href="#nav-table" role="tab" aria-controls="nav-table" aria-selected="true">Interaction table</a> </li>
-            <li><a class="nav-item nav-link" id="nav-heatmap-tab" data-toggle="tab" href="#nav-heatmap" role="tab" aria-controls="nav-heatmap" aria-selected="true">Interaction Heatmap</a> </li>
+            <li><a class="nav-item nav-link active" id="nav-table-tab" data-toggle="tab" href="#nav-table" role="tab" aria-controls="nav-table" aria-selected="true">Full Table</a> </li>
+            <li><a class="nav-item nav-link" id="nav-heatmap-tab" data-toggle="tab" href="#nav-heatmap" role="tab" aria-controls="nav-heatmap" aria-selected="true">Heatmap</a> </li>
+            <li><a class="nav-item nav-link" id="nav-info-tab" data-toggle="tab" href="#nav-info" role="tab" aria-controls="nav-info" aria-selected="true">Score Information</a> </li>
             <!-- <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Interacted mets</a> </li> -->
         </ul>
         <div class="tab-content" id="nav-tabContent">
-            <div class="tab-pane fade show active" id="nav-table" role="tabpanel" aria-labelledby="nav-summary-tab">
+            <div class="tab-pane fade show active" id="nav-table" role="tabpanel" aria-labelledby="nav-table-tab">
                 <p>The biomass yields are expressed in [gm/hr*(gm CDW)]</p>
                 <table border="1" class="dataframe">
   <thead>
@@ -67,7 +67,7 @@
       <th>BSS_model2</th>
       <th>BIT</th>
       <th>GYD</th>
-      <th>RFC</th>
+      <th>FC</th>
     </tr>
   </thead>
   <tbody>
@@ -78,9 +78,9 @@
       <td>R2A_edition_003</td>
       <td>0.84615 (33/39)</td>
       <td>0.84615 (33/39)</td>
-      <td>22</td>
-      <td>5 (1)</td>
-      <td>8 (4)</td>
+      <td>21</td>
+      <td>3 (1)</td>
+      <td>11 (3)</td>
       <td>0.60797</td>
       <td>0.641026</td>
       <td>0.692308</td>
@@ -93,25 +93,25 @@
             </div>
             <div class="tab-pane fade" id="nav-heatmap" role="tabpanel" aria-labelledby="nav-heatmap-tab">
                 <style type="text/css">
-#T_14c69_row0_col0, #T_14c69_row0_col1, #T_14c69_row0_col2, #T_14c69_row0_col3, #T_14c69_row0_col4, #T_14c69_row0_col5, #T_14c69_row0_col6, #T_14c69_row0_col7, #T_14c69_row0_col8, #T_14c69_row0_col9 {
+#T_e3674_row0_col0, #T_e3674_row0_col1, #T_e3674_row0_col2, #T_e3674_row0_col3, #T_e3674_row0_col4, #T_e3674_row0_col5, #T_e3674_row0_col6, #T_e3674_row0_col7, #T_e3674_row0_col8, #T_e3674_row0_col9 {
   background-color: #fff7fb;
   color: #000000;
 }
 </style>
-<table id="T_14c69">
+<table id="T_e3674">
   <thead>
     <tr>
       <th class="blank level0" >&nbsp;</th>
-      <th id="T_14c69_level0_col0" class="col_heading level0 col0" >MRO_model1</th>
-      <th id="T_14c69_level0_col1" class="col_heading level0 col1" >MRO_model2</th>
-      <th id="T_14c69_level0_col2" class="col_heading level0 col2" >CIP</th>
-      <th id="T_14c69_level0_col3" class="col_heading level0 col3" >MIP_model1</th>
-      <th id="T_14c69_level0_col4" class="col_heading level0 col4" >MIP_model2</th>
-      <th id="T_14c69_level0_col5" class="col_heading level0 col5" >PC</th>
-      <th id="T_14c69_level0_col6" class="col_heading level0 col6" >BSS_model1</th>
-      <th id="T_14c69_level0_col7" class="col_heading level0 col7" >BSS_model2</th>
-      <th id="T_14c69_level0_col8" class="col_heading level0 col8" >GYD</th>
-      <th id="T_14c69_level0_col9" class="col_heading level0 col9" >RFC</th>
+      <th id="T_e3674_level0_col0" class="col_heading level0 col0" >MRO_model1</th>
+      <th id="T_e3674_level0_col1" class="col_heading level0 col1" >MRO_model2</th>
+      <th id="T_e3674_level0_col2" class="col_heading level0 col2" >CIP</th>
+      <th id="T_e3674_level0_col3" class="col_heading level0 col3" >MIP_model1</th>
+      <th id="T_e3674_level0_col4" class="col_heading level0 col4" >MIP_model2</th>
+      <th id="T_e3674_level0_col5" class="col_heading level0 col5" >PC</th>
+      <th id="T_e3674_level0_col6" class="col_heading level0 col6" >BSS_model1</th>
+      <th id="T_e3674_level0_col7" class="col_heading level0 col7" >BSS_model2</th>
+      <th id="T_e3674_level0_col8" class="col_heading level0 col8" >GYD</th>
+      <th id="T_e3674_level0_col9" class="col_heading level0 col9" >FC</th>
     </tr>
     <tr>
       <th class="index_name level0" >model1 ++ model2 ___ Media</th>
@@ -129,96 +129,98 @@
   </thead>
   <tbody>
     <tr>
-      <th id="T_14c69_level0_row0" class="row_heading level0 row0" >Pseudomonas_sp._GM17_2511231006.fna.RAST.fbamodel ++ Sphingobium_sp._AP49_2512564014.fna.RAST.fbamodel in R2A_edition_003</th>
-      <td id="T_14c69_row0_col0" class="data row0 col0" >0.846150</td>
-      <td id="T_14c69_row0_col1" class="data row0 col1" >0.846150</td>
-      <td id="T_14c69_row0_col2" class="data row0 col2" >22.000000</td>
-      <td id="T_14c69_row0_col3" class="data row0 col3" >5.000000</td>
-      <td id="T_14c69_row0_col4" class="data row0 col4" >8.000000</td>
-      <td id="T_14c69_row0_col5" class="data row0 col5" >0.607970</td>
-      <td id="T_14c69_row0_col6" class="data row0 col6" >0.641026</td>
-      <td id="T_14c69_row0_col7" class="data row0 col7" >0.692308</td>
-      <td id="T_14c69_row0_col8" class="data row0 col8" >0.162830</td>
-      <td id="T_14c69_row0_col9" class="data row0 col9" >0.304200</td>
+      <th id="T_e3674_level0_row0" class="row_heading level0 row0" >Pseudomonas_sp._GM17_2511231006.fna.RAST.fbamodel ++ Sphingobium_sp._AP49_2512564014.fna.RAST.fbamodel in R2A_edition_003</th>
+      <td id="T_e3674_row0_col0" class="data row0 col0" >0.846150</td>
+      <td id="T_e3674_row0_col1" class="data row0 col1" >0.846150</td>
+      <td id="T_e3674_row0_col2" class="data row0 col2" >21.000000</td>
+      <td id="T_e3674_row0_col3" class="data row0 col3" >3.000000</td>
+      <td id="T_e3674_row0_col4" class="data row0 col4" >11.000000</td>
+      <td id="T_e3674_row0_col5" class="data row0 col5" >0.607970</td>
+      <td id="T_e3674_row0_col6" class="data row0 col6" >0.641026</td>
+      <td id="T_e3674_row0_col7" class="data row0 col7" >0.692308</td>
+      <td id="T_e3674_row0_col8" class="data row0 col8" >0.162830</td>
+      <td id="T_e3674_row0_col9" class="data row0 col9" >0.304200</td>
     </tr>
   </tbody>
 </table>
 
             </div>
+            <div class="tab-pane fade" id="nav-info" role="tabpanel" aria-labelledby="nav-info-tab">
+                <br> 
+                <h3>Novel scores</h3><br>
+
+                <h4>Functional Complementarity (FC)</h4>    
+                <p>
+                    The <b>FC</b> score is calculated as the Jiccard Index of ontologies $O$ from either RAST or another annotation software available on KBase <sup><a href="#kbase">[2]</a></sup>
+                    <div class="latex">
+                        \[ FC= \left( \frac{O_1 \cap O_2}{O_1 \cup O_2} \right)~~. \]
+                    </div>
+                    This score captures the potential for niche overlap and therefore negative interactions. The broad assessment of the entire genome further captures secondary metabolic interactions as well as the primary metabolism that is embodied in genome-scale metabolic models.
+                </p>
+
+                <h4>Growth Yield Difference (GYD)</h4>    
+                <p>
+                    The <b>GYD</b> score evaluates the disparity in growth rate between the isolated members
+                    <div class="latex">
+                        \[ GYD = \frac{abs(G_{1}-G_{2})}{min(G_{1}, G_{2})}~~, \]
+                    </div>
+                    by normalizing the difference in the member's growth rates by the growth rate of the slower growing member. A relatively large disparity in the isolate growth rates may foreshadow a negative interaction when the members are combined, where one member rapidly begins dominating the environment and media consumption which leaves the other member potentially starved and possibly launching antibiotic warfare in desparation to survive.
+                </p>
+
+                <h4>Costless Interaction Potential (CIP)</h4>    
+                <p>
+                    The <b>CIP</b> score quantifies the union of costless excreta <i>CE</i> (compounds that are excreted at maximal growth and therefore have no fitness cost associated with their excretion) in the isolated members
+                    <div class="latex">
+                        \[ CIP = len(CE_1 \cup CE_2)~~, \]
+                    </div>
+                    which may contextualize syntrophic exchanges in their likelihood for exchange based on the fitness expense of their excretion. Our curation of the MIP score can be further contextualized with costless excreta via the intersection of exchanged compounds in the MIP score and the CIP for the same member pair. 
+                </p>
+
+                <h4>Biological Interaction Potential (BIT)</h4>
+                <p>
+                    The <b>BIT</b> score categorizes the member interaction into one of the classical descriptions -- competitive, amensalism, neutral, parasitism, commensalism, and mutualism -- based on relative growth of the members as isolates <i>G<sub>1</sub></i> versus in the community environment <i>G<sub>1,comm</sub></i>
+                    <div class="latex">
+                        \[ BIT_1 = G_{1,comm}-G_1 \]
+                    </div>
+                    <div class="latex">
+                        \[ BIT_2 = G_{2,comm}-G_2 \]
+                    </div>
+                    which provides a tangible biological description of the member interaction based on growth through the primary metabolism.
+                </p>
+
+                <h3>Curated scores</h3><br> 
+
+                <h4>MRO</h4>
+                <p>
+                    The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is in the SMETANA suite and was published in several earlier studies as well, albeit with slight algorithmic variations. The MRO quantifies the fraction of a member's nutritional requirements, in a given media or the complete media by default, that overlap with the other member's nutritional requirements 
+                        <div class="latex">\[ MRO= \frac{|M_1 \cap M_2|}{|M_1|} \]</div>
+                    and is importantly directional (by replacing the denominator member), which can capture directional dependencies of interactions (e.g. lawn versus spot). The minimal media $M$ of each member is determined by minimizing the total exchange flux.
+                </p>
+
+                <h4>MIP</h4>
+                <p>
+                    The <i><b>M</b>etabolic <b>I</b>nteraction <b>P</b>otential</i> (MIP) score is also in the SMETANA suite and earlier studies. This score quantifies syntrophic exchanges between the members. Our curation computes the MIP as the difference in exchanged compounds versus transported compounds in the compartmentalized community model
+                        <div class="latex">\[ MIP=M_{transports}-M_{exchanges}~~, \]</div>
+                    where compounds that the members are transporting but the community is not exchanging with the media must be sourced from syntrophy. The MIP compounds that are costlessly excreted can also be quantified as a subscore of the MIP, and may better represent the compounds that are favorably exchanged in the community.
+                </p>
+
+                <h4>PC</h4>
+                <p>
+                    The <i><b>P</b>otential <b>C</b>ooperation</i> (PC) score quantifies the net effect of co-growth relative to isolate growth, and in our curation is determined as the ratio of community growth to the sum of isolated member growths
+                        <div class="latex">\[ PC = \frac{G_{comm}}{G_1+G_2}~~, \]</div>
+                    and is therefore essentially a continuous quantitative representation of the discrete qualitative BIT score.
+                </p>
+
+                <h4>BSS</h4>
+                <p>
+                    The <i><b>B</b>iosynthetic <b>S</b>upport <b>S</b>core</i> (BSS) score quantifies the capacity of a member to parasitize another member by topologically evaluating the proportion of a member's nutritional requirements that are in the other member's cytoplasmic metabolites
+                        <div class="latex">\[ BSS = \frac{M_i \cap R_j}{M_i}~~. \]</div>
+                    This score therefore quantifies the capacity or incentive for negative interaction.
+                </p>
+            </div>
             <!-- <div class="tab-pane fade" id="nav-mets" role="tabpanel" aria-labelledby="nav-mets-tab">
-                [{'mro_mets': [({'EX_cpd00254_e0', 'EX_cpd00322_e0', 'EX_cpd00149_e0', 'EX_cpd00099_e0', 'EX_cpd00654_e0', 'EX_cpd00136_e0', 'EX_cpd00107_e0', 'EX_cpd00058_e0', 'EX_cpd00119_e0', 'EX_cpd00051_e0', 'EX_cpd03847_e0', 'EX_cpd00017_e0', 'EX_cpd01080_e0', 'EX_cpd00264_e0', 'EX_cpd00393_e0', 'EX_cpd00028_e0', 'EX_cpd00205_e0', 'EX_cpd10515_e0', 'EX_cpd00048_e0', 'EX_cpd00220_e0', 'EX_cpd00030_e0', 'EX_cpd00063_e0', 'EX_cpd00034_e0', 'EX_cpd01017_e0', 'EX_cpd00215_e0', 'EX_cpd00069_e0', 'EX_cpd00793_e0', 'EX_cpd00104_e0', 'EX_cpd00007_e0', 'EX_cpd00065_e0', 'EX_cpd00066_e0', 'EX_cpd00644_e0', 'EX_cpd00156_e0'}, {'EX_cpd00156_e0': 0.035223318909420306, 'EX_cpd00793_e0': 0.000280615915959131, 'EX_cpd00654_e0': 0.005215640721434261, 'EX_cpd00179_e0': 0.06274188137490219, 'EX_cpd10515_e0': 0.0008418477478773932, 'EX_cpd00007_e0': 0.0008418477478773933, 'EX_cpd00311_e0': 0.015193123296078484, 'EX_cpd00058_e0': 0.00028061591595913103, 'EX_cpd00254_e0': 0.00028061591595913103, 'EX_cpd00069_e0': 0.012067660460661201, 'EX_cpd00063_e0': 0.0002806159159591311, 'EX_cpd00034_e0': 0.00028061591595913103, 'EX_cpd00220_e0': 0.0008418477478773932, 'EX_cpd01017_e0': 0.008456496968442235, 'EX_cpd00644_e0': 0.0005612318319182638, 'EX_cpd00215_e0': 0.00028061591595913103, 'EX_cpd00322_e0': 0.0241798510337235, 'EX_cpd00104_e0': 0.00028061591595913103, 'EX_cpd00205_e0': 0.00028061591595913103, 'EX_cpd00107_e0': 0.03753888475401271, 'EX_cpd00149_e0': 0.00028061591595913103, 'EX_cpd00065_e0': 0.00472019191450218, 'EX_cpd00048_e0': 0.00028061591595913103, 'EX_cpd00119_e0': 0.007926360007371592, 'EX_cpd00099_e0': 0.00028061591595913103, 'EX_cpd00355_e0': 1.18422356313892, 'EX_cpd01080_e0': 0.024916275954454087, 'EX_cpd00017_e0': 0.013060758175035837, 'EX_cpd00136_e0': 0.00028061591595913103, 'EX_cpd00066_e0': 0.015451949003134503, 'EX_cpd00438_e0': 0.0011917803122624656, 'EX_cpd00209_e0': 0.44760816358423205, 'EX_cpd00028_e0': 0.00028061591595913103, 'EX_cpd00264_e0': 0.00028061591595913103, 'EX_cpd00030_e0': 0.0002806159159591311, 'EX_cpd03847_e0': 0.002501059771089441, 'EX_cpd00307_e0': 0.00841036156544863, 'EX_cpd00393_e0': 0.0008418477478773854, 'EX_cpd00051_e0': 0.0246696822701341}), ({'EX_cpd00254_e0', 'EX_cpd00322_e0', 'EX_cpd00149_e0', 'EX_cpd00099_e0', 'EX_cpd00654_e0', 'EX_cpd00136_e0', 'EX_cpd00107_e0', 'EX_cpd00058_e0', 'EX_cpd00119_e0', 'EX_cpd00051_e0', 'EX_cpd03847_e0', 'EX_cpd00017_e0', 'EX_cpd01080_e0', 'EX_cpd00264_e0', 'EX_cpd00393_e0', 'EX_cpd00028_e0', 'EX_cpd00205_e0', 'EX_cpd10515_e0', 'EX_cpd00048_e0', 'EX_cpd00220_e0', 'EX_cpd00030_e0', 'EX_cpd00063_e0', 'EX_cpd00034_e0', 'EX_cpd01017_e0', 'EX_cpd00215_e0', 'EX_cpd00069_e0', 'EX_cpd00104_e0', 'EX_cpd00793_e0', 'EX_cpd00007_e0', 'EX_cpd00065_e0', 'EX_cpd00066_e0', 'EX_cpd00644_e0', 'EX_cpd00156_e0'}, {'EX_cpd00156_e0': 0.03522331890916251, 'EX_cpd00793_e0': 0.00028061591595913103, 'EX_cpd00654_e0': 0.0011789605965904404, 'EX_cpd10515_e0': 0.0008418477478773931, 'EX_cpd00009_e0': 0.08097478546577376, 'EX_cpd00007_e0': 1.1741528321292758, 'EX_cpd00058_e0': 0.000280615915959131, 'EX_cpd00254_e0': 0.00028061591595913103, 'EX_cpd00069_e0': 0.012067660460661201, 'EX_cpd00063_e0': 0.0002806159159591311, 'EX_cpd00118_e0': 0.0002806159159591311, 'EX_cpd00034_e0': 0.0002806159159591311, 'EX_cpd00220_e0': 0.0008418477478773931, 'EX_cpd01017_e0': 0.008456496968391312, 'EX_cpd00039_e0': 0.028543802049017897, 'EX_cpd00644_e0': 0.0005612318318673393, 'EX_cpd00215_e0': 0.00028061591595913103, 'EX_cpd00277_e0': 0.0020247366767531506, 'EX_cpd00322_e0': 0.024179851033723502, 'EX_cpd00104_e0': 0.000280615915959131, 'EX_cpd00205_e0': 0.000280615915959131, 'EX_cpd00107_e0': 0.037538884754166196, 'EX_cpd00149_e0': 0.00028061591595913103, 'EX_cpd00065_e0': 0.004720191914502182, 'EX_cpd00048_e0': 0.000280615915959131, 'EX_cpd00119_e0': 0.16897710575026803, 'EX_cpd00099_e0': 0.00028061591595913103, 'EX_cpd01080_e0': 0.024916275954454083, 'EX_cpd00017_e0': 0.0019643114117139167, 'EX_cpd00136_e0': 0.00028061591595913103, 'EX_cpd00066_e0': 0.015451949003134503, 'EX_cpd00794_e0': 0.23177487667053182, 'EX_cpd00060_e0': 0.011096446763321907, 'EX_cpd00028_e0': 0.000280615915959131, 'EX_cpd00264_e0': 0.0002806159159591311, 'EX_cpd00030_e0': 0.0002806159159591311, 'EX_cpd03847_e0': 0.0025010597710894396, 'EX_cpd00393_e0': 0.0008418477478774358, 'EX_cpd00051_e0': 0.0246696822701341})]}, {'mip_mets': {'Pseudomonas_sp._GM17_2511231006.fna.RAST.fbamodel': ['cpd00053', 'cpd00136', 'cpd00067', 'cpd00161', 'cpd00132'], 'Sphingobium_sp._AP49_2512564014.fna.RAST.fbamodel': ['cpd00129', 'cpd00118', 'cpd00067', 'cpd00084', 'cpd00060', 'cpd00033', 'cpd00039', 'cpd00009']}}]
+                [{'mro_mets': [({'EX_cpd00254_e0', 'EX_cpd00051_e0', 'EX_cpd00030_e0', 'EX_cpd00107_e0', 'EX_cpd00058_e0', 'EX_cpd00063_e0', 'EX_cpd00644_e0', 'EX_cpd03847_e0', 'EX_cpd00028_e0', 'EX_cpd00793_e0', 'EX_cpd00322_e0', 'EX_cpd00048_e0', 'EX_cpd00007_e0', 'EX_cpd00205_e0', 'EX_cpd00215_e0', 'EX_cpd00264_e0', 'EX_cpd00393_e0', 'EX_cpd00066_e0', 'EX_cpd01080_e0', 'EX_cpd00099_e0', 'EX_cpd00136_e0', 'EX_cpd00065_e0', 'EX_cpd00156_e0', 'EX_cpd00149_e0', 'EX_cpd01017_e0', 'EX_cpd00017_e0', 'EX_cpd00119_e0', 'EX_cpd10515_e0', 'EX_cpd00654_e0', 'EX_cpd00034_e0', 'EX_cpd00104_e0', 'EX_cpd00069_e0', 'EX_cpd00220_e0'}, {'EX_cpd00220_e0': 0.0008418477478773932, 'EX_cpd00793_e0': 0.000280615915959131, 'EX_cpd00264_e0': 0.00028061591595913103, 'EX_cpd00393_e0': 0.0008418477478773958, 'EX_cpd00119_e0': 0.007926360007371592, 'EX_cpd00205_e0': 0.00028061591595913103, 'EX_cpd00030_e0': 0.0002806159159591311, 'EX_cpd03847_e0': 0.002501059771089441, 'EX_cpd00048_e0': 0.00028061591595913103, 'EX_cpd00034_e0': 0.00028061591595913103, 'EX_cpd00051_e0': 0.0246696822701341, 'EX_cpd10515_e0': 0.0008418477478773932, 'EX_cpd00209_e0': 0.44760816358394934, 'EX_cpd00058_e0': 0.00028061591595913103, 'EX_cpd00179_e0': 0.06274188137470496, 'EX_cpd00066_e0': 0.015451949003134503, 'EX_cpd00254_e0': 0.00028061591595913103, 'EX_cpd00028_e0': 0.00028061591595913103, 'EX_cpd00063_e0': 0.0002806159159591311, 'EX_cpd00644_e0': 0.0005612318319182638, 'EX_cpd00438_e0': 0.0011917803122624656, 'EX_cpd00065_e0': 0.00472019191450218, 'EX_cpd01017_e0': 0.008456496968442235, 'EX_cpd00215_e0': 0.00028061591595913103, 'EX_cpd00654_e0': 0.005215640721434261, 'EX_cpd00136_e0': 0.00028061591595913076, 'EX_cpd00322_e0': 0.0241798510337235, 'EX_cpd00007_e0': 0.0008418477478773925, 'EX_cpd00156_e0': 0.035223318909502234, 'EX_cpd00069_e0': 0.012067660460661201, 'EX_cpd00355_e0': 1.1842235631389384, 'EX_cpd00104_e0': 0.00028061591595913103, 'EX_cpd00149_e0': 0.00028061591595913103, 'EX_cpd00307_e0': 0.008410361565448637, 'EX_cpd00311_e0': 0.015193123295969044, 'EX_cpd00099_e0': 0.00028061591595913103, 'EX_cpd00107_e0': 0.03753888475401271, 'EX_cpd01080_e0': 0.024916275954454087, 'EX_cpd00017_e0': 0.013060758175035835}), ({'EX_cpd00254_e0', 'EX_cpd00051_e0', 'EX_cpd00030_e0', 'EX_cpd00107_e0', 'EX_cpd00058_e0', 'EX_cpd00063_e0', 'EX_cpd00644_e0', 'EX_cpd03847_e0', 'EX_cpd00028_e0', 'EX_cpd00793_e0', 'EX_cpd00322_e0', 'EX_cpd00048_e0', 'EX_cpd00007_e0', 'EX_cpd00205_e0', 'EX_cpd00215_e0', 'EX_cpd00264_e0', 'EX_cpd00393_e0', 'EX_cpd00066_e0', 'EX_cpd01080_e0', 'EX_cpd00099_e0', 'EX_cpd00136_e0', 'EX_cpd00065_e0', 'EX_cpd00156_e0', 'EX_cpd00149_e0', 'EX_cpd01017_e0', 'EX_cpd00017_e0', 'EX_cpd00119_e0', 'EX_cpd10515_e0', 'EX_cpd00654_e0', 'EX_cpd00034_e0', 'EX_cpd00104_e0', 'EX_cpd00069_e0', 'EX_cpd00220_e0'}, {'EX_cpd00220_e0': 0.0008418477478773931, 'EX_cpd00793_e0': 0.00028061591595913103, 'EX_cpd00264_e0': 0.0002806159159591311, 'EX_cpd00393_e0': 0.0008418477479800973, 'EX_cpd00060_e0': 0.011096446763321914, 'EX_cpd00119_e0': 0.16897710574146574, 'EX_cpd00205_e0': 0.000280615915959131, 'EX_cpd00030_e0': 0.0002806159159591311, 'EX_cpd00118_e0': 0.0002806159159591311, 'EX_cpd03847_e0': 0.0025010597710894396, 'EX_cpd00048_e0': 0.000280615915959131, 'EX_cpd00034_e0': 0.0002806159159591311, 'EX_cpd00051_e0': 0.0246696822701341, 'EX_cpd10515_e0': 0.0008418477478773931, 'EX_cpd00058_e0': 0.000280615915959131, 'EX_cpd00066_e0': 0.015451949003134503, 'EX_cpd00254_e0': 0.00028061591595913103, 'EX_cpd00028_e0': 0.000280615915959131, 'EX_cpd00063_e0': 0.0002806159159591311, 'EX_cpd00644_e0': 0.0005612318320293196, 'EX_cpd00065_e0': 0.004720191914502182, 'EX_cpd00794_e0': 0.23177487666228458, 'EX_cpd01017_e0': 0.008456496968553296, 'EX_cpd00215_e0': 0.00028061591595913103, 'EX_cpd00654_e0': 0.0011789605965904404, 'EX_cpd00009_e0': 0.08097478545687763, 'EX_cpd00136_e0': 0.00028061591595913114, 'EX_cpd00039_e0': 0.0285438020490179, 'EX_cpd00322_e0': 0.024179851033723502, 'EX_cpd00007_e0': 1.1741528321169399, 'EX_cpd00156_e0': 0.0352233189090214, 'EX_cpd00277_e0': 0.0020247366767794624, 'EX_cpd00069_e0': 0.012067660460661201, 'EX_cpd00104_e0': 0.000280615915959131, 'EX_cpd00149_e0': 0.00028061591595913103, 'EX_cpd00099_e0': 0.00028061591595913103, 'EX_cpd00107_e0': 0.037538884754166196, 'EX_cpd01080_e0': 0.024916275954454083, 'EX_cpd00017_e0': 0.0019643114117139167})]}, {'mip_mets': {'Pseudomonas_sp._GM17_2511231006.fna.RAST.fbamodel': ['cpd00053', 'cpd00161', 'cpd00067'], 'Sphingobium_sp._AP49_2512564014.fna.RAST.fbamodel': ['cpd00067', 'cpd00067', 'cpd00009', 'cpd00129', 'cpd00136', 'cpd00054', 'cpd00060', 'cpd00039', 'cpd00132', 'cpd00118', 'cpd00084']}}]
             </div> -->
         </div>
-        <br> <br> <br>
-        <h3>Novel scores</h3>
-
-        <h4>Functional Complementarity (FC)</h4>    
-        <p>
-            The <b>FC</b> score is calculated as the Jiccard Index of ontologies $O$ from either RAST or another annotation software available on KBase <sup><a href="#kbase">[2]</a></sup>
-            <div class="latex">
-                \[ FC= \left( \frac{O_1 \cap O_2}{O_1 \cup O_2} \right)~~. \]
-            </div>
-            This score captures the potential for niche overlap and therefore negative interactions. The broad assessment of the entire genome further captures secondary metabolic interactions as well as the primary metabolism that is embodied in genome-scale metabolic models.
-        </p>
-
-        <h4>Growth Yield Difference (GYD)</h4>    
-        <p>
-            The <b>GYD</b> score evaluates the disparity in growth rate between the isolated members
-            <div class="latex">
-                \[ GYD = \frac{abs(G_{1}-G_{2})}{min(G_{1}, G_{2})}~~, \]
-            </div>
-            by normalizing the difference in the member's growth rates by the growth rate of the slower growing member. A relatively large disparity in the isolate growth rates may foreshadow a negative interaction when the members are combined, where one member rapidly begins dominating the environment and media consumption which leaves the other member potentially starved and possibly launching antibiotic warfare in desparation to survive.
-        </p>
-
-        <h4>Costless Interaction Potential (CIP)</h4>    
-        <p>
-            The <b>CIP</b> score quantifies the union of costless excreta <i>CE</i> (compounds that are excreted at maximal growth and therefore have no fitness cost associated with their excretion) in the isolated members
-            <div class="latex">
-                \[ CIP = len(CE_1 \cup CE_2)~~, \]
-            </div>
-            which may contextualize syntrophic exchanges in their likelihood for exchange based on the fitness expense of their excretion. Our curation of the MIP score can be further contextualized with costless excreta via the intersection of exchanged compounds in the MIP score and the CIP for the same member pair. 
-        </p>
-
-        <h4>Biological Interaction Potential (BIT)</h4>    
-        <p>
-            The <b>BIT</b> score categorizes the member interaction into one of the classical descriptions -- competitive, amensalism, neutral, parasitism, commensalism, and mutualism -- based on relative growth of the members as isolates <i>G<sub>1</sub></i> versus in the community environment <i>G<sub>1,comm</sub></i>
-            <div class="latex">
-                \[ BIT_1 = G_{1,comm}-G_1 \]
-            </div>
-            <div class="latex">
-                \[ BIT_2 = G_{2,comm}-G_2 \]
-            </div>
-            which provides a tangible biological description of the member interaction based on growth through the primary metabolism.
-        </p>
-
-        <h3>Curated scores</h3>
-
-        <h4>MRO</h4>
-        <p>
-            The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is in the SMETANA suite and was published in several earlier studies as well, albeit with slight algorithmic variations. The MRO quantifies the fraction of a member's nutritional requirements, in a given media or the complete media by default, that overlap with the other member's nutritional requirements 
-                <div class="latex">\[ MRO= \frac{|M_1 \cap M_2|}{|M_1|} \]</div>
-            and is importantly directional (by replacing the denominator member), which can capture directional dependencies of interactions (e.g. lawn versus spot). The minimal media $M$ of each member is determined by minimizing the total exchange flux.
-        </p>
-
-        <h4>MIP</h4>
-        <p>
-            The <i><b>M</b>etabolic <b>I</b>nteraction <b>P</b>otential</i> (MIP) score is also in the SMETANA suite and earlier studies. This score quantifies syntrophic exchanges between the members. Our curation computes the MIP as the difference in exchanged compounds versus transported compounds in the compartmentalized community model
-                <div class="latex">\[ MIP=M_{transports}-M_{exchanges}~~, \]</div>
-            where compounds that the members are transporting but the community is not exchanging with the media must be sourced from syntrophy. The MIP compounds that are costlessly excreted can also be quantified as a subscore of the MIP, and may better represent the compounds that are favorably exchanged in the community.
-        </p>
-
-        <h4>PC</h4>
-        <p>
-            The <i><b>P</b>otential <b>C</b>ooperation</i> (PC) score quantifies the net effect of co-growth relative to isolate growth, and in our curation is determined as the ratio of community growth to the sum of isolated member growths
-                <div class="latex">\[ PC = \frac{G_{comm}}{G_1+G_2}~~, \]</div>
-            and is therefore essentially a continuous quantitative representation of the discrete qualitative BIT score.
-        </p>
-
-        <h4>BSS</h4>
-        <p>
-            The <i><b>B</b>iosynthetic <b>S</b>upport <b>S</b>core</i> (BSS) score quantifies the capacity of a member to parasitize another member by topologically evaluating the proportion of a member's nutritional requirements that are in the other member's cytoplasmic metabolites
-                <div class="latex">\[ BSS = \frac{M_i \cap R_j}{M_i}~~. \]</div>
-            This score therefore quantifies the capacity or incentive for negative interaction.
-        </p>
     </body>
 </html>
