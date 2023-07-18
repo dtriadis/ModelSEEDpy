@@ -209,10 +209,13 @@ def commscores_report(df, mets, export_html_path="commscores_report.html"):
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
     for col in heatmap_df.columns:
         if any([kind in col for kind in ["MRO", "MIP"]]):  heatmap_df[col] = heatmap_df[col].apply(quantify_MRO)
-    heatmap_df.drop("BIT", axis=1, inplace=True)
+    heatmap_df.drop("BIT", axis=1, inplace=True)    # TODO colorize the BIT entries as well
     heatmap_df = heatmap_df.astype(float)
+    heatmap_df["CIP"] = heatmap_df["CIP"].astype(int)
+    heatmap_df["MIP_model1 (costless)"] = heatmap_df["MIP_model1 (costless)"].astype(int)
+    heatmap_df["MIP_model2 (costless)"] = heatmap_df["MIP_model2 (costless)"].astype(int)
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
-    content = {'table': df.to_html(), "mets": mets, "heatmap": heatmap_df.style.background_gradient().to_html()}
+    content = {'table': df.applymap(lambda x: round(x, 3)).to_html(), "mets": mets, "heatmap": heatmap_df.style.background_gradient().to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))
     html_report = env.get_template("commscores_template.html").render(content)

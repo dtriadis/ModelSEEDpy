@@ -15,7 +15,7 @@
         <script type="text/x-mathjax-config">
             MathJax = {
               tex: {
-                inlineMath: [['$', '$'], ["\\(", "\\)"]],
+                inlineMath: [['<i>', '<i>'], ["\\(", "\\)"]],
                 processEscapes: true,
               }
             }
@@ -61,7 +61,7 @@
 
                 <h4>Functional Complementarity (FC)</h4>    
                 <p>
-                    The <b>FC</b> score is calculated as the Jiccard Index of ontologies $O$ from either RAST or another annotation software available on KBase
+                    The <b>FC</b> score is calculated as the Jiccard Index of ontologies <i>O</i> from either RAST or another annotation software available on KBase
                     <div class="latex">
                         \[ FC= \left( \frac{O_1 \cap O_2}{O_1 \cup O_2} \right)~~. \]
                     </div>
@@ -104,7 +104,7 @@
                 <p>
                     The <i><b>M</b>etabolic <b>R</b>esource <b>O</b>verlap</i> (MRO) score is in the SMETANA suite and was published in several earlier studies as well, albeit with slight algorithmic variations. The MRO quantifies the fraction of a member's nutritional requirements, in a given media or the complete media by default, that overlap with the other member's nutritional requirements 
                         <div class="latex">\[ MRO= \frac{|M_1 \cap M_2|}{|M_1|} \]</div>
-                    and is importantly directional (by replacing the denominator member), which can capture directional dependencies of interactions (e.g. lawn versus spot). The minimal media $M$ of each member is determined by minimizing the total exchange flux.
+                    and is importantly directional (by replacing the denominator member), which can capture directional dependencies of interactions (e.g. lawn versus spot). The minimal media <i>M</i> of each member is determined by minimizing the total exchange flux.
                 </p>
 
                 <h4>MIP</h4>
