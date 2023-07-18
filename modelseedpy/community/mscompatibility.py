@@ -274,6 +274,8 @@ class MSCompatibility:
         # identify a matching metabolite name in the ModelSEED Database
         base_name = ''.join(met.name.split('-')[1:]).capitalize()
         comp = re.compile("(_\w\d+$)")
+        if not comp.search(met.id):
+            comp = re.compile("(\[\w\])")
         general_name = comp.sub('', met.name)
         general_met = comp.sub("", met.id)
         met_name = None

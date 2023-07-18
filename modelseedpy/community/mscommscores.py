@@ -41,7 +41,7 @@ def _load_models(member_models: Iterable, com_model=None, compatibilize=True, pr
     return member_models, com_model
 
 def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, environment=None,
-               interacting=True, printing=False, minimization_method="minFlux"):
+               interacting=True, printing=False, minimization_method="minFlux", skip_bad_media=False):
     # ic(media, com_model, model_s_)
     if com_model is None and model_s_ is None:  raise TypeError("< com_model > or < model_s_ > must be parameterized.")
     if media is not None:
@@ -50,15 +50,30 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
         elif com_model is not None:  return media["community_media"]
         return media
     # model_s_ is either a singular model or a list of models
-    if com_model is not None:  com_media, media_sol = MSMinimalMedia.determine_min_media(
-        com_model, minimization_method, min_growth, None, interacting, 5, printing)
+    if com_model is not None:
+        try:
+            com_media, media_sol = MSMinimalMedia.determine_min_media(
+                com_model, minimization_method, min_growth, None, interacting, 5, printing)
+        except Exception as e:
+            if skip_bad_media:  com_media, media_sol = None, None
+            else: print(e)
     if model_s_ is not None:
-        if not isinstance(model_s_, (list,set,tuple,ndarray)):  return MSMinimalMedia.determine_min_media(
-            model_s_, minimization_method, min_growth, environment, interacting, printing)
+        if not isinstance(model_s_, (list,set,tuple,ndarray)):
+            try:
+                return MSMinimalMedia.determine_min_media(
+                    model_s_, minimization_method, min_growth, environment, interacting, printing)
+            except Exception as e:
+                if skip_bad_media: return None
+                else: print(e)
         members_media = {}
         for model in model_s_:
-            members_media[model.id] = {"media":MSMinimalMedia.determine_min_media(
-                model, minimization_method, min_growth, environment, interacting, printing)[0]}
+            try:
+                members_media[model.id] = {"media": MSMinimalMedia.determine_min_media(
+                    model, minimization_method, min_growth, environment, interacting, printing)[0]}
+                continue
+            except Exception as e:
+                if skip_bad_media: continue
+                else: print(e)
         # print(members_media)
         if com_model is None:  return members_media
     else:  return com_media, media_sol
@@ -246,7 +261,7 @@ class MSCommScores:
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None, lazy_load=False,
-                         kbase_obj=None, cip_score=True, costless=True, print_progress=False):
+                         kbase_obj=None, cip_score=True, costless=True, skip_bad_media=False, print_progress=False):
         from pandas import Series
 
         if isinstance(pairs, list):  pairs, models_media, environments, RAST_genomes, lazy_load, kbase_obj = pairs
@@ -258,14 +273,18 @@ class MSCommScores:
         for model1, models in pairs.items():
             if lazy_load:  model1, model1_str = MSCommScores._load(model1, kbase_obj)
             else:  model1_str = str(list(pairs.keys()).index(model1))
-            if model1.id not in models_media: models_media[model1.id] = {"media": _get_media(model_s_=model1)}
+            if model1.id not in models_media:
+                models_media[model1.id] = {"media": _get_media(model_s_=model1, skip_bad_media=skip_bad_media)}
+                if models_media[model1.id] is None:  continue
             if model1.id not in model_utils:  model_utils[model1.id] = MSModelUtil(model1)
             # print(pid, model1)
             for model_index, model2 in enumerate(models):
                 # print(model2)
                 if lazy_load:  model2, model2_str = MSCommScores._load(model2, kbase_obj)
                 else:  model2_str = f"{model1_str}_{model_index}"
-                if model2.id not in models_media: models_media[model2.id] = {"media": _get_media(model_s_=model2)}
+                if model2.id not in models_media:
+                    models_media[model2.id] = {"media": _get_media(model_s_=model2, skip_bad_media=skip_bad_media)}
+                    if models_media[model2.id] is None:  continue
                 if model2.id not in model_utils:  model_utils[model2.id] = MSModelUtil(model2)
                 # print(model2)
                 grouping = [model1, model2]
@@ -333,7 +352,7 @@ class MSCommScores:
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True):
+                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False):
         from pandas import concat
 
         all_models = list(set(all_models))
@@ -353,7 +372,7 @@ class MSCommScores:
         if not all_models:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
         lazy_load = isinstance(all_models[0], (list,set,tuple))
         if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
-        if not mem_media:  models_media = _get_media(model_s_=all_models)
+        if not mem_media:  models_media = _get_media(model_s_=all_models, skip_bad_media=skip_bad_media)
         else:
             models_media = mem_media.copy()
             missing_models = set()
@@ -364,7 +383,7 @@ class MSCommScores:
                     missing_modelID.append(model if not hasattr(model, "id") else model.id)
             if missing_models != set():
                 print(f"Media of the {missing_modelID} models are not defined, and will be calculated separately.")
-                models_media.update(_get_media(model_s_=missing_models))
+                models_media.update(_get_media(model_s_=missing_models), skip_bad_media=skip_bad_media)
         if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
         print(f"\nExamining the {len(list(model_pairs))} model pairs")
         if pool_size is not None:
@@ -377,7 +396,7 @@ class MSCommScores:
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless)
+                                                            kbase_obj, cip_score, costless, skip_bad_media)
         return concat(series, axis=1).T, mets
 
     @staticmethod

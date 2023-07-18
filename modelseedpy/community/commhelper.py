@@ -112,7 +112,9 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if printing:  print(f"The {rxn.id} ({output}; {hasattr(rxn, 'compartment')}) is unpredictable.")
-                        rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                        try:
+                            rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                        except ValueError: pass
                     elif len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
                     elif len(output) == 3:
                         name, compartment, index = output
