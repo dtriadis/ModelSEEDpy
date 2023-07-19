@@ -344,21 +344,15 @@ class MSATPCorrection:
         self.selected_media = []
         best_score = inf
         for media in self.media_gapfill_stats:
-<<<<<<< HEAD
-=======
             atp_att["core_atp_gapfilling"][media.id] = {
                 "score": 0,
                 "new": {},
                 "reversed": {},
             }
->>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
             if self.media_gapfill_stats[media]:
                 atp_att["core_atp_gapfilling"][media.id]["score"] = len(
                     self.media_gapfill_stats[media]["new"].keys()
                 ) + 0.5 * len(self.media_gapfill_stats[media]["reversed"].keys())
-<<<<<<< HEAD
-            best_score = min(best_score, gfscore)
-=======
                 atp_att["core_atp_gapfilling"][media.id][
                     "new"
                 ] = self.media_gapfill_stats[media]["new"]
@@ -370,13 +364,8 @@ class MSATPCorrection:
                     "score": 1000,
                     "failed": True,
                 }
-            if (
-                best_score is None
-                or atp_att["core_atp_gapfilling"][media.id]["score"] < best_score
-            ):
-                best_score = atp_att["core_atp_gapfilling"][media.id]["score"]
+            best_score = min(best_score, atp_att["core_atp_gapfilling"][media.id]["score"])
 
->>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
         if self.max_gapfilling is None:
             self.max_gapfilling = best_score
 

@@ -47,7 +47,9 @@ setup(
         "deepdiff",
         "openpyxl",
         "jinja2",
-        "multiprocess"
+        "multiprocess",
+        "h5py",
+        "graphviz"
     ],
     tests_require=[
         "pytest",

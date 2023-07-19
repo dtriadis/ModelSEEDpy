@@ -802,17 +802,6 @@ class MSTemplateBiomass:
                     coef = comp.coefficient
                 elif comp.coefficient_type == "AT":
                     coef = (
-<<<<<<< HEAD
-                            comp.coefficient
-                            * (1 - GC)
-                            * (type_abundances[type] / bio_type_hash[type]["total_mw"])
-                    )
-                elif comp.coefficient_type == "GC":
-                    coef = (
-                            comp.coefficient
-                            * GC
-                            * (type_abundances[type] / bio_type_hash[type]["total_mw"])
-=======
                         2
                         * comp.coefficient
                         * (1 - GC)
@@ -824,7 +813,6 @@ class MSTemplateBiomass:
                         * comp.coefficient
                         * GC
                         * (type_abundances[type] / bio_type_hash[type]["total_mw"])
->>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
                     )
                 if coef:
                     met = model.metabolites.get_by_id(comp.metabolite.id + index)
@@ -848,20 +836,9 @@ class MSTemplateBiomass:
                             else:
                                 metabolites[met] = coef * comp.linked_metabolites[l_met]
                         elif not classic:
-<<<<<<< HEAD
-                            if met in metabolites:
-                                specific_reactions[type].metabolites[met] += (
-                                        coef * comp.linked_metabolites[l_met]
-                                )
-                            else:
-                                specific_reactions[type].metabolites[met] = (
-                                        coef * comp.linked_metabolites[l_met]
-                                )
-=======
                             specific_reactions[type].add_metabolites(
                                 {met: coef * comp.linked_metabolites[l_met]}
                             )
->>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
         biorxn.annotation[SBO_ANNOTATION] = "SBO:0000629"
         biorxn.add_metabolites(metabolites)
         if add_to_model:
@@ -1282,16 +1259,9 @@ class MSTemplate:
                 if cpx.id not in self.complexes:
                     self.add_complexes([cpx])
                 complex_replace.add(self.complexes.get_by_id(cpx.id))
-<<<<<<< HEAD
             rxn._metabolites = metabolites_replace
+            rxn._update_awareness()
             rxn.complexes = complex_replace
-=======
-
-            x._metabolites = metabolites_replace
-            x._update_awareness()
-            x.complexes = complex_replace
-
->>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
         self.reactions += reaction_list
 
     def get_role_sources(self):
