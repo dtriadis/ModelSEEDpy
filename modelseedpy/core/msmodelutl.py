@@ -4,6 +4,8 @@ import re
 import time
 import json
 import sys
+import pandas as pd
+import cobra
 from cobra import Model, Reaction, Metabolite
 from cobra.io.json import from_json, to_json
 from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
@@ -13,14 +15,14 @@ from itertools import chain
 from optlang.symbolics import Zero
 from optlang import Constraint, Objective
 from math import isclose
+from multiprocessing import Value
+
+# from builtins import None
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-# handler = logging.StreamHandler(sys.stdout)
-# handler.setLevel(logging.DEBUG)
-# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# handler.setFormatter(formatter)
-# logger.addHandler(handler)
+logger.setLevel(
+    logging.INFO
+)  # When debugging - set this to INFO then change needed messages below from DEBUG to INFO
 
 
 class MSModelUtil:
@@ -88,6 +90,8 @@ class MSModelUtil:
 
     @staticmethod
     def get(model, create_if_missing=True):
+        if isinstance(model, MSModelUtil):
+            return model
         if model in MSModelUtil.mdlutls:
             return MSModelUtil.mdlutls[model]
         elif create_if_missing:
@@ -111,6 +115,7 @@ class MSModelUtil:
                                  f" where the original objective value is {org_obj_val}"
                                  f" and the new objective value is {new_obj_val}.")
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.model)
+        self.wsid = None
         self.atputl = None
         self.gfutl = None
         self.metabolite_hash = None
@@ -119,6 +124,16 @@ class MSModelUtil:
         self.reaction_scores = None
         self.score = None
         self.integrated_gapfillings = []
+        self.attributes = {}
+        if hasattr(self.model, "computed_attributes"):
+            if self.model.computed_attributes:
+                self.attributes = self.model.computed_attributes
+        if "pathways" not in self.attributes:
+            self.attributes["pathways"] = {}
+        if "auxotrophy" not in self.attributes:
+            self.attributes["auxotrophy"] = {}
+        if "fbas" not in self.attributes:
+            self.attributes["fbas"] = {}
 
     def compute_automated_reaction_scores(self):
         """
@@ -331,6 +346,26 @@ class MSModelUtil:
     #################################################################################
     # Functions related to editing the model
     #################################################################################
+    def get_attributes(self, key=None, default=None):
+        if not key:
+            return self.attributes
+        if key not in self.attributes:
+            self.attributes[key] = default
+        return self.attributes[key]
+
+    def save_attributes(self, value=None, key=None):
+        if value:
+            if key:
+                self.attributes[key] = value
+            else:
+                self.attributes = value
+        if hasattr(self.model, "computed_attributes"):
+            logger.info(
+                "Setting FBAModel computed_attributes to mdlutl attributes"
+            )
+            self.attributes["gene_count"] = len(self.model.genes)
+            self.model.computed_attributes = self.attributes
+
     def add_ms_reaction(self, rxn_dict, msdb_path=None, msdb_object=None, comp_trans=["c0", "e0"]):
         if msdb_object:  modelseed = msdb_object
         else:
@@ -424,6 +459,30 @@ class MSModelUtil:
             medium[ex_rxn] = cpd.maxFlux
         self.model.medium = medium
         return self.model
+
+    #################################################################################
+    # Functions related to utility functions
+    #################################################################################
+    def build_model_data_hash(self):
+        data = {
+            "Model": self.id,
+            "Genome": self.genome.info.metadata["Name"],
+            "Genes": self.genome.info.metadata["Number of Protein Encoding Genes"],
+        }
+        return data
+
+    def compare_reactions(self, reaction_list, filename):
+        data = {}
+        for rxn in reaction_list:
+            for met in rxn.metabolites:
+                if met.id not in data:
+                    data[met.id] = {}
+                    for other_rxn in reaction_list:
+                        data[met.id][other_rxn.id] = 0
+                data[met.id][rxn.id] = rxn.metabolites[met]
+        df = pd.DataFrame(data)
+        df = df.transpose()
+        df.to_csv(filename)
 
     #################################################################################
     # Functions related to managing biomass reactions
@@ -600,6 +659,7 @@ class MSModelUtil:
 
     def test_solution(self, solution, keep_changes=False):
         unneeded = []
+        removed_rxns = []
         tempmodel = self.model
         if not keep_changes:
             tempmodel = from_json(to_json(self.model))
@@ -617,7 +677,7 @@ class MSModelUtil:
                     rxnobj.upper_bound = 0
                     objective = tempmodel.slim_optimize()
                     if objective < solution["minobjective"]:
-                        logger.debug(
+                        logger.info(
                             rxn_id
                             + solution[key][rxn_id]
                             + " needed:"
@@ -627,8 +687,9 @@ class MSModelUtil:
                         )
                         rxnobj.upper_bound = original_bound
                     else:
+                        removed_rxns.append(rxnobj)
                         unneeded.append([rxn_id, solution[key][rxn_id], key])
-                        logger.debug(
+                        logger.info(
                             rxn_id
                             + solution[key][rxn_id]
                             + " not needed:"
@@ -639,7 +700,7 @@ class MSModelUtil:
                     rxnobj.lower_bound = 0
                     objective = tempmodel.slim_optimize()
                     if objective < solution["minobjective"]:
-                        logger.debug(
+                        logger.info(
                             rxn_id
                             + solution[key][rxn_id]
                             + " needed:"
@@ -649,14 +710,16 @@ class MSModelUtil:
                         )
                         rxnobj.lower_bound = original_bound
                     else:
+                        removed_rxns.append(rxnobj)
                         unneeded.append([rxn_id, solution[key][rxn_id], key])
-                        logger.debug(
+                        logger.info(
                             rxn_id
                             + solution[key][rxn_id]
                             + " not needed:"
                             + str(objective)
                         )
         if keep_changes:
+            tempmodel.remove_reactions(removed_rxns)
             for items in unneeded:
                 del solution[items[2]][items[0]]
         return unneeded
@@ -791,6 +854,7 @@ class MSModelUtil:
         if model is None:
             model = self.model
         if apply_condition:
+            print("applying - bad")
             self.apply_test_condition(condition, model)
         new_objective = model.slim_optimize()
         value = new_objective
@@ -991,12 +1055,10 @@ class MSModelUtil:
         Raises
         ------
         """
-        logger.debug("Expansion started!")
+        logger.debug(f"Expansion started! Binary = {binary_search}")
         filtered_list = []
         for condition in condition_list:
-
             logger.debug(f"testing condition {condition}")
-
             currmodel = self.model
             tic = time.perf_counter()
             new_filtered = []
@@ -1007,13 +1069,15 @@ class MSModelUtil:
                         reaction_list, condition, currmodel
                     )
                     for item in new_filtered:
-                        filtered_list.append(item)
+                        if item not in filtered_list:
+                            filtered_list.append(item)
                 else:
                     new_filtered = self.linear_expansion_test(
                         reaction_list, condition, currmodel
                     )
                     for item in new_filtered:
-                        filtered_list.append(item)
+                        if item not in filtered_list:
+                            filtered_list.append(item)
             # Restoring knockout of newly filtered reactions, which expire after exiting the "with" block above
             for item in new_filtered:
                 if item[1] == ">":
@@ -1021,16 +1085,155 @@ class MSModelUtil:
                 else:
                     item[0].lower_bound = 0
             toc = time.perf_counter()
-            logger.debug(
+            logger.info(
                 "Expansion time:" + condition["media"].id + ":" + str((toc - tic))
             )
-            logger.debug(
+            logger.info(
                 "Filtered count:"
                 + str(len(filtered_list))
                 + " out of "
                 + str(len(reaction_list))
             )
+            # Adding filter results to attributes
+            gf_filter_att = self.get_attributes("gf_filter", {})
+            if condition["media"].id not in gf_filter_att:
+                gf_filter_att[condition["media"].id] = {}
+            if condition["objective"] not in gf_filter_att[condition["media"].id]:
+                gf_filter_att[condition["media"].id][condition["objective"]] = {}
+            if (
+                condition["threshold"]
+                not in gf_filter_att[condition["media"].id][condition["objective"]]
+            ):
+                gf_filter_att[condition["media"].id][condition["objective"]][
+                    condition["threshold"]
+                ] = {}
+            for item in new_filtered:
+                if (
+                    item[0].id
+                    not in gf_filter_att[condition["media"].id][condition["objective"]][
+                        condition["threshold"]
+                    ]
+                ):
+                    gf_filter_att[condition["media"].id][condition["objective"]][
+                        condition["threshold"]
+                    ][item[0].id] = {}
+                if (
+                    item[1]
+                    not in gf_filter_att[condition["media"].id][condition["objective"]][
+                        condition["threshold"]
+                    ][item[0].id]
+                ):
+                    if len(item) < 3:
+                        gf_filter_att[condition["media"].id][condition["objective"]][
+                            condition["threshold"]
+                        ][item[0].id][item[1]] = None
+                    else:
+                        gf_filter_att[condition["media"].id][condition["objective"]][
+                            condition["threshold"]
+                        ][item[0].id][item[1]] = item[2]
+            gf_filter_att = self.save_attributes(gf_filter_att, "gf_filter")
         return filtered_list
+
+    #################################################################################
+    # Functions related to biomass sensitivity analysis
+    #################################################################################
+    def find_unproducible_biomass_compounds(self, target_rxn="bio1", ko_list=None):
+        # Cloning the model because we don't want to modify the original model with this analysis
+        tempmodel = cobra.io.json.from_json(cobra.io.json.to_json(self.model))
+        # Getting target reaction and making sure it exists
+        if target_rxn not in tempmodel.reactions:
+            logger.critical(target_rxn + " not in model!")
+        target_rxn_obj = tempmodel.reactions.get_by_id(target_rxn)
+        tempmodel.objective = target_rxn
+        original_objective = tempmodel.objective
+        pkgmgr = MSPackageManager.get_pkg_mgr(tempmodel)
+        rxn_list = [target_rxn, "rxn05294_c0", "rxn05295_c0", "rxn05296_c0"]
+        for rxn in rxn_list:
+            if rxn in tempmodel.reactions:
+                pkgmgr.getpkg("FlexibleBiomassPkg").build_package(
+                    {
+                        "bio_rxn_id": rxn,
+                        "flex_coefficient": [0, 1],
+                        "use_rna_class": None,
+                        "use_dna_class": None,
+                        "use_protein_class": None,
+                        "use_energy_class": [0, 1],
+                        "add_total_biomass_constraint": False,
+                    }
+                )
+
+        # Creating min flex objective
+        min_flex_obj = tempmodel.problem.Objective(Zero, direction="min")
+        obj_coef = dict()
+        for reaction in tempmodel.reactions:
+            if reaction.id[0:5] == "FLEX_" or reaction.id[0:6] == "energy":
+                obj_coef[reaction.forward_variable] = 1
+                obj_coef[reaction.reverse_variable] = 1
+        # Temporarily setting flex objective so I can set coefficients
+        tempmodel.objective = min_flex_obj
+        min_flex_obj.set_linear_coefficients(obj_coef)
+        if not ko_list:
+            return self.run_biomass_dependency_test(
+                target_rxn_obj, tempmodel, original_objective, min_flex_obj, rxn_list
+            )
+        else:
+            output = {}
+            for item in ko_list:
+                logger.debug("KO:" + item[0] + item[1])
+                rxnobj = tempmodel.reactions.get_by_id(item[0])
+                if item[1] == ">":
+                    original_bound = rxnobj.upper_bound
+                    rxnobj.upper_bound = 0
+                    if item[0] not in output:
+                        output[item[0]] = {}
+                    output[item[0]][item[1]] = self.run_biomass_dependency_test(
+                        target_rxn_obj,
+                        tempmodel,
+                        original_objective,
+                        min_flex_obj,
+                        rxn_list,
+                    )
+                    rxnobj.upper_bound = original_bound
+                else:
+                    original_bound = rxnobj.lower_bound
+                    rxnobj.lower_bound = 0
+                    if item[0] not in output:
+                        output[item[0]] = {}
+                    output[item[0]][item[1]] = self.run_biomass_dependency_test(
+                        target_rxn_obj,
+                        tempmodel,
+                        original_objective,
+                        min_flex_obj,
+                        rxn_list,
+                    )
+                    rxnobj.lower_bound = original_bound
+            return output
+
+    def run_biomass_dependency_test(
+        self, target_rxn, tempmodel, original_objective, min_flex_obj, rxn_list
+    ):
+        tempmodel.objective = original_objective
+        objective = tempmodel.slim_optimize()
+        if objective > 0:
+            target_rxn.lower_bound = 0.1
+            tempmodel.objective = min_flex_obj
+            solution = tempmodel.optimize()
+            biocpds = []
+            for reaction in tempmodel.reactions:
+                if reaction.id[0:5] == "FLEX_" and (
+                    reaction.forward_variable.primal > Zero
+                    or reaction.reverse_variable.primal > Zero
+                ):
+                    logger.debug("Depends on:" + reaction.id)
+                    label = reaction.id[5:]
+                    for item in rxn_list:
+                        if label[0 : len(item)] == item:
+                            biocpds.append(label[len(item) + 1 :])
+            target_rxn.lower_bound = 0
+            return biocpds
+        else:
+            logger.debug("Cannot grow")
+            return None
 
     def add_atp_hydrolysis(self, compartment):
         # Searching for ATP hydrolysis compounds
