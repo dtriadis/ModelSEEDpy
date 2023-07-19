@@ -328,8 +328,6 @@ class MSCommScores:
                             del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
                         if print_progress:  print("costless_MIP  done", end="\t")
                     if print_progress:  print("MIP done", end="\t")
-                    kbase_dic.update({"PC": f"{MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]:.5f}"})
-                    if print_progress:  print("PC  done", end="\t")
                     bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
                                                   environments, models_media, anme_comm)
                     kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": f"{val:.5f}"
@@ -337,6 +335,8 @@ class MSCommScores:
                     if print_progress:  print("BSS done", end="\t")
                     kbase_dic.update({"BIT": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     if print_progress:  print("BIT done", end="\t")
+                    kbase_dic.update({"PC": f"{MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]:.5f}"})
+                    if print_progress:  print("PC  done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"GYD": f"""{list(MSCommScores.gyd(
                         grouping, environment=environ, community=community, anme_comm=anme_comm).values())[0]:.5f}"""})
