@@ -61,7 +61,7 @@ def minimizeFlux_withGrowth(model_util, min_growth, obj):
     model_util.add_minimal_objective_cons(min_growth)
     model_util.add_objective(obj, "min")
     sol = model_util.model.optimize()
-    sol_dict = bioFlux_check(model_util.model, sol)
+    sol_dict = bioFlux_check(model_util.model, sol, min_growth=min_growth)
     return sol, sol_dict
 
 
@@ -88,7 +88,7 @@ class MSMinimalMedia:
         model_util = MSModelUtil(org_model, True)
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
-        min_growth = min_growth or model_util.model.slim_optimize()
+        min_growth =  model_util.model.slim_optimize() if min_growth is None else min(min_growth, model_util.model.slim_optimize())
         # min_flux = MSMinimalMedia._min_consumption_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media
@@ -257,7 +257,6 @@ class MSMinimalMedia:
     @staticmethod
     def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
                             interacting=True, solution_limit=5, printing=True):
-        min_growth = min_growth or 0.1
         if minimization_method == "minFlux":
             return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
         if minimization_method == "minComponents":

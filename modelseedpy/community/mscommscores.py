@@ -63,8 +63,8 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
                 return MSMinimalMedia.determine_min_media(
                     model_s_, minimization_method, min_growth, environment, interacting, printing)
             except Exception as e:
-                if skip_bad_media: return None
-                else: print(e)
+                if not skip_bad_media: print(e)
+                return None
         members_media = {}
         for model in model_s_:
             try:
@@ -121,10 +121,10 @@ class MSCommScores:
         sc = None # self.sc_score()
         smetana = None # self.smetana_score()
         gyd = self.gyd_score()
-        rfc = self.rfc_score() if any([kbase_obj is not None, RAST_genomes != [], cobrakbase_path is not None
+        fc = self.fc_score() if any([kbase_obj is not None, RAST_genomes != [], cobrakbase_path is not None
                                        and kbase_token_path is not None]) else None
         return {"mro": mro, "mip": mip, "mp": mp, "mu": mu, "sc": sc, "smetana": smetana,
-                "gyd":gyd, "rfc":rfc}
+                "gyd":gyd, "fc":fc}
 
     def mro_score(self):
         self.mro_val = MSCommScores.mro(self.models, self.media["members"], self.min_growth,
@@ -161,13 +161,13 @@ class MSCommScores:
                   f" is {score} times greater than the growth of the slower member.")
         return self.gyd
 
-    def rfc_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, RAST_genomes:dict=None):
-        self.rfc_val = MSCommScores.rfc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
-        if not self.printing:  return self.rfc
-        for pair, score in self.rfc_val.items():
-            print(f"\nRFC Score: The similarity of RAST functional SSO ontology "
+    def fc_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, RAST_genomes:dict=None):
+        self.fc_val = MSCommScores.fc(self.models, kbase_obj, cobrakbase_path, kbase_token_path, RAST_genomes)
+        if not self.printing:  return self.fc
+        for pair, score in self.fc_val.items():
+            print(f"\nFC Score: The similarity of RAST functional SSO ontology "
                   f"terms between the {pair} members is {score}.")
-        return self.rfc
+        return self.fc
 
     def mp_score(self):
         print("executing MP")
@@ -261,7 +261,8 @@ class MSCommScores:
 
     @staticmethod
     def calculate_scores(pairs, models_media=None, environments=None, RAST_genomes=None, lazy_load=False,
-                         kbase_obj=None, cip_score=True, costless=True, skip_bad_media=False, print_progress=False):
+                         kbase_obj=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
+                         print_progress=False):
         from pandas import Series
 
         if isinstance(pairs, list):  pairs, models_media, environments, RAST_genomes, lazy_load, kbase_obj = pairs
@@ -272,7 +273,7 @@ class MSCommScores:
         count = 0
         for model1, models in pairs.items():
             if lazy_load:  model1, model1_str = MSCommScores._load(model1, kbase_obj)
-            else:  model1_str = str(list(pairs.keys()).index(model1))
+            else:  model1_str = model1.id
             if model1.id not in models_media:
                 models_media[model1.id] = {"media": _get_media(model_s_=model1, skip_bad_media=skip_bad_media)}
                 if models_media[model1.id] is None:  continue
@@ -281,7 +282,7 @@ class MSCommScores:
             for model_index, model2 in enumerate(models):
                 # print(model2)
                 if lazy_load:  model2, model2_str = MSCommScores._load(model2, kbase_obj)
-                else:  model2_str = f"{model1_str}_{model_index}"
+                else:  model2_str = model2.id
                 if model2.id not in models_media:
                     models_media[model2.id] = {"media": _get_media(model_s_=model2, skip_bad_media=skip_bad_media)}
                     if models_media[model2.id] is None:  continue
@@ -295,11 +296,12 @@ class MSCommScores:
                 print(f"{pid}~~{count}\t{modelIDs}")
                 for envIndex, environ in enumerate(environments):
                     if print_progress:  print(f"\tEnvironment{envIndex}: {environ}", end="\t")
-                    model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
-                    model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str)
+                    if not anme_comm:
+                        model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
+                        model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
-                    kbase_dic["media"] = f"{environ}{envIndex}" if not hasattr(environ, "name") else environ.name
+                    kbase_dic["media"] = f"media{envIndex}" if not hasattr(environ, "name") else environ.name
                     if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
                     # define the MRO content
                     mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
@@ -329,19 +331,19 @@ class MSCommScores:
                     kbase_dic.update({"PC": f"{MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]:.5f}"})
                     if print_progress:  print("PC  done", end="\t")
                     bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
-                                                  environments, models_media)
-                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": val
+                                                  environments, models_media, anme_comm)
+                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": f"{val:.5f}"
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
-                    kbase_dic.update({"BIT": f"{MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community):.5f}"})
+                    kbase_dic.update({"BIT": MSCommScores.bit(grouping, comm_model, comm_sol=comm_sol, community=community)})
                     if print_progress:  print("BIT done", end="\t")
                     # determine the growth diff content
                     kbase_dic.update({"GYD": f"""{list(MSCommScores.gyd(
-                        grouping, environment=environ, community=community).values())[0]:.5f}"""})
+                        grouping, environment=environ, community=community, anme_comm=anme_comm).values())[0]:.5f}"""})
                     if print_progress:  print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
                     # determine the RAST Functional Complementarity content
-                    if kbase_obj is not None and RAST_genomes:
-                        kbase_dic.update({"FC": f"""{list(MSCommScores.rfc(
+                    if kbase_obj is not None and RAST_genomes and not anme_comm:
+                        kbase_dic.update({"FC": f"""{list(MSCommScores.fc(
                             grouping, kbase_obj, RAST_genomes=RAST_genomes).values())[0]:.5f}"""})
                         if print_progress:  print("FC done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
@@ -354,7 +356,7 @@ class MSCommScores:
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False):
+                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anmne_comm=False):
         from pandas import concat
 
         all_models = list(set(all_models))
@@ -398,7 +400,7 @@ class MSCommScores:
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless, skip_bad_media)
+                                                            kbase_obj, cip_score, costless, skip_bad_media, anmne_comm)
         return concat(series, axis=1).T, mets
 
     @staticmethod
@@ -629,12 +631,12 @@ class MSCommScores:
 
     @staticmethod
     def gyd(member_models:Iterable=None, model_utils:Iterable=None, environment=None, coculture_growth=False,
-            community=None):
+            community=None, anme_comm=False):
         diffs = {}
         for combination in combinations(model_utils or member_models, 2):
             if model_utils is None:
                 model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
-                if environment:  model1_util.add_medium(environment); model2_util.add_medium(environment)
+                if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if not coculture_growth:
                 G_m1, G_m2 = model1_util.model.slim_optimize(), model2_util.model.slim_optimize()
@@ -687,7 +689,7 @@ class MSCommScores:
         if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
 
     @staticmethod
-    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None):
+    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None, anme_comm=False):
         def compute_score(environment="complete"):
             model1_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
                                 for rxnID in minMedia[model1_util.id]["media"].keys()])
@@ -709,7 +711,7 @@ class MSCommScores:
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if environments:
                 for index, environment in enumerate(environments):
-                    model1_util.add_medium(environment); model2_util.add_medium(environment)
+                    if not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
                     compute_score(f"environment{index}")
             else:  compute_score()
         return bss_scores
@@ -745,8 +747,9 @@ class MSCommScores:
                 for genome_name in genome_names}
 
     @staticmethod
-    def rfc(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,  # RAST Functional Complementarity
+    def fc(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,  # RAST Functional Complementarity
             kbase_token_path:str=None, RAST_genomes:dict=None, printing=False):
+        if any([not hasattr(model, "genome_ref") for model in models]):  return None
         if not isinstance(RAST_genomes, dict):
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
@@ -756,7 +759,7 @@ class MSCommScores:
         elif models is not None:
             RAST_genomes = {k:v for k,v in RAST_genomes.items() if k in [model.id for model in models]}
         genome_combinations = list(combinations(RAST_genomes.keys(), 2))
-        if printing: print(f"The RAST Functionality Score (RFC) will be calculated for {len(genome_combinations)} pairs.")
+        if printing: print(f"The Functionality Score (FC) will be calculated for {len(genome_combinations)} pairs.")
         if not isinstance(list(RAST_genomes.values())[0], dict):
             genome1_set, genome2_set = set(), set()
             distances = {}
