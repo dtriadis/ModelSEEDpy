@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
-from modelseedpy.core.msgapfill import MSGapfill
-from modelseedpy.core.fbahelper import FBAHelper
 import itertools
 import cobra
+import copy
 import json
 import time
 import pandas as pd
@@ -26,26 +25,34 @@ from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.helpers import get_template
 
 logger = logging.getLogger(__name__)
+logger.setLevel(
+    logging.INFO
+)  # When debugging - set this to INFO then change needed messages below from DEBUG to INFO
 
 _path = _dirname(_abspath(__file__))
 
 min_gap = {
-    "Glc/O2": 5,
-    "Etho/O2": 0.01,
-    "Ac/O2": 1,
-    "Pyr/O2": 3,
-    "Glyc/O2": 2,
-    "Fum/O2": 3,
-    "Succ/O2": 2,
-    "Akg/O2": 2,
-    "LLac/O2": 2,
-    "Dlac/O2": 2,
-    "For/O2": 2,
-    "For/NO3": 1.5,
-    "Pyr/NO": 2.5,
-    "Pyr/NO2": 2.5,
-    "Pyr/NO3": 2.5,
-    "Pyr/SO4": 2.5,
+    "Glc.O2": 5,
+    "Etho.O2": 0.01,
+    "Ac.O2": 1,
+    "Pyr.O2": 3,
+    "Glyc.O2": 2,
+    "Fum.O2": 3,
+    "Succ.O2": 2,
+    "Akg.O2": 2,
+    "LLac.O2": 2,
+    "Dlac.O2": 2,
+    "For.O2": 1.875,
+    "For.NO3": 1.5,
+    "Pyr.NO": 2.5,
+    "Pyr.NO2": 2.5,
+    "Pyr.NO3": 2.5,
+    "Pyr.SO4": 2.5,
+}
+
+default_threshold_multipiers = {
+    "Glc": 2,
+    "default":1.2,
 }
 
 
@@ -100,6 +107,7 @@ class MSATPCorrection:
             output = self.modelutl.add_atp_hydrolysis(compartment)
             self.atp_hydrolysis = output["reaction"]
 
+        self.media_hash = {}
         self.atp_medias = []
         if load_default_medias:
             self.load_default_medias()
@@ -108,7 +116,13 @@ class MSATPCorrection:
                 self.atp_medias.append(media)
             else:
                 self.atp_medias.append([media, 0.01])
-
+            self.media_hash[media.id] = media
+        if "empty" not in self.media_hash:
+            media = MSMedia.from_dict({})
+            media.id = "empty"
+            media.name = "empty"
+            self.media_hash[media.id] = media
+        
         self.forced_media = []
         for media_id in forced_media:
             for media in self.atp_medias:
@@ -125,7 +139,9 @@ class MSATPCorrection:
             self.coretemplate = core_template
 
         self.msgapfill = MSGapfill(
-            self.modelutl, default_gapfill_templates=core_template
+            self.modelutl,
+            default_gapfill_templates=[core_template],
+            default_target=self.atp_hydrolysis.id,
         )
         # These should stay as None until atp correction is actually run
         self.cumulative_core_gapfilling = None
@@ -211,6 +227,7 @@ class MSATPCorrection:
         self.noncore_reactions, self.other_compartments = [], []
         # Iterating through reactions and disabling
         for reaction in self.model.reactions:
+            gfrxn = self.msgapfill.gfmodel.reactions.get_by_id(reaction.id)
             if reaction.id == self.atp_hydrolysis.id:
                 continue
             if FBAHelper.is_ex(reaction):
@@ -235,10 +252,12 @@ class MSATPCorrection:
                     logger.debug(reaction.id + " core but reversible")
                     self.noncore_reactions.append([reaction, "<"])
                     reaction.lower_bound = 0
+                    gfrxn.lower_bound = 0
                 if reaction.upper_bound > 0 and template_reaction.upper_bound <= 0:
                     logger.debug(reaction.id + " core but reversible")
                     self.noncore_reactions.append([reaction, ">"])
                     reaction.upper_bound = 0
+                    gfrxn.upper_bound = 0
             else:
                 logger.debug(f"{reaction.id} non core")
                 if FBAHelper.rxn_compartment(reaction) != self.compartment:
@@ -253,6 +272,8 @@ class MSATPCorrection:
                         self.noncore_reactions.append([reaction, ">"])
                 reaction.lower_bound = 0
                 reaction.upper_bound = 0
+                gfrxn.lower_bound = 0
+                gfrxn.upper_bound = 0
 
     def evaluate_growth_media(self):
         """Determines how much gap filling each input test media requires to make ATP"""
@@ -264,13 +285,10 @@ class MSATPCorrection:
         results = {}
         with self.model:
             self.model.objective = self.atp_hydrolysis.id
-            # self.model.objective = self.model.problem.Objective(Zero,direction="max")
-
-            logger.debug(
-                f"ATP bounds: ({self.atp_hydrolysis.lower_bound}, {self.atp_hydrolysis.upper_bound})"
-            )
-            # self.model.objective.set_linear_coefficients({self.atp_hydrolysis.forward_variable:1})
             pkgmgr = MSPackageManager.get_pkg_mgr(self.model)
+            # First prescreening model for ATP production without gapfilling
+            media_list = []
+            min_objectives = {}
             for media, minimum_obj in self.atp_medias:
                 logger.debug("evaluate media %s", media)
                 pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
@@ -282,27 +300,38 @@ class MSATPCorrection:
                     solution.objective_value,
                     solution.status,
                 )
+
                 self.media_gapfill_stats[media] = None
+
                 output[media.id] = solution.objective_value
 
                 if (
                     solution.objective_value < minimum_obj
                     or solution.status != "optimal"
                 ):
-                    self.media_gapfill_stats[media] = self.msgapfill.run_gapfilling(
-                        media, self.atp_hydrolysis.id, minimum_obj
-                    )
-                    # IF gapfilling fails - need to activate and penalize the noncore and try again
+                    media_list.append(media)
+                    min_objectives[media] = minimum_obj
                 elif solution.objective_value >= minimum_obj:
                     self.media_gapfill_stats[media] = {"reversed": {}, "new": {}}
-                logger.debug(
-                    "gapfilling stats: %s",
-                    json.dumps(self.media_gapfill_stats[media], indent=2, default=vars),
-                )
+
+            # Now running gapfilling on all conditions where initially there was no growth
+            all_solutions = self.msgapfill.run_multi_gapfill(
+                media_list,
+                self.atp_hydrolysis.id,
+                min_objectives,
+                check_for_growth=False,
+            )
+
+            # Adding the new solutions to the media gapfill stats
+            for media in all_solutions:
+                self.media_gapfill_stats[media] = all_solutions[media]
 
         if MSATPCorrection.DEBUG:
+            export_data = {}
+            for media in self.media_gapfill_stats:
+                export_data[media.id] = self.media_gapfill_stats[media]
             with open("debug.json", "w") as outfile:
-                json.dump(self.media_gapfill_stats[media], outfile)
+                json.dump(export_data, outfile)
 
         return output
 
@@ -311,79 +340,86 @@ class MSATPCorrection:
         Decides which of the test media to use as growth conditions for this model
         :return:
         """
+        atp_att = {"tests": {}, "selected_media": {}, "core_atp_gapfilling": {}}
         self.selected_media = []
         best_score = inf
         for media in self.media_gapfill_stats:
+<<<<<<< HEAD
+=======
+            atp_att["core_atp_gapfilling"][media.id] = {
+                "score": 0,
+                "new": {},
+                "reversed": {},
+            }
+>>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
             if self.media_gapfill_stats[media]:
-                gfscore = len(
+                atp_att["core_atp_gapfilling"][media.id]["score"] = len(
                     self.media_gapfill_stats[media]["new"].keys()
                 ) + 0.5 * len(self.media_gapfill_stats[media]["reversed"].keys())
+<<<<<<< HEAD
             best_score = min(best_score, gfscore)
+=======
+                atp_att["core_atp_gapfilling"][media.id][
+                    "new"
+                ] = self.media_gapfill_stats[media]["new"]
+                atp_att["core_atp_gapfilling"][media.id][
+                    "reversed"
+                ] = self.media_gapfill_stats[media]["reversed"]
+            else:
+                atp_att["core_atp_gapfilling"][media.id] = {
+                    "score": 1000,
+                    "failed": True,
+                }
+            if (
+                best_score is None
+                or atp_att["core_atp_gapfilling"][media.id]["score"] < best_score
+            ):
+                best_score = atp_att["core_atp_gapfilling"][media.id]["score"]
+
+>>>>>>> b08f8f38362c3a9140571f5ade10f8d00ab10ae6
         if self.max_gapfilling is None:
             self.max_gapfilling = best_score
 
-        logger.debug(f"max_gapfilling: {self.max_gapfilling}, best_score: {best_score}")
+        logger.info(f"max_gapfilling: {self.max_gapfilling}, best_score: {best_score}")
 
         for media in self.media_gapfill_stats:
-            gfscore = 0
-            if self.media_gapfill_stats[media]:
-                gfscore = len(
-                    self.media_gapfill_stats[media]["new"].keys()
-                ) + 0.5 * len(self.media_gapfill_stats[media]["reversed"].keys())
-
-            logger.debug(f"media gapfilling score: {media.id}: {gfscore}")
-            if gfscore <= self.max_gapfilling and gfscore <= (
+            if atp_att["core_atp_gapfilling"][media.id][
+                "score"
+            ] <= self.max_gapfilling and atp_att["core_atp_gapfilling"][media.id][
+                "score"
+            ] <= (
                 best_score + self.gapfilling_delta
             ):
                 self.selected_media.append(media)
+                atp_att["selected_media"][media.id] = 0
 
-    def determine_growth_media2(self, max_gapfilling=None):
-        """
-        Decides which of the test media to use as growth conditions for this model
-        :return:
-        """
-
-        def scoring_function(media):
-            return len(self.media_gapfill_stats[media]["new"].keys()) + 0.5 * len(
-                self.media_gapfill_stats[media]["reversed"].keys()
-            )
-
-        if not max_gapfilling:
-            max_gapfilling = self.max_gapfilling
-        self.selected_media = []
-        media_scores = dict(
-            (media, scoring_function(media))
-            for media in self.media_gapfill_stats
-            if self.media_gapfill_stats[media]
-        )
-        best_score = min(media_scores.values())
-        if max_gapfilling is None or max_gapfilling > (
-            best_score + self.gapfilling_delta
-        ):
-            max_gapfilling = best_score + self.gapfilling_delta
-        for media in media_scores:
-            score = media_scores[media]
-            logger.debug(score, best_score, max_gapfilling)
-            if score <= max_gapfilling:
-                self.selected_media.append(media)
+        self.modelutl.save_attributes(atp_att, "ATP_analysis")
 
     def apply_growth_media_gapfilling(self):
         """
         Applies the gapfilling to all selected growth media
         :return:
         """
-        self.cumulative_core_gapfilling = (
-            []
-        )  # TODO: In case someone runs ATP correction twice with different parameters, before resetting this, maybe check if any of these reactions are already in the model and remove them so we're starting fresh???
+        self.cumulative_core_gapfilling = []
+        #  TODO: In case someone runs ATP correction twice with different parameters,
+        #   before resetting this, maybe check if any of these reactions are already in
+        #   the model and remove them so we're starting fresh???
         for media in self.selected_media:
+            stats = self.media_gapfill_stats.get(media, None)
             if (
-                media in self.media_gapfill_stats
-                and self.media_gapfill_stats[media]
+                stats is not None
                 and MSGapfill.gapfill_count(self.media_gapfill_stats[media]) > 0
             ):
                 self.msgapfill.integrate_gapfill_solution(
-                    self.media_gapfill_stats[media], self.cumulative_core_gapfilling
+                    stats,
+                    self.cumulative_core_gapfilling,
+                    link_gaps_to_objective=False
                 )
+        core_gf = {
+            "count": len(self.cumulative_core_gapfilling),
+            "reactions": self.cumulative_core_gapfilling,
+        }
+        self.modelutl.save_attributes(core_gf, "core_gapfilling_details")
 
     def expand_model_to_genome_scale(self):
         """Restores noncore reactions to model while filtering out reactions that break ATP
@@ -405,7 +441,7 @@ class MSATPCorrection:
         )
         # Removing filtered reactions
         for item in self.filtered_noncore:
-            print("Removing " + item[0].id + " " + item[1])
+            logger.info("Removing " + item[0].id + " " + item[1])
             if item[1] == ">":
                 item[0].upper_bound = 0
             else:
@@ -441,7 +477,7 @@ class MSATPCorrection:
                     reaction.lower_bound = self.original_bounds[reaction.id][0]
                     reaction.upper_bound = self.original_bounds[reaction.id][1]
 
-    def build_tests(self, multiplier=None):
+    def build_tests(self,multiplier_hash_override={}):
         """Build tests based on ATP media evaluations
 
         Parameters
@@ -457,22 +493,60 @@ class MSATPCorrection:
         Raises
         ------
         """
-        if multiplier is None:
-            multiplier = self.multiplier
+        #Applying threshold multiplier
+        for key in default_threshold_multipiers:
+            if key not in multiplier_hash_override:
+                multiplier_hash_override[key] = default_threshold_multipiers[key]
+        #Initialzing atp test attributes
+        atp_att = self.modelutl.get_attributes(
+            "ATP_analysis",
+            {"tests": {}, "selected_media": {}, "core_atp_gapfilling": {}},
+        )
+        #Initializing tests and adding empty media every time
         tests = []
+        if "empty" in self.media_hash:
+            tests.append(
+                {
+                    "media": self.media_hash["empty"],
+                    "is_max_threshold": True,
+                    "threshold": 0.00001,
+                    "objective": self.atp_hydrolysis.id,
+                }
+            )
+            atp_att["tests"]["empty"] = {
+                "threshold": 0.00001,
+                "objective": self.atp_hydrolysis.id,
+            }
+        #Setting objective to ATP hydrolysis
         self.model.objective = self.atp_hydrolysis.id
         for media in self.selected_media:
+            #Setting multiplier for test threshold
+            multiplier = multiplier_hash_override["default"]
+            if media.id in multiplier_hash_override:
+                 multiplier = multiplier_hash_override[media.id]
+            #Constraining model exchanges for media
             self.modelutl.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
+            #Computing core ATP production
             obj_value = self.model.slim_optimize()
-            logger.debug(f"{media.name} = {obj_value}")
+            logger.debug(f"{media.name} = {obj_value};{multiplier}")
+            threshold = multiplier * obj_value
+            if threshold == 0:
+                threshold += 0.00001
             tests.append(
                 {
                     "media": media,
                     "is_max_threshold": True,
-                    "threshold": multiplier * obj_value,
+                    "threshold": threshold,
                     "objective": self.atp_hydrolysis.id,
                 }
             )
+            atp_att["selected_media"][media.id] = obj_value
+            atp_att["tests"][media.id] = {
+                "threshold": multiplier * obj_value,
+                "objective": self.atp_hydrolysis.id,
+            }
+        #Saving test attributes to the model
+        self.modelutl.save_attributes(atp_att, "ATP_analysis")
         return tests
 
     def run_atp_correction(self):
@@ -484,7 +558,7 @@ class MSATPCorrection:
         self.evaluate_growth_media()
         self.determine_growth_media()
         self.apply_growth_media_gapfilling()
-        self.evaluate_growth_media()
+        # self.evaluate_growth_media()
         self.expand_model_to_genome_scale()
         return self.build_tests()
 

@@ -141,3 +141,7 @@ dmypy.json
 
 
 *.FASTQ/
+.pydevproject
+.settings/*
+*data/*
+*.lp

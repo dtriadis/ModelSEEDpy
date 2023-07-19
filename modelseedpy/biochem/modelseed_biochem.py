@@ -8,6 +8,7 @@ from modelseedpy.biochem.modelseed_compound import ModelSEEDCompound, ModelSEEDC
 from modelseedpy.biochem.modelseed_reaction import ModelSEEDReaction, ModelSEEDReaction2
 from modelseedpy.core.msmodel import get_reaction_constraints_from_direction
 from modelseedpy.helpers import config
+from modelseedpy.core.msmodel import get_reaction_constraints_from_direction
 
 logger = logging.getLogger(__name__)
 
@@ -495,7 +496,7 @@ class ModelSEEDBiochem:
     @staticmethod
     def get(create_if_missing=True):
         if not ModelSEEDBiochem.default_biochemistry:
-            ModelSEEDBiochem.default_biochemistry = from_local(
+            ModelSEEDBiochem.default_biochemistry = from_local2(
                 config.get("biochem", "path")
             )
         return ModelSEEDBiochem.default_biochemistry
