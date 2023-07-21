@@ -75,7 +75,7 @@ class MSCompatibility:
                 # TODO develop a correction of reactions based upon their stoichiometry
                 break
             ## standardize exchanges
-            if exchanges:
+            if exchanges:   # TODO this may need to be expanded to capture the biomass reaction
                 if printing:
                     message = f"\n\n\nStandardize exchange reactions in {model.id}"
                     print(message, "\n", "="*len(message))

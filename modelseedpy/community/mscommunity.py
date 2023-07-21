@@ -112,7 +112,7 @@ class MSCommunity:
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
-            elif 'c' in self.biomass_cpd.compartment:  # else does not seem to capture built model members
+            elif 'c' in self.biomass_cpd.compartment:  # TODO expand to capture nonMS models
                 other_biomass_cpds.append(self.biomass_cpd)
         # assign community members and their abundances
         abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)

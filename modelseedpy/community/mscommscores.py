@@ -45,6 +45,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
     # ic(media, com_model, model_s_)
     if com_model is None and model_s_ is None:  raise TypeError("< com_model > or < model_s_ > must be parameterized.")
     if media is not None:
+        print(media)
         if model_s_ is not None and not isinstance(model_s_, (list,set,tuple)):
             return media["members"][model_s_.id]["media"]
         elif com_model is not None:  return media["community_media"]
@@ -316,20 +317,21 @@ class MSCommScores:
                         kbase_dic.update({"CIP": cip_values[1]})
                         if print_progress:  print("CIP done", end="\t")
                     # define the MIP content
-                    mip_values = MSCommScores.mip(grouping, comm_model, environment=environ, compatibilized=True,
-                                                  costless=costless, multi_output=costless)
-                    kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
-                                      for models_name, received in mip_values[0].items()})
-                    mets.append({"mip_mets": mip_values[0]})
-                    if costless:
-                        for models_name, received in mip_values[1].items():
-                            kbase_dic[f"MIP_model{modelIDs.index(models_name)+1} (costless)"] = kbase_dic[
-                                f"MIP_model{modelIDs.index(models_name)+1}"] + f" ({len(received)})"
-                            del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
-                        if print_progress:  print("costless_MIP  done", end="\t")
+                    mip_values = MSCommScores.mip(grouping, comm_model, 0.1, None, None, environ, print_progress, True,
+                                                  costless, costless, skip_bad_media)
+                    if mip_values is not None:
+                        kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
+                                          for models_name, received in mip_values[0].items()})
+                        mets.append({"mip_mets": mip_values[0]})
+                        if costless:
+                            for models_name, received in mip_values[1].items():
+                                kbase_dic[f"MIP_model{modelIDs.index(models_name)+1} (costless)"] = kbase_dic[
+                                    f"MIP_model{modelIDs.index(models_name)+1}"] + f" ({len(received)})"
+                                del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
+                            if print_progress:  print("costless_MIP  done", end="\t")
                     if print_progress:  print("MIP done", end="\t")
                     bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
-                                                  environments, models_media, anme_comm)
+                                                  environments, models_media, anme_comm, skip_bad_media)
                     kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": f"{val:.5f}"
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
@@ -352,17 +354,29 @@ class MSCommScores:
         return series, mets
 
     @staticmethod
-    def kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+    def kbase_output(all_models:iter=None,  # a list of distinct lists is provided for specifying exclusive groups
+                     pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anmne_comm=False):
+                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False):
         from pandas import concat
 
-        all_models = list(set(all_models))
         if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
         elif all_models is not None:
-            model_pairs = array(list(permutations(all_models, 2) if directional_pairs else combinations(all_models, 2)))
+            if not isinstance(all_models[0], list):
+                all_models = list(set(all_models))
+                model_pairs = array(list(permutations(all_models, 2) if directional_pairs else combinations(all_models, 2)))
+            else:
+                model_pairs = []
+                for models1, models2 in combinations(all_models, 2):
+                    models1 = set(models1)  ;  models2 = set(models2)
+                    if len(models1) > len(models2):  larger_list = models1  ;  smaller_list = models2
+                    else:  larger_list = models2  ;  smaller_list = models1
+                    model_pairs.append([list(zip(combin, smaller_list)) for combin in permutations(larger_list, len(smaller_list))])
+                # flatten the assembled pairs and filter duplicates
+                model_pairs = array([x for x in set(tuple(x) for x in [i for y in list(chain.from_iterable(model_pairs)) for i in y])])
+                all_models = list(chain.from_iterable(all_models))
             if pair_limit is not None:
                 shuffle(model_pairs)
                 new_pairs = []
@@ -374,7 +388,7 @@ class MSCommScores:
             pairs = {first: model_pairs[where(model_pairs[:, 0] == first)][:, 1] for first in model_pairs[:, 0]}
         else:  raise ValueError("Either < all_models > or < pairs > must be defined to simulate interactions.")
         if not all_models:  all_models = list(chain(*[list(values) for values in pairs.values()])) + list(pairs.keys())
-        lazy_load = isinstance(all_models[0], (list,set,tuple))
+        lazy_load = len(model_pairs) > 10000     # all_models[0], (list,set,tuple))
         if lazy_load and not kbase_obj:  ValueError("The < kbase_obj > argument must be provided to lazy load models.")
         if not mem_media:  models_media = _get_media(model_s_=all_models, skip_bad_media=skip_bad_media)
         else:
@@ -400,7 +414,7 @@ class MSCommScores:
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless, skip_bad_media, anmne_comm)
+                                                            kbase_obj, cip_score, costless, skip_bad_media, anme_comm)
         return concat(series, axis=1).T, mets
 
     @staticmethod
@@ -412,7 +426,8 @@ class MSCommScores:
             if not member_models:
                 raise ParameterError("The either member_models or minimal_media parameter must be defined.")
             member_models = _compatibilize(member_models, printing)
-            mem_media = _get_media(media_dict, None, member_models, min_growth, environment, printing=printing)
+            mem_media = _get_media(media_dict, None, member_models, min_growth, environment, printing=printing,
+                                   skip_bad_media=skip_bad_media)
             if "community_media" in mem_media:  mem_media = mem_media["members"]
         # MROs = array(list(map(len, pairs.values()))) / array(list(map(len, mem_media.values())))
         mro_values = {}
@@ -428,15 +443,17 @@ class MSCommScores:
     @staticmethod
     def mip(member_models: Iterable, com_model=None, min_growth=0.1, interacting_media_dict=None,
             noninteracting_media_dict=None, environment=None, printing=False, compatibilized=False,
-            costless=False, multi_output=False):
+            costless=False, multi_output=False, skip_bad_media=False):
         """Determine the quantity of nutrients that can be potentially sourced through syntrophy"""
         member_models, community = _load_models(member_models, com_model, not compatibilized, printing=printing)
         # determine the interacting and non-interacting media for the specified community  .util.model
         noninteracting_medium, noninteracting_sol = _get_media(
-            noninteracting_media_dict, community, None, min_growth, environment, False)
+            noninteracting_media_dict, community, None, min_growth, environment, False, skip_bad_media=skip_bad_media)
+        if noninteracting_medium is None:  return
         if "community_media" in noninteracting_medium:  noninteracting_medium = noninteracting_medium["community_media"]
         interacting_medium, interacting_sol = _get_media(
-            interacting_media_dict, community, None, min_growth, environment, True)
+            interacting_media_dict, community, None, min_growth, environment, True, skip_bad_media=skip_bad_media)
+        if interacting_medium is None:  return
         if "community_media" in interacting_medium:  interacting_medium = interacting_medium["community_media"]
         interact_diff = DeepDiff(noninteracting_medium, interacting_medium)
         if "dictionary_item_removed" not in interact_diff:  return None, 0
@@ -635,6 +652,7 @@ class MSCommScores:
         diffs = {}
         for combination in combinations(model_utils or member_models, 2):
             if model_utils is None:
+                # TODO the model is breaking here
                 model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
                 if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
             else:  model1_util = combination[0] ; model2_util = combination[1]
@@ -689,7 +707,8 @@ class MSCommScores:
         if any(growth_diffs > mutualism_bound) and any(growth_diffs < competitive_bound):  return "parasitism"
 
     @staticmethod
-    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None, anme_comm=False):
+    def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None, anme_comm=False,
+            skip_bad_media=False):
         def compute_score(environment="complete"):
             model1_media = set([re.sub(r"(\_\w\d+$)", "", rxnID.replace("EX_", ""))
                                 for rxnID in minMedia[model1_util.id]["media"].keys()])
@@ -704,7 +723,7 @@ class MSCommScores:
 
         bss_scores = {}
         for combination in combinations(model_utils or member_models, 2):
-            minMedia = minMedia or _get_media(model_s_=[modelUtil.model for modelUtil in model_utils])
+            minMedia = minMedia or _get_media(model_s_=[modelUtil.model for modelUtil in model_utils], skip_bad_media=skip_bad_media)
             if model_utils is None:
                 model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
                 model_utils = [model1_util, model2_util]
