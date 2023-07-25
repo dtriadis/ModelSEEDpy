@@ -65,7 +65,9 @@ class MSCompatibility:
                     unknown_mets:Iterable=None, changed_mets:Iterable=None, changed_rxns:Iterable=None):
         unknown_mets, changed_mets, changed_rxns = _define_vars(unknown_mets, changed_mets, changed_rxns)
         new_models = []
-        models = [models] if not isinstance(models, (list, tuple, set)) else models
+        single_model = False
+        if not isinstance(models, (list, tuple, set)):
+            models = [models]  ;  single_model = True
         for org_model in models:  # Develop a singular model function and then an abstracted version for multiple models
             model = org_model.copy()  # model_util cannot be used, since it would cause a circular import
             model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
@@ -115,7 +117,7 @@ class MSCompatibility:
                   f'{len(changed_mets)} metabolite IDs were redefined in {models_id} by standardize().')
         if view_unknown_mets:
             return new_models, unknown_mets
-        return new_models
+        return new_models if not single_model else new_models[0]
        
     @staticmethod
     # TODO - verify that this method appropriately aligns the exchange reactions of the two models

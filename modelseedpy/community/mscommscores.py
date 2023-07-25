@@ -45,7 +45,6 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
     # ic(media, com_model, model_s_)
     if com_model is None and model_s_ is None:  raise TypeError("< com_model > or < model_s_ > must be parameterized.")
     if media is not None:
-        print(media)
         if model_s_ is not None and not isinstance(model_s_, (list,set,tuple)):
             return media["members"][model_s_.id]["media"]
         elif com_model is not None:  return media["community_media"]
@@ -243,13 +242,13 @@ class MSCommScores:
     ###### STATIC METHODS OF THE SMETANA SCORES, WHICH ARE APPLIED IN THE ABOVE CLASS OBJECT ######
 
     @staticmethod
-    def _check_model(model_util, media, model_str):
+    def _check_model(model_util, media, model_str, skip_bad_media):
         default_media = model_util.model.medium
         if media is not None:  model_util.add_medium(media)
         obj_val = model_util.model.slim_optimize()
         if obj_val == 0 or not FBAHelper.isnumber(obj_val):
             print(f"The {model_str} model input does not yield an operational model, and will therefore be gapfilled.")
-            return MSGapfill.gapfill(model_util.model, media)
+            # if not skip_bad_media:  return MSGapfill.gapfill(model_util.model, media)
         model_util.add_medium(default_media)
         return model_util.model
 
@@ -298,8 +297,8 @@ class MSCommScores:
                 for envIndex, environ in enumerate(environments):
                     if print_progress:  print(f"\tEnvironment{envIndex}: {environ}", end="\t")
                     if not anme_comm:
-                        model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str)
-                        model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str)
+                        model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str, skip_bad_media)
+                        model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str, skip_bad_media)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"media{envIndex}" if not hasattr(environ, "name") else environ.name
@@ -330,8 +329,7 @@ class MSCommScores:
                                 del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
                             if print_progress:  print("costless_MIP  done", end="\t")
                     if print_progress:  print("MIP done", end="\t")
-                    bss_values = MSCommScores.bss(None, [model_utils[model1.id], model_utils[model2.id]],
-                                                  environments, models_media, anme_comm, skip_bad_media)
+                    bss_values = MSCommScores.bss(grouping, None, environments, models_media, anme_comm, skip_bad_media)
                     kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": f"{val:.5f}"
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
@@ -340,6 +338,7 @@ class MSCommScores:
                     kbase_dic.update({"PC": f"{MSCommScores.pc(grouping, comm_model, comm_sol, community=community)[0]:.5f}"})
                     if print_progress:  print("PC  done", end="\t")
                     # determine the growth diff content
+                    # print([mem.slim_optimize() for mem in grouping])
                     kbase_dic.update({"GYD": f"""{list(MSCommScores.gyd(
                         grouping, environment=environ, community=community, anme_comm=anme_comm).values())[0]:.5f}"""})
                     if print_progress:  print("GYD done\t\t", end="\t" if RAST_genomes else "\n")
@@ -359,7 +358,8 @@ class MSCommScores:
                      exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
                      RAST_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False):
+                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
+                     print_progress=False):
         from pandas import concat
 
         if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
@@ -414,18 +414,19 @@ class MSCommScores:
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
         else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, RAST_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless, skip_bad_media, anme_comm)
+                                                            kbase_obj, cip_score, costless, skip_bad_media, anme_comm,
+                                                            print_progress)
         return concat(series, axis=1).T, mets
 
     @staticmethod
     def mro(member_models:Iterable=None, mem_media:dict=None, min_growth=0.1, media_dict=None,
-            raw_content=False, environment=None, printing=False, compatibilized=False):
+            raw_content=False, environment=None, skip_bad_media=False, printing=False, compatibilized=False):
         """Determine the overlap of nutritional requirements (minimal media) between member organisms."""
         # determine the member minimal media if they are not parameterized
         if not mem_media:
             if not member_models:
                 raise ParameterError("The either member_models or minimal_media parameter must be defined.")
-            member_models = _compatibilize(member_models, printing)
+            member_models = member_models if compatibilized else _compatibilize(member_models, printing)
             mem_media = _get_media(media_dict, None, member_models, min_growth, environment, printing=printing,
                                    skip_bad_media=skip_bad_media)
             if "community_media" in mem_media:  mem_media = mem_media["members"]
@@ -482,7 +483,7 @@ class MSCommScores:
                     or rxn.metabolites[mets[0]] < 0 and interacting_sol.fluxes[rxn.id] < 0):  # donor
                 directionalMIP[rxn_model.id].append(metID)
                 if metID in cross_fed_copy:  cross_fed_copy.remove(metID) ; continue
-            if printing:  print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not received in the simulated interaction.")
+            if printing:  print(f"{mets[0]} in {rxn.id} ({rxn.reaction}) is not assigned a receiving member.")
         if cross_fed_copy != [] and printing:  print(f"Missing directions for the {cross_fed_copy} cross-fed metabolites")
         outputs = [directionalMIP]
         # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
@@ -652,9 +653,10 @@ class MSCommScores:
         diffs = {}
         for combination in combinations(model_utils or member_models, 2):
             if model_utils is None:
-                # TODO the model is breaking here
                 model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
+                print(f"{model1_util.model.id} ++ {model2_util.model.id}", model1_util.model.slim_optimize(), model2_util.model.slim_optimize())
                 if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
+                print(model1_util.model.slim_optimize(), model2_util.model.slim_optimize())
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if not coculture_growth:
                 G_m1, G_m2 = model1_util.model.slim_optimize(), model2_util.model.slim_optimize()

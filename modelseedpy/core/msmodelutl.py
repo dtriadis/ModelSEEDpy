@@ -108,7 +108,7 @@ class MSModelUtil:
         self.id = model.id
         if copy:
             org_obj_val = model.slim_optimize()
-            self.model = model.copy()
+            self.model = model.copy()  ;  self.model.objective = model.objective
             new_obj_val = self.model.slim_optimize()
             if not isclose(org_obj_val, new_obj_val, rel_tol=1e-2):
                 raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
@@ -1299,9 +1299,11 @@ class MSModelUtil:
                              if "EX_"+exID in exIDs}
         return self.model.medium
 
-    def add_medium(self, media):
+    def add_medium(self, media, uniform_uptake=None):
         # add the new media and its flux constraints
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
         if not hasattr(media, "items"):  media = FBAHelper.convert_kbase_media(media)
         self.model.medium = {ex: uptake for ex, uptake in media.items() if ex in exIDs}
+        if uniform_uptake is not None:  self.model.medium = dict(zip(
+            list(self.model.medium.keys()), [uniform_uptake]*len(self.model.medium)))
         return self.model.medium
