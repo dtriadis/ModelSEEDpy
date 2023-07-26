@@ -103,8 +103,9 @@ class MSModelUtil:
 
     ########################### CLASS METHODS ###########################
 
-    def __init__(self, model, copy=False):
+    def __init__(self, model, copy=False, environment=None):
         self.model = model
+        if environment is not None:  self.add_medium(environment)
         self.id = model.id
         if copy:
             org_obj_val = model.slim_optimize()

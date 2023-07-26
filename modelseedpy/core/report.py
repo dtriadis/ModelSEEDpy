@@ -190,11 +190,9 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     return html_report
 
 def commscores_report(df, mets, export_html_path="commscores_report.html"):
-    # refine the DataFrame into a heatmap
+    # construct a heatmap
     def quantify_MRO(element):
-        return float(re.sub("(\s\(.+\))", "", str(element)))
-
-    # construct the Heatmap
+        return float(re.sub("(\s\(.+\))", "", str(element)).replace("%", ""))
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
@@ -215,6 +213,11 @@ def commscores_report(df, mets, export_html_path="commscores_report.html"):
     heatmap_df["MIP_model1 (costless)"] = heatmap_df["MIP_model1 (costless)"].astype(int)
     heatmap_df["MIP_model2 (costless)"] = heatmap_df["MIP_model2 (costless)"].astype(int)
     heatmap_df.rename({"MIP_model1 (costless)": "MIP_model1", "MIP_model2 (costless)": "MIP_model2"}, axis=1, inplace=True)
+
+    # construct a metabolites table
+    from pandas import DataFrame
+    mets_table = DataFrame()
+
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(), "mets": mets,
                "heatmap": heatmap_df.applymap(lambda x: round(x, 3)).style.background_gradient().to_html()}
