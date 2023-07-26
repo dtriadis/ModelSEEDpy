@@ -15,6 +15,7 @@ from typing import Iterable, Union
 from pprint import pprint
 from numpy.random import shuffle
 from multiprocess import current_process
+from math import inf
 import sigfig
 from icecream import ic
 import re
@@ -79,6 +80,13 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
         if com_model is None:  return members_media
     else:  return com_media, media_sol
     return {"community_media":com_media, "members":members_media}
+
+
+def _sigfig_number_check(value, sigfigs, default):
+    if str(value) == "inf":  value = 1E6
+    if str(value) == "nan":  value = 0
+    if FBAHelper.isnumber(value):  return sigfig.round(value, sigfigs)
+    else:  return default
 
 
 class MSCommScores:
@@ -330,23 +338,25 @@ class MSCommScores:
                                     f"MIP_model{modelIDs.index(models_name)+1}"] + f" ({len(received)})"
                                 del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
                             if print_progress:  print("costless_MIP  done", end="\t")
-                    else:  kbase_dic.update({f"MIP_model1": "0", f"MIP_model2": "0"})
+                    else:  kbase_dic.update({f"MIP_model1 (costless)": 0, f"MIP_model2 (costless)": 0})
                     if print_progress:  print("MIP done", end="\t")
                     bss_values = MSCommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
-                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": f"{val:.5f}"
+                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": _sigfig_number_check(val, 5, 0)
                                       for name, val in bss_values.items()})
                     if print_progress:  print("BSS done", end="\t")
                     pc_values = MSCommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)
-                    kbase_dic.update({"PC_comm": f"{pc_values[0]:.5f}", "PC_model1": list(pc_values[1].values())[0],
-                                      "PC_model2": list(pc_values[1].values())[1], "BIT": pc_values[2]})
+                    kbase_dic.update({"PC_comm": _sigfig_number_check(pc_values[0], 5, 0),
+                                      "PC_model1": _sigfig_number_check(list(pc_values[1].values())[0], 5, 0),
+                                      "PC_model2": _sigfig_number_check(list(pc_values[1].values())[1], 5, 0),
+                                      "BIT": pc_values[2]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
-                    kbase_dic.update({"GYD": f"""{sigfig.round(list(MSCommScores.gyd(
-                        grouping, grouping_utils, environ, False, community, anme_comm).values())[0], 5)}"""})
+                    kbase_dic.update({"GYD": _sigfig_number_check(list(MSCommScores.gyd(
+                        grouping, grouping_utils, environ, False, community, anme_comm).values())[0], 5, 0)})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
-                        kbase_dic.update({"FS": f"""{list(MSCommScores.fs(
-                            grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]:.5f}"""})
+                        kbase_dic.update({"FS": sigfig.round(list(MSCommScores.fs(
+                            grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0], 5)})
                         if print_progress:  print("FS done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))

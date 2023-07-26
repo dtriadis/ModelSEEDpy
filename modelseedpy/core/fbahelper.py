@@ -139,7 +139,9 @@ class FBAHelper:
         # TODO: check for SBO
         return reaction.id[0:3] == "bio"
 
+    @staticmethod
     def isnumber(string):
+        if str(string) in ["nan", "inf"]:  return False
         try:  float(string);  return True
         except:  return False
 
