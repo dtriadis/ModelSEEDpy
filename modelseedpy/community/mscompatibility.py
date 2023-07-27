@@ -2,6 +2,7 @@ from collections import OrderedDict, namedtuple
 from cobra import Reaction
 from cobra.io.json import save_json_model
 from modelseedpy.core.fbahelper import FBAHelper
+from itertools import chain
 from typing import Iterable
 from zipfile import ZipFile, ZIP_LZMA
 from math import isclose
@@ -66,11 +67,13 @@ class MSCompatibility:
         unknown_mets, changed_mets, changed_rxns = _define_vars(unknown_mets, changed_mets, changed_rxns)
         new_models = []
         single_model = False
-        if not isinstance(models, (list, tuple, set)):
-            models = [models]  ;  single_model = True
+        if not isinstance(models, (list, tuple, set)):  models = [models]  ;  single_model = True
         for org_model in models:  # Develop a singular model function and then an abstracted version for multiple models
             model = org_model.copy()  # model_util cannot be used, since it would cause a circular import
             model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
+            ex_mets_map = {ex_rxn: [met.id for met in ex_rxn.metabolites] for ex_rxn in model_exchanges}
+            mets_ex_map = {metID: ex for ex, mets in ex_mets_map.items() for metID in mets}
+            ex_mets = set(chain.from_iterable(list(ex_mets_map.values())))
             reactions = {}
             # standardize metabolites
             if not metabolites:
@@ -81,7 +84,6 @@ class MSCompatibility:
                 if printing:
                     message = f"\n\n\nStandardize exchange reactions in {model.id}"
                     print(message, "\n", "="*len(message))
-                ex_mets = [met.id for ex_rxn in model_exchanges for met in ex_rxn.metabolites]
                 ### correct each metabolite in each exchange reaction
                 for ex_rxn in model_exchanges:
                     for met in ex_rxn.metabolites:
@@ -95,11 +97,22 @@ class MSCompatibility:
                         changed_rxns.extend(results.changed_rxns) ; changed_mets.extend(results.changed_mets)
                     ex_rxn.id = new_rxn_id
             else:
+                if printing:
+                    message = f"\n\n\nStandardize all metabolites in {model.id}"
+                    print(message, "\n", "="*len(message))
+                model_mets = [met.id for rxn in model.reactions for met in rxn.metabolites]
                 for met in model.metabolites:
                     model, met, reactions, results = MSCompatibility._correct_met(model, met, reactions, True, printing)
-                    if 'cpd' not in met.id:
+                    if met.id in ex_mets:  mets_ex_map[met.id].id = "EX_"+results.new_met_id
+                    if all(['cpd' not in met.id, results.new_met_id not in model_mets, results.unknown_met_id]):
                         unknown_mets.append(met.id)
                         logger.warning(f'CodeError: The metabolite {met.id} | {met.name} was not corrected to a ModelSEED metabolite.')
+                for rxn in model.reactions:
+                    if "biomass" in rxn.name:  rxn.id = "bio1"  ;  break
+                    # if rxn in model_exchanges:
+                    #     model, met, reactions, results = MSCompatibility._correct_met(
+                    #         model, met, reactions, True, printing)
+                    #     new_rxn_id = 'EX_'+results.new_met_id
 
                 if conflicts_file_name is not None:
                     model_names = model_names or [model.id for model in models]
@@ -275,16 +288,15 @@ class MSCompatibility:
     def _correct_met(model, met, reactions, standardize, printing):
         # identify a matching metabolite name in the ModelSEED Database
         base_name = ''.join(met.name.split('-')[1:]).capitalize()
-        comp = re.compile("(_\w\d+$)")
-        if not comp.search(met.id):
-            comp = re.compile("(\[\w\])")
-        general_name = comp.sub('', met.name)
-        general_met = comp.sub("", met.id)
+        comp = re.compile("(_\w\d+$)")  ;  change_comp = False
+        if not comp.search(met.id):  comp = re.compile("(\[\w\])")  ;  change_comp = True
+        compartment = comp.search(met.id).group()
+        if change_comp:  compartment = re.sub('(\[|\])', '', compartment) + "0"
+        general_name = comp.sub('', met.name)  ;  general_met = comp.sub("", met.id)
         met_name = None
         for possible_name in [met.name, met.name.capitalize(), general_name, general_name.capitalize(), base_name]:
             if possible_name in compoundNames:
-                met_name = possible_name
-                break
+                met_name = possible_name  ;  break
         if not met_name:
             # TODO - add a search through cross-references to confirm that the metabolite is unknown, despite different names
             # general_met = re.sub("(_\w\d+$)", "", met.id)
@@ -296,9 +308,8 @@ class MSCompatibility:
             metabolite_desc = " | ".join([x for x in [met.id, met.name, base_name, general_name] if x != ""])
             logger.warning(f"ModelSEEDError: The metabolite ({metabolite_desc}) is not recognized by the ModelSEED Database")
             return model, met, reactions, resultsTup(met.id, met.id, [], [])
-        compartment = comp.search(met.id).group()
-        if _remove_suffix(met.id, compartment) == compoundNames[met_name]:
-            return model, met, reactions, resultsTup(met.id, None, [], [])
+        # if change_comp:  met.id = f"{general_met}_{compartment}"
+        if general_met == compoundNames[met_name]:  return model, met, reactions, resultsTup(met.id, None, [], [])
 
         # correct the metabolite whose name matches a metabolite in the ModelSEED Database but whose ID deviates
         changed_mets, changed_rxns, matches = [], [], []
@@ -308,7 +319,7 @@ class MSCompatibility:
         if 'cpd' in met.id:  # TODO correct an anomaly where a valid MSID is repeated with itself
             logger.warning(f"IDWarning: The original ID {met.id} is a ModelSEED ID, and "
                            f"may not be desirably changed to {new_met_id}.")
-            if compounds_cross_references[general_met] != {}:
+            if general_met in compounds_cross_references and compounds_cross_references[general_met] != {}:
                 matches = _check_cross_references(met, general_met, met_name)
                 if not matches:
                     logger.warning(f"ModelSEEDError: The old metabolite {met.id} cross-references"
@@ -382,8 +393,8 @@ class MSCompatibility:
                                      f" {rxn_diff} and is therefore skipped.")
         else:
             ## rename the undesirable compound
-            met.name = met_name+compartment
-            met.id = new_met_id
+            met.name = f"{met_name}_{compartment}"
+            met.id = new_met_id if not change_comp else f"{compoundNames[met_name]}_{compartment}"
             change = {'original': {'id': original_id, 'name': original_name},
                       'new': {'id': met.id, 'name': met.name},
                       'justification': f'The {original_id} and {met.id} distinction in {model.id} is incompatible; '
