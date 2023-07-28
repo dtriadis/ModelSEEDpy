@@ -36,10 +36,8 @@ def _remove_suffix(string, suffix):
 
 def _print_changes(change):
     print('\n')
-    if float(platform.python_version()[:3]) >= 3.8:
-        pprint(change, sort_dicts=False)
-    else:
-        pprint(change)
+    if float(platform.python_version()[:3]) >= 3.8:  pprint(change, sort_dicts=False)
+    else:  pprint(change)
 
 def _define_vars(*variables):
     return [var or [] for var in variables]
@@ -288,9 +286,15 @@ class MSCompatibility:
     def _correct_met(model, met, reactions, standardize, printing):
         # identify a matching metabolite name in the ModelSEED Database
         base_name = ''.join(met.name.split('-')[1:]).capitalize()
-        comp = re.compile("(_\w\d+$)")  ;  change_comp = False
-        if not comp.search(met.id):  comp = re.compile("(\[\w\])")  ;  change_comp = True
-        compartment = comp.search(met.id).group()
+        if hasattr(met, "compartment"):
+            comp = re.compile(met.compartment)
+            compartment = met.compartment
+        else:
+            comp = re.compile("(_\w\d+$)")
+            if not comp.search(met.id):
+                comp = re.compile("(\[\w\])")
+            compartment = comp.search(met.id).group()
+        change_comp = comp != re.compile("(_\w\d+$)")
         if change_comp:  compartment = re.sub('(\[|\])', '', compartment) + "0"
         general_name = comp.sub('', met.name)  ;  general_met = comp.sub("", met.id)
         met_name = None

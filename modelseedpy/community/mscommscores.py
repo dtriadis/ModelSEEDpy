@@ -271,7 +271,7 @@ class MSCommScores:
     @staticmethod
     def calculate_scores(pairs, models_media=None, environments=None, annotated_genomes=None, lazy_load=False,
                          kbase_obj=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
-                         print_progress=False):
+                         isolate_growths=True, print_progress=False):
         from pandas import Series
 
         if isinstance(pairs, list):  pairs, models_media, environments, annotated_genomes, lazy_load, kbase_obj = pairs
@@ -289,14 +289,12 @@ class MSCommScores:
             if model1.id not in model_utils:  model_utils[model1.id] = MSModelUtil(model1)
             # print(pid, model1)
             for model_index, model2 in enumerate(models):
-                # print(model2)
                 if lazy_load:  model2, model2_str = MSCommScores._load(model2, kbase_obj)
                 else:  model2_str = model2.id
                 if model2.id not in models_media:
                     models_media[model2.id] = {"media": _get_media(model_s_=model2, skip_bad_media=skip_bad_media)}
                     if models_media[model2.id] is None:  continue
                 if model2.id not in model_utils:  model_utils[model2.id] = MSModelUtil(model2)
-                # print(model2)
                 grouping = [model1, model2]  ;  grouping_utils = [model_utils[model1.id], model_utils[model2.id]]
                 comm_model = build_from_species_models(grouping)
                 community = MSCommunity(comm_model, grouping)
@@ -327,7 +325,7 @@ class MSCommScores:
                     # define the MIP content
                     mip_values = MSCommScores.mip(grouping, comm_model, 0.1, None, None, environ, print_progress, True,
                                                   costless, costless, skip_bad_media)
-                    print(mip_values)
+                    # print(mip_values)
                     if mip_values is not None:
                         kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
                                           for models_name, received in mip_values[0].items()})
@@ -351,8 +349,13 @@ class MSCommScores:
                                       "BIT": pc_values[2]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
-                    kbase_dic.update({"GYD": _sigfig_number_check(list(MSCommScores.gyd(
-                        grouping, grouping_utils, environ, False, community, anme_comm).values())[0], 5, 0)})
+                    gyd, g1, g2 = list(MSCommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
+                    kbase_dic.update({"GYD": _sigfig_number_check(gyd, 5, 0)})
+                    if isolate_growths:
+                        kbase_dic.update({"GYD (mem1, mem2)": f"{_sigfig_number_check(gyd, 5, 0)}"
+                                                              f" ({_sigfig_number_check(g1, 5, 0)},"
+                                                              f" {_sigfig_number_check(g2, 5, 0)})"})
+                        del kbase_dic["GYD"]
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
                         kbase_dic.update({"FS": sigfig.round(list(MSCommScores.fs(
@@ -661,13 +664,12 @@ class MSCommScores:
     @staticmethod
     def gyd(member_models:Iterable=None, model_utils:Iterable=None, environment=None, coculture_growth=False,
             community=None, anme_comm=False):
-        diffs = {}
+        gyds = {}
         for combination in combinations(model_utils or member_models, 2):
             if model_utils is None:
                 model1_util = MSModelUtil(combination[0], True) ; model2_util = MSModelUtil(combination[1], True)
                 print(f"{model1_util.model.id} ++ {model2_util.model.id}", model1_util.model.slim_optimize(), model2_util.model.slim_optimize())
                 if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
-                print(model1_util.model.slim_optimize(), model2_util.model.slim_optimize())
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if not coculture_growth:
                 G_m1, G_m2 = model1_util.model.slim_optimize(), model2_util.model.slim_optimize()
@@ -679,10 +681,10 @@ class MSCommScores:
                 community.run_fba()
                 member_growths = community.parse_member_growths()
                 G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
-            if G_m2 <= 0 and G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = None  ;  continue
-            if G_m2 <= 0 or G_m1 <= 0: diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = 1e5  ;  continue
-            diffs[f"{model1_util.model.id} ++ {model2_util.model.id}"] = abs(G_m1-G_m2) / min([G_m1, G_m2])
-        return diffs
+            if G_m2 <= 0 and G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (None, G_m1, G_m2)  ;  continue
+            if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (1e5, G_m1, G_m2)  ;  continue
+            gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (abs(G_m1-G_m2) / min([G_m1, G_m2]), G_m1, G_m2)
+        return gyds
 
     @staticmethod
     def pc(member_models=None, modelutils=None, com_model=None, isolate_growths=None, comm_sol=None,
