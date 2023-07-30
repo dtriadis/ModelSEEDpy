@@ -191,8 +191,9 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
 
 def commscores_report(df, mets, export_html_path="commscores_report.html"):
     # construct a heatmap
+    metadata = re.compile("(\s\(.+\))")
     def remove_metadata(element):
-        return float(re.sub("(\s\(.+\))", "", str(element)).replace("%", ""))
+        return float(metadata.sub("", str(element)).replace("%", ""))
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
@@ -205,14 +206,18 @@ def commscores_report(df, mets, export_html_path="commscores_report.html"):
     heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
-    for col in heatmap_df.columns:
-        if any([kind in col for kind in ["MRO", "MIP", "GYD"]]):  heatmap_df[col] = heatmap_df[col].apply(remove_metadata)
+    if "MIP_model1 (costless)" in heatmap_df.columns:
+        heatmap_df["costless_MIP_model1"] = [metadata.search(str(e)).group() for e in heatmap_df["MIP_model1 (costless)"]]
+        heatmap_df["costless_MIP_model2"] = [metadata.search(str(e)).group() for e in heatmap_df["MIP_model2 (costless)"]]
+        heatmap_df["MIP_model1"] = heatmap_df["MIP_model1 (costless)"].apply(remove_metadata)
+        heatmap_df["MIP_model2"] = heatmap_df["MIP_model2 (costless)"].apply(remove_metadata)
+    heatmap_df["MRO"] = heatmap_df["MRO"].apply(remove_metadata)
     del heatmap_df["BIT"]    # TODO colorize the BIT entries as well
     heatmap_df = heatmap_df.astype(float)
-    heatmap_df["CIP"] = heatmap_df["CIP"].astype(int)
-    heatmap_df["MIP_model1 (costless)"] = heatmap_df["MIP_model1 (costless)"].astype(int)
-    heatmap_df["MIP_model2 (costless)"] = heatmap_df["MIP_model2 (costless)"].astype(int)
-    heatmap_df.rename({"MIP_model1 (costless)": "MIP_model1", "MIP_model2 (costless)": "MIP_model2"}, axis=1, inplace=True)
+    int_cols = ["CIP", "MIP_model1", "MIP_model2"]
+    if "costless_MIP_model1" in heatmap_df.columns:  int_cols.extend(["costless_MIP_model1", "costless_MIP_model2"])
+    for col in int_cols:
+        heatmap_df[col] = heatmap_df[col].astype(int)
 
     # construct a metabolites table
     from pandas import DataFrame

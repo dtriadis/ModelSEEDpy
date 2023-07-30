@@ -2,8 +2,7 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from cobra.core import Reaction
-import cobra
+from cobra.core import Reaction, Metabolite
 import re
 
 
@@ -87,51 +86,28 @@ class MSEditorAPI:
         return model.metabolites.get_by_id(metabolite_id).formula_weight
 
     @staticmethod
-    def add_custom_reaction(model, rxn_id, MSEquation, gpr=None, genome=None):
-        new_rxn = Reaction(id=rxn_id)
-        # going on the assumption that all metabolites are present in the model
-        metabolites = {}
-        for key in MSEquation.equation:
-            met_id = key[0] + "_" + key[1]
-            if met_id in model.metabolites:
-                metabolites[met_id] = stoich
-            else:
-                raise ValueError(f"The {met_id} is not in model.")
+    def add_custom_reaction(model, stoichiometry, direction, rxnID, rxnName="", subsystem="", lb=0, ub=1000, gpr=None):
+        if direction == "<":  lb = -1000  ;  ub = 0
+        elif direction == "<=>":   lb = -1000
+        if isinstance(list(stoichiometry.keys())[0], str):
+            stoichiometry = {model.metabolites.get_by_id(metID): stoich for metID, stoich in stoichiometry.items()}
+        new_rxn = MSEquation(stoichiometry, direction, rxnID, rxnName, subsystem, lb, ub, gpr)
         model.add_reaction(new_rxn)
-        new_rxn.add_metabolites(metabolites)
-        if gpr:
-            new_rxn.gene_reaction_rule = gpr
-
-        # adjust the bounds based on the arrow direction  -1000, 1000, 0
-        if MSEquation.direction == "left":
-            new_rxn.lower_bound = -1000
-            new_rxn.upper_bound = 0
-        if MSEquation.direction == "reversable":
-            new_rxn.lower_bound = -1000
 
     @staticmethod  
     def add_ms_reaction(model, rxn_id, modelseed, compartment_equivalents = {'0':'c0', '1':'e0'}, direction = '>'):#Andrew
-        cobra_reaction = cobra.Reaction(rxn_id)
+        new_rxn = Reaction(rxn_id)
         modelseed_reaction = modelseed.get_seed_reaction(rxn_id)
-        cobra_reaction.name = modelseed_reaction.data['name']
+        new_rxn.name = modelseed_reaction.data['name']
         reaction_stoich = modelseed_reaction.cstoichiometry
+        metabolites_to_add = {Metabolite(metabolite[0], name=modelseed.get_seed_compound(metabolite[0]).data['name'],
+                                          compartment=compartment_equivalents[metabolite[1]]): stoich
+                              for metabolite, stoich in reaction_stoich.items()}
 
-        metabolites_to_add = {}
-        for metabolite, stoich in reaction_stoich.items():
-            metabolites_to_add[cobra.Metabolite(
-                    metabolite[0], name = modelseed.get_seed_compound(metabolite[0]).data['name'], 
-                    compartment = compartment_equivalents[metabolite[1]])
-                ] = stoich
-
-        cobra_reaction.add_metabolites(metabolites_to_add)
-        cobra_reaction.lower_bound = 0
-        cobra_reaction.upper_bound = 1000
-        if direction == '=':
-            cobra_reaction.lower_bound = -1000
-        elif direction == '<':
-            cobra_reaction.lower_bound = -1000
-            cobra_reaction.upper_bound = 0
-        model.add_reactions([cobra_reaction])
+        new_rxn.add_metabolites(metabolites_to_add)
+        new_rxn.lower_bound = 0 if direction != '=' else -1000   ;   new_rxn.upper_bound = 1000
+        if direction == '<':  new_rxn.lower_bound = -1000  ;  new_rxn.upper_bound = 0
+        model.add_reactions([new_rxn])
 
     @staticmethod
     def copy_model_reactions(model, source_model, rxn_id_list=[]):
@@ -146,55 +122,52 @@ class MSEditorAPI:
         model.add_reactions([source_model.reactions.get_by_id(rxn.id) for rxn in source_model.reactions if rxn not in model.reactions])
 
 class MSEquation:
-    def __init__(self, stoichiometry, direction = None):
-        self.equation = stoichiometry; self.direction = direction
+    def __init__(self, stoichiometry, direction=None, ID="rxn42", name="", subsystem="", lb=0, ub=1000, gpr=None):
+        self.stoich = stoichiometry; self.direction = direction
+        self.rxn_obj = Reaction(ID, name, subsystem, lb, ub)
+        if gpr is not None:  self.rxn_obj.gene_reaction_rule = gpr
+        if not isinstance(list(stoichiometry.keys())[0], str):  self.rxn_obj.add_metabolites(stoichiometry)
 
     @staticmethod
-    def build_from_palsson_string(equation_string, default_group='c'):  # add default group
-        def clean_ends(lst):
-            return [i.strip() for i in lst]
+    def _get_coef(lst, return_dict, side, default_group):
+        return_dict = return_dict or {}
+        # for side variable, -1 is left side, 1 is right side, for coeficients
+        for reagent in lst:
+            coeficient = side
+            identifier = default_group
+            if '(' in reagent and ')' in reagent:
+                number = ''
+                position = 1
+                while reagent[position] != ')':
+                    number += reagent[position]
+                    position += 1
+                coeficient = side * float(number)
+                reagent = reagent[position+1: ]
+            elif '[' in reagent and ']' in reagent:
+                s = ''
+                position = -2
+                while reagent[position] != '[':
+                    s = reagent[position] + s
+                    position -= 1
+                identifier = s
+                reagent = reagent[:position]
+            elif any([x in reagent for x in ['(', ')', '[', ']']]):
+                raise ValueError("A closing or opening parentheses or bracket is missing in the reaction string", reagent)
+            return_dict[(reagent.strip(), identifier)] = coeficient
+        return return_dict
 
-        def get_coef_and_group(lst, return_dict, side):
-            # for side variable, -1 is left side, 1 is right side, for coeficients
-            for reagent in lst:
-                coeficient = side
-                identifier = default_group
-                if '(' in reagent and ')' in reagent:  
-                    number = ''
-                    position = 1
-                    while reagent[position] != ')':
-                        number += reagent[position]
-                        position += 1
-                    coeficient = side * float(number)
-                    reagent = reagent[position+1: ]
-                elif '[' in reagent and ']' in reagent: 
-                    s = ''
-                    position = -2
-                    while reagent[position] != '[':
-                        s = reagent[position] + s
-                        position -= 1
-                    identifier = s
-                    reagent = reagent[:position]
-                elif any([x in reagent for x in ['(', ')', '[', ']']]):
-                    raise ValueError("A closing or opening parentheses or bracket is missing in the reaction string", reagent)
-                return_dict[(reagent.strip(), identifier)] = coeficient
-            return return_dict
-
+    @staticmethod
+    def build_from_palsson_string(equation_string, default_group='c', ID="rxn42", name="", subsystem="", lb=0, ub=1000, gpr=None):
         # check for the '=' character, throw exception otherwise
-        if '=' not in equation_string:
-            raise ValueError(f"Error: The '=' character is missing; hence, the reaction string {equation_string} cannot be split.")
-        if '<=>' in equation_string:
-            direction = '='
-        elif '=>' in equation_string: 
-            direction = '>'
-        elif '<=' in equation_string:
-            direction = '<'
-        else:
-            direction = '?'
+        if '=' not in equation_string: raise ValueError(f"Error: '=' is missing in the reaction {equation_string}.")
+        if '<=>' in equation_string:   direction = '='
+        elif '=>' in equation_string:  direction = '>'
+        elif '<=' in equation_string:  direction = '<'
+        else:  direction = '?'
 
         # get substrings for either side of the equation
         reactants_substring_list = equation_string[0:equation_string.find('=') - 1].split('+')
         products_substring_list = equation_string[equation_string.find('=') + 2:len(equation_string)].split('+')
-        reactant_dict = get_coef_and_group([x.strip() for x in reactants_substring_list], {}, -1)
-        products_dict = get_coef_and_group([x.strip() for x in products_substring_list], reactant_dict, 1)
-        return MSEquation(reactant_dict.update(products_dict), direction)
+        rxn_dict = MSEquation._get_coef([x.strip() for x in reactants_substring_list], None, -1, default_group)
+        rxn_dict = MSEquation._get_coef([x.strip() for x in products_substring_list], rxn_dict, 1, default_group)
+        return MSEquation(rxn_dict, direction, ID, name, subsystem, lb, ub, gpr)

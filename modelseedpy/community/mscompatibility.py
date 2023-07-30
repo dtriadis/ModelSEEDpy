@@ -233,6 +233,24 @@ class MSCompatibility:
         return models
 
     @staticmethod
+    def add_reaction(reaction_dict):
+        from cobra import Reaction
+
+        reaction_dict
+        # TODO a wrapper for the COBRApy function of adding a reaction with a dictionary of met objects and their
+        ## stoichiometry should be defined to allow users to custom curate models into MS conventions, such as
+        ## adding an extracellular reaction that can translate metabolites.
+        pass
+
+    @staticmethod
+    def remove_boundary_rns():
+        # TODO replace all boundary reactions, probably identified via a "b" compartment, with drain reactions
+        ## where the boundary metabolite is simply deleted from the reaction and the rxnID is renamed according
+        ## to the convention for a drain reaction ("DM_...").
+        pass
+
+
+    @staticmethod
     # !!! This does not catch the errors, perhaps from faulty unknown_mets
     def _validate_results(model, org_model, unknown_mets, standardize=True):
         # ensure that all non-standard exchanges have been corrected

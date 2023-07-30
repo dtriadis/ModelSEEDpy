@@ -82,7 +82,7 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
     return {"community_media":com_media, "members":members_media}
 
 
-def _sigfig_number_check(value, sigfigs, default):
+def _sigfig_check(value, sigfigs, default):
     if str(value) == "inf":  value = 1E6
     if str(value) == "nan":  value = 0
     if FBAHelper.isnumber(value):  return sigfig.round(value, sigfigs)
@@ -269,9 +269,14 @@ class MSCommScores:
         return model, model_str
 
     @staticmethod
-    def calculate_scores(pairs, models_media=None, environments=None, annotated_genomes=None, lazy_load=False,
+    def _determine_growths(modelUtils):
+        return [util.model.slim_optimize() for util in modelUtils]
+
+
+    @staticmethod
+    def calculate_scores(pairs, models_media=None, environments=None, annotated_genomes=True, lazy_load=False,
                          kbase_obj=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
-                         isolate_growths=True, print_progress=False):
+                         print_progress=False):
         from pandas import Series
 
         if isinstance(pairs, list):  pairs, models_media, environments, annotated_genomes, lazy_load, kbase_obj = pairs
@@ -310,12 +315,15 @@ class MSCommScores:
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"media{envIndex}" if not hasattr(environ, "name") else environ.name
                     if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
+                    g1, g2, comm = MSCommScores._determine_growths([model_utils[model1.id], model_utils[model2.id], community.util])
+                    g1, g2, comm = _sigfig_check(g1, 5, 0), _sigfig_check(g2, 5, 0), _sigfig_check(comm, 5, 0)
+                    kbase_dic.update({"model1 growth": g1, "model2 growth": g2, "community growth": comm})
                     # define the MRO content
                     mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{100*len(intersection)/len(memMedia):.3f}% ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
-                    mets.append({"mro_mets": list(mro_values.values())})
+                    mets.append({"mro_mets": list(mro_values.values())[0][0]})
                     if print_progress:  print("MRO done", end="\t")
                     # define the CIP content
                     if cip_score:
@@ -329,7 +337,7 @@ class MSCommScores:
                     if mip_values is not None:
                         kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
                                           for models_name, received in mip_values[0].items()})
-                        mets[-1].update({"mip_mets": mip_values[0]})
+                        mets[-1].update({"mip_mets": list(mip_values[0].values())})  # an MIP list for each direction
                         if costless:
                             for models_name, received in mip_values[1].items():
                                 kbase_dic[f"MIP_model{modelIDs.index(models_name)+1} (costless)"] = kbase_dic[
@@ -339,23 +347,20 @@ class MSCommScores:
                     else:  kbase_dic.update({f"MIP_model1 (costless)": 0, f"MIP_model2 (costless)": 0})
                     if print_progress:  print("MIP done", end="\t")
                     bss_values = MSCommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
-                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}": _sigfig_number_check(val, 5, 0)
-                                      for name, val in bss_values.items()})
+                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}":
+                                          f"{_sigfig_check(100*val, 5, 0)}" for name, val in bss_values.items()})
+                    # TODO report BSS metabolites analogously to the MRO
+                    # mets[-1].update({"bss_mets": list(bss_values[0].values())})
                     if print_progress:  print("BSS done", end="\t")
                     pc_values = MSCommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)
-                    kbase_dic.update({"PC_comm": _sigfig_number_check(pc_values[0], 5, 0),
-                                      "PC_model1": _sigfig_number_check(list(pc_values[1].values())[0], 5, 0),
-                                      "PC_model2": _sigfig_number_check(list(pc_values[1].values())[1], 5, 0),
+                    kbase_dic.update({"PC_comm": _sigfig_check(pc_values[0], 5, 0),
+                                      "PC_model1": _sigfig_check(list(pc_values[1].values())[0], 5, 0),
+                                      "PC_model2": _sigfig_check(list(pc_values[1].values())[1], 5, 0),
                                       "BIT": pc_values[2]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
                     gyd, g1, g2 = list(MSCommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
-                    kbase_dic.update({"GYD": _sigfig_number_check(gyd, 5, 0)})
-                    if isolate_growths:
-                        kbase_dic.update({"GYD (mem1, mem2)": f"{_sigfig_number_check(gyd, 5, 0)}"
-                                                              f" ({_sigfig_number_check(g1, 5, 0)},"
-                                                              f" {_sigfig_number_check(g2, 5, 0)})"})
-                        del kbase_dic["GYD"]
+                    kbase_dic.update({"GYD": _sigfig_check(gyd, 5, 0)})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
                         kbase_dic.update({"FS": sigfig.round(list(MSCommScores.fs(
@@ -450,8 +455,10 @@ class MSCommScores:
             intersection = set(mem_media[model1.id]["media"].keys()) & set(mem_media[model2.id]["media"].keys())
             member_media = mem_media[model1.id]["media"]
             if raw_content:  mro_values[f"{model1.id}---{model2.id})"] = (intersection, member_media)
-            else:  mro_values[f"{model1.id}---{model2.id})"] = 100*(
-                len(intersection)/len(member_media), len(intersection), len(member_media))
+            else:  mro_values.update({
+                f"{model1.id}---{model2.id})": 100*(len(intersection) / len(member_media), len(intersection), len(member_media)),
+                "mets": intersection
+            })
         return mro_values
         # return mean(list(map(len, pairs.values()))) / mean(list(map(len, mem_media.values())))
 
@@ -672,9 +679,8 @@ class MSCommScores:
                 if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if not coculture_growth:
-                G_m1, G_m2 = model1_util.model.slim_optimize(), model2_util.model.slim_optimize()
-                G_m1 = G_m1 if FBAHelper.isnumber(str(G_m1)) else 0
-                G_m2 = G_m2 if FBAHelper.isnumber(str(G_m2)) else 0
+                G_m1, G_m2 = MSCommScores._determine_growths([model1_util, model2_util])
+                G_m1, G_m2 = G_m1 if FBAHelper.isnumber(str(G_m1)) else 0, G_m2 if FBAHelper.isnumber(str(G_m2)) else 0
             else:
                 community = community or MSCommunity(member_models=[model1_util.model, model2_util.model],
                                                      ids=[mem.id for mem in member_models])
@@ -776,13 +782,13 @@ class MSCommScores:
     @staticmethod
     def fs(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,
             kbase_token_path:str=None, annotated_genomes:dict=None, printing=False):
-        if any([not hasattr(model, "genome_ref") for model in models]):  return None
         if not isinstance(annotated_genomes, dict):
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
                 with open(kbase_token_path) as token_file:  kbase_object = cobrakbase.KBaseAPI(token_file.readline())
-            annotated_genomes = {model.id: kbase_object.get_from_ws(model.genome_ref) for model in models}
-        elif not isinstance(annotated_genomes, dict):  annotated_genomes = dict(zip([model.id for model in models], annotated_genomes))
+            annotated_genomes = {model.id: kbase_object.get_from_ws(model.genome_ref)
+                                 for model in models if hasattr(model, "genome_ref")}
+        elif isinstance(annotated_genomes, list):  annotated_genomes = dict(zip([model.id for model in models], annotated_genomes))
         elif models is not None:
             annotated_genomes = {k:v for k,v in annotated_genomes.items() if k in [model.id for model in models]}
         genome_combinations = list(combinations(annotated_genomes.keys(), 2))

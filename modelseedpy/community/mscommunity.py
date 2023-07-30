@@ -237,3 +237,9 @@ class MSCommunity:
     def parse_member_growths(self):
         # f"cpd11416_c{member.index}"
         return {member.name: self.solution.fluxes[member.primary_biomass.id] for member in self.members}
+
+    def return_member_models(self):
+        # TODO return a list of member models that is parsed from the .members attribute
+        ## which will have applicability in disaggregating community models that do not have member models
+        ## such as Filipe's Nitrate reducing community model for the SBI ENIGMA team.
+        return
