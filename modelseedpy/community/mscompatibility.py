@@ -2,6 +2,7 @@ from collections import OrderedDict, namedtuple
 from cobra import Reaction
 from cobra.io.json import save_json_model
 from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy.core.mseditorapi import MSEditorAPI
 from itertools import chain
 from typing import Iterable
 from zipfile import ZipFile, ZIP_LZMA
@@ -233,14 +234,8 @@ class MSCompatibility:
         return models
 
     @staticmethod
-    def add_reaction(reaction_dict):
-        from cobra import Reaction
-
-        reaction_dict
-        # TODO a wrapper for the COBRApy function of adding a reaction with a dictionary of met objects and their
-        ## stoichiometry should be defined to allow users to custom curate models into MS conventions, such as
-        ## adding an extracellular reaction that can translate metabolites.
-        pass
+    def add_reaction(model, reaction_dict, rxnID="rxn42"):
+        MSEditorAPI.add_custom_reaction(model, reaction_dict, rxnID=rxnID)
 
     @staticmethod
     def remove_boundary_rns():

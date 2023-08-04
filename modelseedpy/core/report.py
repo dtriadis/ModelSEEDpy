@@ -191,9 +191,10 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
 
 def commscores_report(df, mets, export_html_path="commscores_report.html"):
     # construct a heatmap
-    metadata = re.compile("(\s\(.+\))")
+    rm_costless = re.compile("(\s\(.+\))")
+    costless = re.compile(r"(?<=\s\()(\d)(?=\))")
     def remove_metadata(element):
-        return float(metadata.sub("", str(element)).replace("%", ""))
+        return float(rm_costless.sub("", str(element)).replace("%", ""))
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
@@ -207,12 +208,20 @@ def commscores_report(df, mets, export_html_path="commscores_report.html"):
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
     if "MIP_model1 (costless)" in heatmap_df.columns:
-        heatmap_df["costless_MIP_model1"] = [metadata.search(str(e)).group() for e in heatmap_df["MIP_model1 (costless)"]]
-        heatmap_df["costless_MIP_model2"] = [metadata.search(str(e)).group() for e in heatmap_df["MIP_model2 (costless)"]]
+        mip_model1, mip_model2 = [], []
+        for e in heatmap_df["MIP_model1 (costless)"]:
+            mip_model1.append(costless.search(str(e)).group() if e not in [0, "0"] else 0)
+        for e in heatmap_df["MIP_model2 (costless)"]:
+            mip_model2.append(costless.search(str(e)).group() if e not in [0, "0"] else 0)
+        heatmap_df["costless_MIP_model1"] = mip_model1 ; heatmap_df["costless_MIP_model2"] = mip_model2
         heatmap_df["MIP_model1"] = heatmap_df["MIP_model1 (costless)"].apply(remove_metadata)
         heatmap_df["MIP_model2"] = heatmap_df["MIP_model2 (costless)"].apply(remove_metadata)
-    heatmap_df["MRO"] = heatmap_df["MRO"].apply(remove_metadata)
-    del heatmap_df["BIT"]    # TODO colorize the BIT entries as well
+    heatmap_df["MRO_model1"] = heatmap_df["MRO_model1"].apply(remove_metadata)
+    heatmap_df["MRO_model2"] = heatmap_df["MRO_model2"].apply(remove_metadata)
+    heatmap_df["BSS_model1"] = heatmap_df["BSS_model1"].apply(remove_metadata)
+    heatmap_df["BSS_model2"] = heatmap_df["BSS_model2"].apply(remove_metadata)
+    del heatmap_df["BIT"], heatmap_df["MIP_model1 (costless)"], heatmap_df["MIP_model2 (costless)"]    # TODO colorize the BIT entries as well
+    display(heatmap_df)
     heatmap_df = heatmap_df.astype(float)
     int_cols = ["CIP", "MIP_model1", "MIP_model2"]
     if "costless_MIP_model1" in heatmap_df.columns:  int_cols.extend(["costless_MIP_model1", "costless_MIP_model2"])
@@ -220,11 +229,57 @@ def commscores_report(df, mets, export_html_path="commscores_report.html"):
         heatmap_df[col] = heatmap_df[col].astype(int)
 
     # construct a metabolites table
-    from pandas import DataFrame
-    mets_table = DataFrame()
+    from pandas import DataFrame, set_option
+    set_option("display.max_colwidth", 0)
+
+    ## Process the MRO metabolites
+    mro_mets = [", ".join(map(str, met["MRO metabolites"])) for met in mets]
+    # for met in mets:
+    #     string = ""
+    #     for index, metID in enumerate(met["MRO metabolites"]):
+    #         index += 1
+    #         if index % 4 == 0:  string += f"{metID}\n"
+    #         else:  string += f"{metID}, "
+    #     mro_mets.append(string)
+    ## Process the MIP metabolites
+    mip_model1_mets = [", ".join(map(str, met["MIP model1 metabolites"])) for met in mets]
+    # for met in mets:
+    #     string = ""
+    #     for index, metID in enumerate(met["MIP model1 metabolites"]):
+    #         index += 1
+    #         if index % 4 == 0:  string += f"{metID}\n"
+    #         else:  string += f"{metID}, "
+    #     mip_model1_mets.append(string)
+    mip_model2_mets = [", ".join(map(str, met["MIP model2 metabolites"])) for met in mets]
+    # for met in mets:
+    #     string = ""
+    #     for index, metID in enumerate(met["MIP model2 metabolites"]):
+    #         index += 1
+    #         if index % 4 == 0:  string += f"{metID}\n"
+    #         else:  string += f"{metID}, "
+    #     mip_model2_mets.append(string)
+    ## Process the CIP metabolites
+    cip_mets = [", ".join(map(str, met["CIP metabolites"])) for met in mets]
+    # for met in mets:
+    #     string = ""
+    #     for index, metID in enumerate(met["CIP metabolites"]):
+    #         index += 1
+    #         if index % 4 == 0:  string += f"{metID}\n"
+    #         else:  string += f"{metID}, "
+    #     cip_mets.append(string)
+    ## Process the BSS metabolites
+    # bss_model1_mets = [", ".join(map(str, met["BSS model1 metabolites"])) for met in mets]
+    # bss_model2_mets = [", ".join(map(str, met["BSS model2 metabolites"])) for met in mets]
+    ## Process the FS features
+    # fs_featuers = [", ".join(str(met["FS features"])) for met in mets]
+    ## construct the DataFrame
+    mets_table = DataFrame(data={"MRO metabolites": mro_mets, "MIP model1 metabolites": mip_model1_mets,
+                                 "MIP model2 metabolites": mip_model2_mets, "CIP metabolites": cip_mets,})
+                                 # "BSS model1 metabolites": bss_model1_mets, "BSS model2 metabolites": bss_model2_mets,})
+                                 # "FS features": fs_featuers})
 
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
-    content = {'table': df.to_html(), "mets": mets,
+    content = {'table': df.to_html(), "mets_table": mets_table.to_html(),
                "heatmap": heatmap_df.applymap(lambda x: round(x, 3)).style.background_gradient().to_html()}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
                              autoescape=jinja2.select_autoescape(['html', 'xml']))

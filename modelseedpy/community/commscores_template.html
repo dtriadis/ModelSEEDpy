@@ -43,6 +43,7 @@
         <h1>CommScores Results</h1>
         <ul class="nav nav-tabs" id="nav-tab" role="tablist">
             <li><a class="nav-item nav-link active" id="nav-table-tab" data-toggle="tab" href="#nav-table" role="tab" aria-controls="nav-table" aria-selected="true">Full Table</a> </li>
+            <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Metabolites/Features</a> </li>
             <li><a class="nav-item nav-link" id="nav-heatmap-tab" data-toggle="tab" href="#nav-heatmap" role="tab" aria-controls="nav-heatmap" aria-selected="true">Heatmap</a> </li>
             <li><a class="nav-item nav-link" id="nav-info-tab" data-toggle="tab" href="#nav-info" role="tab" aria-controls="nav-info" aria-selected="true">Score Information</a> </li>
             <!-- <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Interacted mets</a> </li> -->
@@ -51,6 +52,9 @@
             <div class="tab-pane fade show active" id="nav-table" role="tabpanel" aria-labelledby="nav-table-tab">
                 <p>The biomass yields are expressed in [gm/hr*(gm CDW)]</p>
                 {{ table|safe }}
+            </div>
+            <div class="tab-pane fade" id="nav-mets" role="tabpanel" aria-labelledby="nav-mets-tab">
+                {{ mets_table|safe }}
             </div>
             <div class="tab-pane fade" id="nav-heatmap" role="tabpanel" aria-labelledby="nav-heatmap-tab">
                 {{ heatmap|safe }}

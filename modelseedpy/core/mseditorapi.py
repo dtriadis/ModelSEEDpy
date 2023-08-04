@@ -32,22 +32,18 @@ class MSEditorAPI:
             upper_bound = model.reactions.get_by_id(rxn_id).upper_bound
 
             if lower_bound < 0 and upper_bound > 0:  # rxn_id is reversible
-                if direction == "=>":
-                    model.reactions.get_by_id(rxn_id).lower_bound = 0
-                elif direction == "<=":
-                    model.reactions.get_by_id(rxn_id).upper_bound = 0
+                if direction == "=>":   model.reactions.get_by_id(rxn_id).lower_bound = 0
+                elif direction == "<=": model.reactions.get_by_id(rxn_id).upper_bound = 0
             elif lower_bound == 0 and upper_bound > 0:  # rxn_id is forward only
                 if direction == "<=":
                     model.reactions.get_by_id(rxn_id).lower_bound = -1 * upper_bound
                     model.reactions.get_by_id(rxn_id).upper_bound = 0
-                elif direction == "<=>":
-                    model.reactions.get_by_id(rxn_id).lower_bound = -1 * upper_bound
+                elif direction == "<=>":  model.reactions.get_by_id(rxn_id).lower_bound = -1 * upper_bound
             elif lower_bound < 0 and upper_bound == 0:  # rxn_id is reverse only
                 if direction == "=>":
                     model.reactions.get_by_id(rxn_id).lower_bound = 0
                     model.reactions.get_by_id(rxn_id).upper_bound = -1 * lower_bound
-                elif direction == "<=>":
-                    model.reactions.get_by_id(rxn_id).upper_bound = -1 * lower_bound
+                elif direction == "<=>": model.reactions.get_by_id(rxn_id).upper_bound = -1 * lower_bound
 
         # Specify GPR as a string with boolean conditions (e.g. "(b0001 and b0002) or b1010").
         try:
@@ -86,13 +82,14 @@ class MSEditorAPI:
         return model.metabolites.get_by_id(metabolite_id).formula_weight
 
     @staticmethod
-    def add_custom_reaction(model, stoichiometry, direction, rxnID, rxnName="", subsystem="", lb=0, ub=1000, gpr=None):
+    def add_custom_reaction(model, stoichiometry, direction=">", rxnID="rxn42", rxnName="",
+                            subsystem="", lb=0, ub=1000, gpr=None):
         if direction == "<":  lb = -1000  ;  ub = 0
         elif direction == "<=>":   lb = -1000
         if isinstance(list(stoichiometry.keys())[0], str):
             stoichiometry = {model.metabolites.get_by_id(metID): stoich for metID, stoich in stoichiometry.items()}
         new_rxn = MSEquation(stoichiometry, direction, rxnID, rxnName, subsystem, lb, ub, gpr)
-        model.add_reaction(new_rxn)
+        model.add_reaction(new_rxn.rxn_obj)
 
     @staticmethod  
     def add_ms_reaction(model, rxn_id, modelseed, compartment_equivalents = {'0':'c0', '1':'e0'}, direction = '>'):#Andrew

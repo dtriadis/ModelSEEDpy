@@ -281,6 +281,7 @@ class MSCommScores:
 
         if isinstance(pairs, list):  pairs, models_media, environments, annotated_genomes, lazy_load, kbase_obj = pairs
         series, mets = [], []
+        # TODO convert environments into a dictionary with keys of media names, which can default to f"media{index}"
         environments = [environments] if not isinstance(environments, (list, set, tuple)) else environments
         pid = current_process().name
         model_utils = {}
@@ -323,12 +324,13 @@ class MSCommScores:
                     kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{100*len(intersection)/len(memMedia):.3f}% ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
-                    mets.append({"mro_mets": list(mro_values.values())[0][0]})
+                    mets.append({"MRO metabolites": list(mro_values.values())[0][0]})
                     if print_progress:  print("MRO done", end="\t")
                     # define the CIP content
                     if cip_score:
                         cip_values = MSCommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
                         kbase_dic.update({"CIP": cip_values[1]})
+                        mets[-1].update({"CIP metabolites": list(cip_values[0])})
                         if print_progress:  print("CIP done", end="\t")
                     # define the MIP content
                     mip_values = MSCommScores.mip(grouping, comm_model, 0.1, None, None, environ, print_progress, True,
@@ -337,18 +339,23 @@ class MSCommScores:
                     if mip_values is not None:
                         kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
                                           for models_name, received in mip_values[0].items()})
-                        mets[-1].update({"mip_mets": list(mip_values[0].values())})  # an MIP list for each direction
+                        mets[-1].update({"MIP model1 metabolites": list(mip_values[0].values())[0],
+                                         "MIP model2 metabolites": list(mip_values[0].values())[1]})
                         if costless:
                             for models_name, received in mip_values[1].items():
                                 kbase_dic[f"MIP_model{modelIDs.index(models_name)+1} (costless)"] = kbase_dic[
                                     f"MIP_model{modelIDs.index(models_name)+1}"] + f" ({len(received)})"
                                 del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
                             if print_progress:  print("costless_MIP  done", end="\t")
-                    else:  kbase_dic.update({f"MIP_model1 (costless)": 0, f"MIP_model2 (costless)": 0})
+                    else:
+                        kbase_dic.update({f"MIP_model1 (costless)": 0, f"MIP_model2 (costless)": 0})
+                        mets[-1].update({"MIP model1 metabolites": [None], "MIP model2 metabolites": [None]})
                     if print_progress:  print("MIP done", end="\t")
                     bss_values = MSCommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
                     kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}":
-                                          f"{_sigfig_check(100*val, 5, 0)}" for name, val in bss_values.items()})
+                                          f"{_sigfig_check(100*val, 5, 0)}%" for name, (mets, val) in bss_values.items()})
+                    mets[-1].update({"BSS model1 metabolites": [met_set for met_set, val in bss_values.values()][0],
+                                     "BSS model2 metabolites": [met_set for met_set, val in bss_values.values()][1]})
                     # TODO report BSS metabolites analogously to the MRO
                     # mets[-1].update({"bss_mets": list(bss_values[0].values())})
                     if print_progress:  print("BSS done", end="\t")
@@ -363,8 +370,9 @@ class MSCommScores:
                     kbase_dic.update({"GYD": _sigfig_check(gyd, 5, 0)})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
-                        kbase_dic.update({"FS": sigfig.round(list(MSCommScores.fs(
-                            grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0], 5)})
+                        fs_values = list(MSCommScores.fs(grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]
+                        kbase_dic.update({"FS": sigfig.round(fs_values[1], 5)})
+                        if fs_values is not None:  mets[-1].update({"FS features": fs_values[0]})
                         if print_progress:  print("FS done\t\t")
                     # return a pandas Series, which can be easily aggregated with other results into a DataFrame
                     series.append(Series(kbase_dic))
@@ -426,7 +434,7 @@ class MSCommScores:
         if pool_size is not None:
             from datetime import datetime  ;  from multiprocess import Pool
             print(f"Loading {int(pool_size)} workers and computing the scores", datetime.now())
-            pool = Pool(int(pool_size))#.map(calculate_scores, [{k: v} for k,v in pairs.items()])
+            pool = Pool(int(pool_size))  #.map(calculate_scores, [{k: v} for k,v in pairs.items()])
             args = [[dict([pair]), models_media, environments, annotated_genomes, lazy_load, kbase_obj]
                     for pair in list(pairs.items())]
             output = pool.map(MSCommScores.calculate_scores, args)
@@ -732,9 +740,9 @@ class MSCommScores:
                                 for rxnID in minMedia[model2_util.id]["media"].keys()])
             model1_internal = {rm_comp(met.id) for rxn in model1_util.internal_list() for met in rxn.products}
             model2_internal = {rm_comp(met.id) for rxn in model2_util.internal_list() for met in rxn.products}
-            bss_scores[f"{model1_util.id} invading {model2_util.id} in media{index}"] = (
+            bss_scores[f"{model1_util.id} invading {model2_util.id} in media{index}"] = (model2_internal,
                     len(model1_media.intersection(model2_internal)) / len(model1_media))
-            bss_scores[f"{model2_util.id} invading {model1_util.id} in media{index}"] = (
+            bss_scores[f"{model2_util.id} invading {model1_util.id} in media{index}"] = (model1_internal,
                     len(model2_media.intersection(model1_internal)) / len(model2_media))
 
         bss_scores = {}
@@ -757,7 +765,8 @@ class MSCommScores:
     @staticmethod
     def _calculate_jaccard_score(set1, set2):
         if set1 == set2:  print(f"The sets are identical, with a length of {len(set1)}.")
-        return len(set1.intersection(set2)) / len(set1.union(set2))
+        if len(set1.union(set2)) == 0:  return (None, None)
+        return (set1.union(set2), len(set1.intersection(set2)) / len(set1.union(set2)))
 
     @staticmethod
     def get_all_genomes_from_ws(ws_id, kbase_object=None, cobrakbase_repo_path:str=None, kbase_token_path:str=None):
