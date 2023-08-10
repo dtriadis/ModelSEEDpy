@@ -289,8 +289,10 @@ class CommScores:
 
         if isinstance(pairs, list):  pairs, models_media, environments, annotated_genomes, lazy_load, kbase_obj = pairs
         series, mets = [], []
-        # TODO convert environments into a dictionary with keys of media names, which can default to f"media{index}"
-        environments = [environments] if not isinstance(environments, (list, set, tuple)) else environments
+        if not isinstance(environments, (list, tuple)):  environments = [environments]
+        if isinstance(environments, (list, tuple)) and hasattr(environments[0], "name"):
+            environments = {m.name:FBAHelper.convert_kbase_media(m, 1000) for m in environments}
+        elif not isinstance(environments, dict):  environments = {f"media{i}":m for i,m in enumerate(environments)}
         pid = current_process().name
         model_utils = {}
         count = 0
@@ -315,18 +317,16 @@ class CommScores:
                 comm_sol = comm_model.optimize()
                 modelIDs = [model.id for model in grouping]
                 print(f"{pid}~~{count}\t{modelIDs}")
-                for envIndex, environ in enumerate(environments):
-                    if print_progress:  print(f"\tEnvironment{envIndex}", end="\t")
+                for environName, environ in environments.items():
+                    if print_progress:  print(f"\tEnvironment\t{environName}", end="\t")
                     if not anme_comm:
                         model1 = CommScores._check_model(model_utils[model1.id], environ, model1_str, skip_bad_media)
                         model2 = CommScores._check_model(model_utils[model2.id], environ, model2_str, skip_bad_media)
                     # initiate the KBase output
-                    kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
-                    kbase_dic["media"] = f"media{envIndex}" if not hasattr(environ, "name") else environ.name
-                    if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
+                    kbase_dic = {f"model{i+1}": modelID for i,modelID in enumerate(modelIDs)}
                     g1, g2, comm = CommScores._determine_growths([model_utils[model1.id], model_utils[model2.id], community.util])
                     g1, g2, comm = _sigfig_check(g1, 5, ""), _sigfig_check(g2, 5, ""), _sigfig_check(comm, 5, "")
-                    kbase_dic.update({"model1 growth": g1, "model2 growth": g2, "community growth": comm})
+                    kbase_dic.update({"media": environName, "model1 growth": g1, "model2 growth": g2, "community growth": comm})
                     # define the MRO content
                     mro_values = CommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
@@ -364,7 +364,6 @@ class CommScores:
                                       f"{_sigfig_check(100*val, 5, '')}%" for name, (mets, val) in bss_values.items()})
                     mets[-1].update({"BSS model1 metabolites": [met_set for met_set, val in bss_values.values()][0],
                                      "BSS model2 metabolites": [met_set for met_set, val in bss_values.values()][1]})
-                    # TODO report BSS metabolites analogously to the MRO
                     # mets[-1].update({"bss_mets": list(bss_values[0].values())})
                     if print_progress:  print("BSS done", end="\t")
                     pc_values = CommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)

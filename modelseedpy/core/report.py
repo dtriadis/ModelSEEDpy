@@ -203,7 +203,20 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
         try:  element = int(element)
         except: pass
         return element
+    def names_updateCPD(metIDs, update_cpdNames):
+        names = []
+        for metID in metIDs:
+            if metID not in cpdNames:
+                if "msdb" not in locals().keys():
+                    from modelseedpy.biochem import from_local
+                    msdb = from_local(msdb_path)
+                name = msdb.compounds.get_by_id(metID).name
+                update_cpdNames[metID] = name
+            else:  name = cpdNames[metID]
+            names.append(name)
+        return names, update_cpdNames
 
+    df.index.name = "Community_index"
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
     heatmap_df.index = [" ++ ".join(index) for index in heatmap_df_index]
@@ -224,20 +237,12 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
         for e in heatmap_df["MIP_model2 (costless)"]:
             if e == "":  mip_model2.append("")  ;  continue
             mip_model2.append(costless.search(str(e)).group() if e not in [0, "0"] else "")
-        heatmap_df["c_MIP1"] = to_numeric(mip_model1, errors='coerce')
-        heatmap_df["c_MIP2"] = to_numeric(mip_model2, errors='coerce')
-        heatmap_df["MIP_model1"] = to_numeric(heatmap_df["MIP_model1 (costless)"].apply(remove_metadata), errors='coerce')
-        heatmap_df["MIP_model2"] = to_numeric(heatmap_df["MIP_model2 (costless)"].apply(remove_metadata), errors='coerce')
-    heatmap_df["MRO_model1"] = to_numeric(heatmap_df["MRO_model1"].apply(remove_metadata), errors='coerce')
-    heatmap_df["MRO_model2"] = to_numeric(heatmap_df["MRO_model2"].apply(remove_metadata), errors='coerce')
-    heatmap_df["BSS_model1"] = to_numeric(heatmap_df["BSS_model1"].apply(remove_metadata), errors='coerce')
-    heatmap_df["BSS_model2"] = to_numeric(heatmap_df["BSS_model2"].apply(remove_metadata), errors='coerce')
-    heatmap_df["PC_model1"] = to_numeric(heatmap_df["PC_model1"].apply(remove_metadata), errors='coerce')
-    heatmap_df["PC_model2"] = to_numeric(heatmap_df["PC_model2"].apply(remove_metadata), errors='coerce')
-    heatmap_df["FS"] = to_numeric(heatmap_df["FS"], errors='coerce')
-    heatmap_df["GYD"] = to_numeric(heatmap_df["GYD"], errors='coerce')
+        for col, lis in {"c_MIP1":mip_model1, "c_MIP2":mip_model2, "MIP_model1":heatmap_df["MIP_model1 (costless)"].apply(remove_metadata),
+                         "MIP_model2":heatmap_df["MIP_model2 (costless)"].apply(remove_metadata)}.items():
+            heatmap_df[col] = to_numeric(lis, errors='coerce')
+    for col in ["MRO_model1", "MRO_model2", "BSS_model1", "BSS_model2", "PC_model1", "PC_model2", "FS", "GYD"]:
+        heatmap_df[col] = to_numeric(heatmap_df[col].apply(remove_metadata), errors='coerce')
     del heatmap_df["BIT"], heatmap_df["MIP_model1 (costless)"], heatmap_df["MIP_model2 (costless)"]    # TODO colorize the BIT entries as well
-    display(heatmap_df)
     heatmap_df = heatmap_df.astype(float)
     int_cols = ["CIP", "MIP_model1", "MIP_model2"]
     if "costless_MIP_model1" in heatmap_df.columns:  int_cols.extend(["c_MIP1", "c_MIP2"])
@@ -249,52 +254,48 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
     # from pandas import set_option
     # set_option("display.max_colwidth", None, 'display.width', 1500)
 
-    ## Process the MRO metabolites
+    ## Process the score metabolites
     mro_mets, mro_mets_names, mip_model1_mets, mip_model1_mets_names = [], [], [], []
     mip_model2_mets, mip_model2_mets_names, cip_mets, cip_mets_names = [], [], [], []
-    if msdb_path is None:
-        for met in mets:
-            mro_mets.append(", ".join(map(str, met["MRO metabolites"])))
-            mip_model1_mets.append(", ".join(map(str, met["MIP model1 metabolites"])))
-            mip_model2_mets.append(", ".join(map(str, met["MIP model2 metabolites"])))
-            cip_mets.append(", ".join(map(str, met["CIP metabolites"])))
-            df_content = {"MRO metabolite IDs": mro_mets, "MIP model1 metabolite IDs": mip_model1_mets,
-                          "MIP model2 metabolite IDs": mip_model2_mets, "CIP metabolite IDs": cip_mets}
-    else:
-        # TODO first check a JSON with the most commonly exchanged metabolites for quicker mapping
-        ## secondarily use MSDB to map undefined compounds, and then open+update+export the JSON so that this
-        ## previously undefined compound in the JSON file is stored. This cacheing system seems to be the most
-        ## efficient protocol for storing the most cross-fed compounds without storing unnecessary compounds.
-        from modelseedpy.biochem import from_local
-        msdb = from_local(msdb_path)
-        for met in mets:
-            # MRO metabolites
-            mro_metIDs = [metID for metID in map(str, met["MRO metabolites"]) if metID not in ["None", None]]
-            mro_mets.append(", ".join(mro_metIDs))
-            mro_mets_names.append(", ".join([msdb.compounds.get_by_id(metID).name for metID in mro_metIDs]))
-            # MIP metabolites
-            mip_model1_metIDs = [metID for metID in map(str, met["MIP model1 metabolites"]) if metID not in ["None", None]]
-            mip_model1_mets.append(", ".join(mip_model1_metIDs))
-            mip_model1_mets_names.append(", ".join([msdb.compounds.get_by_id(metID).name for metID in mip_model1_metIDs]))
-            ## model2 MIP metabolites
-            mip_model2_metIDs = [metID for metID in map(str, met["MIP model2 metabolites"]) if metID not in ["None", None]]
-            mip_model2_mets.append(", ".join(mip_model2_metIDs))
-            mip_model2_mets_names.append(", ".join([msdb.compounds.get_by_id(metID).name for metID in mip_model2_metIDs]))
-            # CIP metabolites
-            cip_metIDs = [metID for metID in map(str, met["CIP metabolites"]) if metID not in ["None", None]]
-            cip_mets.append(", ".join(cip_metIDs))
-            cip_mets_names.append(", ".join([msdb.compounds.get_by_id(metID).name for metID in cip_metIDs]))
-            df_content = {"MRO metabolite names": mro_mets_names, "MRO metabolite IDs": mro_mets,
-                          "MIP model1 metabolite names": mip_model1_mets_names, "MIP model1 metabolite IDs": mip_model1_mets,
-                          "MIP model2 metabolite names": mip_model2_mets_names, "MIP model2 metabolite IDs": mip_model2_mets,
-                          "CIP metabolite names": cip_mets_names, "CIP metabolite IDs": cip_mets}
-    ## construct the DataFrame
+    from json import load, dump
+    cpdNames_path = os.path.join(os.path.dirname(__file__), "..", "data", "cpdNames.json")
+    with open(cpdNames_path, "r") as jsonIn:
+        cpdNames = load(jsonIn)
+    update_cpdNames = {}
+    for met in mets:
+        # MRO metabolites
+        mro_metIDs = [metID for metID in map(str, met["MRO metabolites"]) if metID not in ["None", None]]
+        mro_mets.append(", ".join(mro_metIDs))
+        names, update_cpdNames = names_updateCPD(mro_metIDs, update_cpdNames)
+        mro_mets_names.append(", ".join(names))
+        # MIP metabolites
+        mip_model1_metIDs = [metID for metID in map(str, met["MIP model1 metabolites"]) if metID not in ["None", None]]
+        mip_model1_mets.append(", ".join(mip_model1_metIDs))
+        names, update_cpdNames = names_updateCPD(mip_model1_metIDs, update_cpdNames)
+        mip_model1_mets_names.append(", ".join(names))
+        ## model2 MIP metabolites
+        mip_model2_metIDs = [metID for metID in map(str, met["MIP model2 metabolites"]) if metID not in ["None", None]]
+        mip_model2_mets.append(", ".join(mip_model2_metIDs))
+        names, update_cpdNames = names_updateCPD(mip_model2_metIDs, update_cpdNames)
+        mip_model2_mets_names.append(", ".join(names))
+        # CIP metabolites
+        cip_metIDs = [metID for metID in map(str, met["CIP metabolites"]) if metID not in ["None", None]]
+        cip_mets.append(", ".join(cip_metIDs))
+        names, update_cpdNames = names_updateCPD(cip_metIDs, update_cpdNames)
+        cip_mets_names.append(", ".join(names))
+    df_content = {"MRO metabolite names": mro_mets_names, "MRO metabolite IDs": mro_mets,
+                  "MIP model1 metabolite names": mip_model1_mets_names, "MIP model1 metabolite IDs": mip_model1_mets,
+                  "MIP model2 metabolite names": mip_model2_mets_names, "MIP model2 metabolite IDs": mip_model2_mets,
+                  "CIP metabolite names": cip_mets_names, "CIP metabolite IDs": cip_mets}
+    if update_cpdNames != {}:
+        cpdNames.update(update_cpdNames)
+        with open(cpdNames_path, "w") as jsonOut:
+            dump(cpdNames, jsonOut, indent=3)
     # print(list(map(len, df_content.values())))
     mets_table = DataFrame(data=df_content)
     mets_table.index.name = "Community_index"
-
+    
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
-    df.index.name = "Community_index"
     content = {'table': df.to_html(table_id="main", classes="display"), "mets_table": mets_table.to_html(),
                "heatmap": heatmap_df.applymap(lambda x: round(x, 3)).style.background_gradient().to_html(table_id="heat", classes="display")}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(package_dir, "community")),
