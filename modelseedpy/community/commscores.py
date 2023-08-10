@@ -17,7 +17,7 @@ from numpy.random import shuffle
 from multiprocess import current_process
 from math import inf
 import sigfig
-from icecream import ic
+# from icecream import ic
 import re
 # from math import prod
 
@@ -83,13 +83,21 @@ def _get_media(media=None, com_model=None, model_s_=None, min_growth=None, envir
 
 
 def _sigfig_check(value, sigfigs, default):
-    if str(value) == "inf":  value = 1E6
-    if str(value) == "nan":  value = 0
+    if str(value) in ["inf", "nan"]:  value = ""
     if FBAHelper.isnumber(value):  return sigfig.round(value, sigfigs)
     else:  return default
 
 
-class MSCommScores:
+
+def nanFilter(value, string=True):
+    if isinstance(value, str) or value is None:
+        if string: return value
+        else:  return nan
+    if any([value < 0, value > 1e5]): return "" if string else nan
+    return value
+
+
+class CommScores:
     def __init__(self, member_models, min_growth=0.1, n_solutions=100, environment=None,
                  abstol=1e-3, media_dict=None, printing=True, raw_content=False, antismash_json_path:str=None,
                  antismash_zip_path:str=None, minimal_media_method="minFlux"):
@@ -136,8 +144,8 @@ class MSCommScores:
                 "gyd":gyd, "fs":fs}
 
     def mro_score(self):
-        self.mro_val = MSCommScores.mro(self.models, self.media["members"], self.min_growth,
-                                        self.media, self.raw_content, self.environment, self.printing, True)
+        self.mro_val = CommScores.mro(self.models, self.media["members"], self.min_growth,
+                                      self.media, self.raw_content, self.environment, self.printing, True)
         if not self.printing:  return self.mro_val
         if self.raw_content:
             for pair, (interaction, media) in self.mro_val.items():
@@ -154,15 +162,15 @@ class MSCommScores:
 
     def mip_score(self, interacting_media:dict=None, noninteracting_media:dict=None):
         interacting_media = interacting_media or self.media or None
-        diff, self.mip_val = MSCommScores.mip(self.models, self.community.model, self.min_growth, interacting_media,
-                                              noninteracting_media, self.environment, self.printing, True)
+        diff, self.mip_val = CommScores.mip(self.models, self.community.model, self.min_growth, interacting_media,
+                                            noninteracting_media, self.environment, self.printing, True)
         if not self.printing:  return self.mip_val
         print(f"\nMIP score: {self.mip_val}\t\t\t{self.mip_val} required compound(s) can be sourced via syntrophy:")
         if self.raw_content:  pprint(diff)
         return self.mip_val
 
     def gyd_score(self, coculture_growth=False):
-        self.gyd_val = MSCommScores.gyd(self.models, environment=self.environment, coculture_growth=coculture_growth)
+        self.gyd_val = CommScores.gyd(self.models, environment=self.environment, coculture_growth=coculture_growth)
         if not self.printing:  return self.gyd
         growth_type = "monocultural" if not coculture_growth else "cocultural"
         for pair, score in self.gyd_val.items():
@@ -171,7 +179,7 @@ class MSCommScores:
         return self.gyd
 
     def fs_score(self, kbase_obj=None, cobrakbase_path:str=None, kbase_token_path:str=None, annotated_genomes:dict=None):
-        self.fs_val = MSCommScores.fs(self.models, kbase_obj, cobrakbase_path, kbase_token_path, annotated_genomes)
+        self.fs_val = CommScores.fs(self.models, kbase_obj, cobrakbase_path, kbase_token_path, annotated_genomes)
         if not self.printing:  return self.fs
         for pair, score in self.fs_val.items():
             print(f"\nFS Score: The similarity of RAST functional SSO ontology "
@@ -180,7 +188,7 @@ class MSCommScores:
 
     def mp_score(self):
         print("executing MP")
-        self.mp_val = MSCommScores.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
+        self.mp_val = CommScores.mp(self.models, self.environment, self.community.model, None, self.abstol, self.printing)
         if not self.printing:  return self.mp_val
         if self.raw_content:
             print("\n(MP) The possible contributions of each member in the member media include:\n")
@@ -193,8 +201,8 @@ class MSCommScores:
 
     def mu_score(self):
         member_excreta = self.mp_score() if not hasattr(self, "mp_val") else self.mp_val
-        self.mu_val = MSCommScores.mu(self.models, self.environment, member_excreta, self.n_solutions,
-                                      self.abstol, True, self.printing)
+        self.mu_val = CommScores.mu(self.models, self.environment, member_excreta, self.n_solutions,
+                                    self.abstol, True, self.printing)
         if not self.printing:  return self.mu_val
         print("\nMU score:\t\t\tThe fraction of solutions in which each member is the "
               "syntrophic receiver that contain a respective metabolite:\n")
@@ -202,8 +210,8 @@ class MSCommScores:
         return self.mu_val
 
     def sc_score(self):
-        self.sc_val = MSCommScores.sc(self.models, self.community.model, self.min_growth,
-                                      self.n_solutions, self.abstol, True, self.printing)
+        self.sc_val = CommScores.sc(self.models, self.community.model, self.min_growth,
+                                    self.n_solutions, self.abstol, True, self.printing)
         if not self.printing:  return self.sc_val
         print("\nSC score:\t\t\tThe fraction of community members who syntrophically contribute to each species:\n")
         pprint(self.sc_val)
@@ -215,14 +223,14 @@ class MSCommScores:
         if not hasattr(self, "mu_val"):  self.mu_val = self.mu_score()
         if not hasattr(self, "mp_val"):  self.mp_val = self.mp_score()
 
-        self.smetana = MSCommScores.smetana(
+        self.smetana = CommScores.smetana(
             self.models, self.community.model, self.min_growth, self.n_solutions, self.abstol,
             (self.sc_val, self.mu_val, self.mp_val), True, sc_coupling, self.printing)
         if self.printing:  print("\nsmetana score:\n")  ;  pprint(self.smetana)
         return self.smetana
 
     def antiSMASH_scores(self, antismash_json_path=None):
-        self.antismash = MSCommScores.antiSMASH(antismash_json_path or self.antismash_json_path)
+        self.antismash = CommScores.antiSMASH(antismash_json_path or self.antismash_json_path)
         if not self.printing:  return self.antismash
         if self.raw_content:
             print("\n(antismash) The biosynthetic_areas, BGCs, protein_annotations, clusterBlast, and "
@@ -287,7 +295,7 @@ class MSCommScores:
         model_utils = {}
         count = 0
         for model1, models in pairs.items():
-            if lazy_load:  model1, model1_str = MSCommScores._load(model1, kbase_obj)
+            if lazy_load:  model1, model1_str = CommScores._load(model1, kbase_obj)
             else:  model1_str = model1.id
             if model1.id not in models_media:
                 models_media[model1.id] = {"media": _get_media(model_s_=model1, skip_bad_media=skip_bad_media)}
@@ -295,7 +303,7 @@ class MSCommScores:
             if model1.id not in model_utils:  model_utils[model1.id] = MSModelUtil(model1)
             # print(pid, model1)
             for model_index, model2 in enumerate(models):
-                if lazy_load:  model2, model2_str = MSCommScores._load(model2, kbase_obj)
+                if lazy_load:  model2, model2_str = CommScores._load(model2, kbase_obj)
                 else:  model2_str = model2.id
                 if model2.id not in models_media:
                     models_media[model2.id] = {"media": _get_media(model_s_=model2, skip_bad_media=skip_bad_media)}
@@ -308,19 +316,19 @@ class MSCommScores:
                 modelIDs = [model.id for model in grouping]
                 print(f"{pid}~~{count}\t{modelIDs}")
                 for envIndex, environ in enumerate(environments):
-                    if print_progress:  print(f"\tEnvironment{envIndex}: {environ}", end="\t")
+                    if print_progress:  print(f"\tEnvironment{envIndex}", end="\t")
                     if not anme_comm:
-                        model1 = MSCommScores._check_model(model_utils[model1.id], environ, model1_str, skip_bad_media)
-                        model2 = MSCommScores._check_model(model_utils[model2.id], environ, model2_str, skip_bad_media)
+                        model1 = CommScores._check_model(model_utils[model1.id], environ, model1_str, skip_bad_media)
+                        model2 = CommScores._check_model(model_utils[model2.id], environ, model2_str, skip_bad_media)
                     # initiate the KBase output
                     kbase_dic = {f"model{index+1}": modelID for index, modelID in enumerate(modelIDs)}
                     kbase_dic["media"] = f"media{envIndex}" if not hasattr(environ, "name") else environ.name
                     if "None" == kbase_dic["media"][:4]:  kbase_dic["media"] = "Complete"
-                    g1, g2, comm = MSCommScores._determine_growths([model_utils[model1.id], model_utils[model2.id], community.util])
-                    g1, g2, comm = _sigfig_check(g1, 5, 0), _sigfig_check(g2, 5, 0), _sigfig_check(comm, 5, 0)
+                    g1, g2, comm = CommScores._determine_growths([model_utils[model1.id], model_utils[model2.id], community.util])
+                    g1, g2, comm = _sigfig_check(g1, 5, ""), _sigfig_check(g2, 5, ""), _sigfig_check(comm, 5, "")
                     kbase_dic.update({"model1 growth": g1, "model2 growth": g2, "community growth": comm})
                     # define the MRO content
-                    mro_values = MSCommScores.mro(grouping, models_media, raw_content=True, environment=environ)
+                    mro_values = CommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
                                       f"{100*len(intersection)/len(memMedia):.3f}% ({len(intersection)}/{len(memMedia)})"
                                       for models_string, (intersection, memMedia) in mro_values.items()})
@@ -328,13 +336,13 @@ class MSCommScores:
                     if print_progress:  print("MRO done", end="\t")
                     # define the CIP content
                     if cip_score:
-                        cip_values = MSCommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
+                        cip_values = CommScores.cip(modelutils=[model_utils[mem.id] for mem in grouping])
                         kbase_dic.update({"CIP": cip_values[1]})
                         mets[-1].update({"CIP metabolites": list(cip_values[0])})
                         if print_progress:  print("CIP done", end="\t")
                     # define the MIP content
-                    mip_values = MSCommScores.mip(grouping, comm_model, 0.1, None, None, environ, print_progress, True,
-                                                  costless, costless, skip_bad_media)
+                    mip_values = CommScores.mip(grouping, comm_model, 0.1, None, None, environ, print_progress, True,
+                                                costless, costless, skip_bad_media)
                     # print(mip_values)
                     if mip_values is not None:
                         kbase_dic.update({f"MIP_model{modelIDs.index(models_name)+1}": str(len(received))
@@ -348,29 +356,30 @@ class MSCommScores:
                                 del kbase_dic[f"MIP_model{modelIDs.index(models_name)+1}"]
                             if print_progress:  print("costless_MIP  done", end="\t")
                     else:
-                        kbase_dic.update({f"MIP_model1 (costless)": 0, f"MIP_model2 (costless)": 0})
+                        kbase_dic.update({f"MIP_model1 (costless)": "", f"MIP_model2 (costless)": ""})
                         mets[-1].update({"MIP model1 metabolites": [None], "MIP model2 metabolites": [None]})
                     if print_progress:  print("MIP done", end="\t")
-                    bss_values = MSCommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
-                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' invading ')[0])+1}":
-                                          f"{_sigfig_check(100*val, 5, 0)}%" for name, (mets, val) in bss_values.items()})
+                    bss_values = CommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
+                    kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' supporting ')[0])+1}":
+                                      f"{_sigfig_check(100*val, 5, '')}%" for name, (mets, val) in bss_values.items()})
                     mets[-1].update({"BSS model1 metabolites": [met_set for met_set, val in bss_values.values()][0],
                                      "BSS model2 metabolites": [met_set for met_set, val in bss_values.values()][1]})
                     # TODO report BSS metabolites analogously to the MRO
                     # mets[-1].update({"bss_mets": list(bss_values[0].values())})
                     if print_progress:  print("BSS done", end="\t")
-                    pc_values = MSCommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)
-                    kbase_dic.update({"PC_comm": _sigfig_check(pc_values[0], 5, 0),
-                                      "PC_model1": _sigfig_check(list(pc_values[1].values())[0], 5, 0),
-                                      "PC_model2": _sigfig_check(list(pc_values[1].values())[1], 5, 0),
+                    pc_values = CommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)
+                    kbase_dic.update({"PC_comm": _sigfig_check(pc_values[0], 5, ""),
+                                      "PC_model1": _sigfig_check(list(pc_values[1].values())[0], 5, ""),
+                                      "PC_model2": _sigfig_check(list(pc_values[1].values())[1], 5, ""),
                                       "BIT": pc_values[2]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
-                    gyd, g1, g2 = list(MSCommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
-                    kbase_dic.update({"GYD": _sigfig_check(gyd, 5, 0)})
+                    gyd, g1, g2 = list(CommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
+                    kbase_dic.update({"GYD": _sigfig_check(gyd, 5, "")})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
-                        fs_values = list(MSCommScores.fs(grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]
+                        fs_values = list(CommScores.fs(grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]
+                        print(len(fs_values[0]) if fs_values[0] is not None else "NaN", fs_values[1])
                         kbase_dic.update({"FS": sigfig.round(fs_values[1], 5)})
                         if fs_values is not None:  mets[-1].update({"FS features": fs_values[0]})
                         if print_progress:  print("FS done\t\t")
@@ -382,8 +391,7 @@ class MSCommScores:
     @staticmethod
     def kbase_output(all_models:iter=None,  # a list of distinct lists is provided for specifying exclusive groups
                      pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
-                     exclude_pairs:list=None, kbase_obj=None, directional_pairs=False,
-                     annotated_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
+                     exclude_pairs:list=None, kbase_obj=None, annotated_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
                      see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
                      pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
                      print_progress=False):
@@ -392,8 +400,7 @@ class MSCommScores:
         if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
         elif all_models is not None:
             if not isinstance(all_models[0], list):
-                all_models = list(set(all_models))
-                model_pairs = array(list(permutations(all_models, 2) if directional_pairs else combinations(all_models, 2)))
+                all_models = list(set(all_models))  ;  model_pairs = array(list(combinations(all_models, 2)))
             else:
                 model_pairs = []
                 for models1, models2 in combinations(all_models, 2):
@@ -437,12 +444,11 @@ class MSCommScores:
             pool = Pool(int(pool_size))  #.map(calculate_scores, [{k: v} for k,v in pairs.items()])
             args = [[dict([pair]), models_media, environments, annotated_genomes, lazy_load, kbase_obj]
                     for pair in list(pairs.items())]
-            output = pool.map(MSCommScores.calculate_scores, args)
+            output = pool.map(CommScores.calculate_scores, args)
             series = chain.from_iterable([ele[0] for ele in output])
             mets = chain.from_iterable([ele[1] for ele in output])
-        else:  series, mets = MSCommScores.calculate_scores(pairs, models_media, environments, annotated_genomes, lazy_load,
-                                                            kbase_obj, cip_score, costless, skip_bad_media, anme_comm,
-                                                            print_progress)
+        else:  series, mets = CommScores.calculate_scores(pairs, models_media, environments, annotated_genomes, lazy_load,
+                                                          kbase_obj, cip_score, costless, skip_bad_media, anme_comm, print_progress)
         return concat(series, axis=1).T, mets
 
     @staticmethod
@@ -459,14 +465,16 @@ class MSCommScores:
             if "community_media" in mem_media:  mem_media = mem_media["members"]
         # MROs = array(list(map(len, pairs.values()))) / array(list(map(len, mem_media.values())))
         mro_values = {}
-        for model1, model2 in permutations(member_models, 2):
+        for model1, model2 in combinations(member_models, 2):
             intersection = set(mem_media[model1.id]["media"].keys()) & set(mem_media[model2.id]["media"].keys())
-            member_media = mem_media[model1.id]["media"]
-            if raw_content:  mro_values[f"{model1.id}---{model2.id})"] = (intersection, member_media)
-            else:  mro_values.update({
-                f"{model1.id}---{model2.id})": 100*(len(intersection) / len(member_media), len(intersection), len(member_media)),
-                "mets": intersection
-            })
+            inter = [ex.replace("EX_", "").replace("_e0", "") for ex in intersection]
+            m1_media = mem_media[model1.id]["media"] ; m2_media = mem_media[model2.id]["media"]
+            if raw_content:  mro_values.update({f"{model1.id}---{model2.id})": (inter, m1_media),
+                                                f"{model2.id}---{model1.id})": (inter, m2_media)})
+            else:
+                mro_values.update({f"{model1.id}---{model2.id})": 100*(len(inter) / len(m1_media), len(inter), len(m1_media)),
+                                   f"{model2.id}---{model1.id})": 100*(len(inter) / len(m2_media), len(inter), len(m2_media)),
+                                   "mets": inter})
         return mro_values
         # return mean(list(map(len, pairs.values()))) / mean(list(map(len, mem_media.values())))
 
@@ -517,7 +525,7 @@ class MSCommScores:
         outputs = [directionalMIP]
         # TODO categorize all of the cross-fed substrates to examine potential associations of specific compounds
         if costless:
-            costless_mets, numExs = MSCommScores.cip(member_models=member_models)
+            costless_mets, numExs = CommScores.cip(member_models=member_models)
             # print(list(directionalMIP.values()), costless_mets)
             costlessDirectionalMIP = {member_name: set(receive_mets).intersection(costless_mets)
                                       for member_name, receive_mets in directionalMIP.items()}
@@ -563,12 +571,12 @@ class MSCommScores:
             org_possible_contr = [ex_rxn for ex_rxn in model_util.exchange_list()
                                   if (ex_rxn.id not in community.medium and ex_rxn.upper_bound > 0)]
             # ic(org_possible_contributions, len(model_util.exchange_list()), len(community.medium))
-            scores, possible_contr = MSCommScores.contributions(org_possible_contr, scores, model_util, abstol)
+            scores, possible_contr = CommScores.contributions(org_possible_contr, scores, model_util, abstol)
             while DeepDiff(org_possible_contr, possible_contr):
                 print("remaining possible_contributions", len(possible_contr), end="\r")
                 ## optimize the sum of the remaining exchanges that have not surpassed the abstol
                 org_possible_contr = possible_contr[:]
-                scores, possible_contr = MSCommScores.contributions(org_possible_contr, scores, model_util, abstol)
+                scores, possible_contr = CommScores.contributions(org_possible_contr, scores, model_util, abstol)
 
             ## individually checks the remaining possible contributions
             for ex_rxn in possible_contr:
@@ -592,8 +600,8 @@ class MSCommScores:
             if missing_members:
                 print(f"The {','.join(missing_members)} members are missing from the defined "
                       f"excreta list and will therefore be determined through an additional MP simulation.")
-                member_excreta.update(MSCommScores.mp(missing_members, environment))
-        else:  member_excreta = MSCommScores.mp(member_models, environment, None, abstol, printing)
+                member_excreta.update(CommScores.mp(missing_members, environment))
+        else:  member_excreta = CommScores.mp(member_models, environment, None, abstol, printing)
         for org_model in member_models:
             other_excreta = set(chain.from_iterable([excreta for model, excreta in member_excreta.items()
                                                      if model != org_model.id]))
@@ -687,7 +695,7 @@ class MSCommScores:
                 if environment and not anme_comm:  model1_util.add_medium(environment); model2_util.add_medium(environment)
             else:  model1_util = combination[0] ; model2_util = combination[1]
             if not coculture_growth:
-                G_m1, G_m2 = MSCommScores._determine_growths([model1_util, model2_util])
+                G_m1, G_m2 = CommScores._determine_growths([model1_util, model2_util])
                 G_m1, G_m2 = G_m1 if FBAHelper.isnumber(str(G_m1)) else 0, G_m2 if FBAHelper.isnumber(str(G_m2)) else 0
             else:
                 community = community or MSCommunity(member_models=[model1_util.model, model2_util.model],
@@ -695,8 +703,8 @@ class MSCommScores:
                 community.run_fba()
                 member_growths = community.parse_member_growths()
                 G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
-            if G_m2 <= 0 and G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (None, G_m1, G_m2)  ;  continue
-            if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (1e5, G_m1, G_m2)  ;  continue
+            if G_m2 <= 0 and G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
+            if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
             gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (abs(G_m1-G_m2) / min([G_m1, G_m2]), G_m1, G_m2)
         return gyds
 
@@ -717,8 +725,9 @@ class MSCommScores:
         if not comm_effects:  return pc_score
 
         comm_member_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass.id] for mem in community.members}
-        comm_growth_effect = {memID: comm_environ/isolate_growths[memID] for memID, comm_environ in comm_member_growths.items()}
-        growth_diffs = array(list(comm_growth_effect.values()))
+        comm_growth_effect = {memID: nanFilter(comm_environ/isolate_growths[memID])
+                              for memID, comm_environ in comm_member_growths.items()}
+        growth_diffs = array([nanFilter(x, False) for x in list(comm_growth_effect.values())])
         th_pos, th_neg = 1+interaction_threshold, 1-interaction_threshold
         if all(growth_diffs > th_pos):  bit = "mutualism"
         elif all(growth_diffs < th_neg):  bit = "competitive"
@@ -726,7 +735,7 @@ class MSCommScores:
         elif all(growth_diffs > th_neg) and any(growth_diffs > th_pos):  bit = "commensalism"
         elif all(growth_diffs < th_pos) and any(growth_diffs < th_neg):  bit = "amensalism"
         elif any(growth_diffs > th_pos) and any(growth_diffs < th_neg):  bit = "parasitism"
-        else: print(f"The relative growths {comm_growth_effect} from {comm_member_growths} are not captured.")  ;  bit = None
+        else: print(f"The relative growths {comm_growth_effect} from {comm_member_growths} are not captured.")  ;  bit = ""
         return (pc_score, comm_growth_effect, bit)
 
     @staticmethod
@@ -740,10 +749,10 @@ class MSCommScores:
                                 for rxnID in minMedia[model2_util.id]["media"].keys()])
             model1_internal = {rm_comp(met.id) for rxn in model1_util.internal_list() for met in rxn.products}
             model2_internal = {rm_comp(met.id) for rxn in model2_util.internal_list() for met in rxn.products}
-            bss_scores[f"{model1_util.id} invading {model2_util.id} in media{index}"] = (model2_internal,
-                    len(model1_media.intersection(model2_internal)) / len(model1_media))
-            bss_scores[f"{model2_util.id} invading {model1_util.id} in media{index}"] = (model1_internal,
+            bss_scores[f"{model1_util.id} supporting {model2_util.id} in media{index}"] = (model1_internal,
                     len(model2_media.intersection(model1_internal)) / len(model2_media))
+            bss_scores[f"{model2_util.id} supporting {model1_util.id} in media{index}"] = (model2_internal,
+                    len(model1_media.intersection(model2_internal)) / len(model1_media))
 
         bss_scores = {}
         for combination in combinations(model_utils or member_models, 2):
@@ -766,7 +775,7 @@ class MSCommScores:
     def _calculate_jaccard_score(set1, set2):
         if set1 == set2:  print(f"The sets are identical, with a length of {len(set1)}.")
         if len(set1.union(set2)) == 0:  return (None, None)
-        return (set1.union(set2), len(set1.intersection(set2)) / len(set1.union(set2)))
+        return (set1.intersection(set2), len(set1.intersection(set2)) / len(set1.union(set2)))
 
     @staticmethod
     def get_all_genomes_from_ws(ws_id, kbase_object=None, cobrakbase_repo_path:str=None, kbase_token_path:str=None):
@@ -790,7 +799,7 @@ class MSCommScores:
 
     @staticmethod
     def fs(models:Iterable=None, kbase_object=None, cobrakbase_repo_path:str=None,
-            kbase_token_path:str=None, annotated_genomes:dict=None, printing=False):
+           kbase_token_path:str=None, annotated_genomes:dict=None, printing=False):
         if not isinstance(annotated_genomes, dict):
             if not kbase_object:
                 import os ; os.environ["HOME"] = cobrakbase_repo_path ; import cobrakbase
@@ -812,9 +821,9 @@ class MSCommScores:
                 for j in annotated_genomes[genome2].features:
                     for key, val in j.ontology_terms.items():
                         if key == 'SSO':  genome2_set.update(val)
-                distances[f"{genome1} ++ {genome2}"] = MSCommScores._calculate_jaccard_score(genome1_set, genome2_set)
+                distances[f"{genome1} ++ {genome2}"] = CommScores._calculate_jaccard_score(genome1_set, genome2_set)
         else:
-            distances = {f"{genome1} ++ {genome2}": MSCommScores._calculate_jaccard_score(
+            distances = {f"{genome1} ++ {genome2}": CommScores._calculate_jaccard_score(
                 set(list(content["SSO"].keys())[0] for dic in annotated_genomes[genome1]["cdss"]
                     for x, content in dic.items() if x == "ontology_terms" and len(content["SSO"].keys()) > 0),
                 set(list(content["SSO"].keys())[0] for dic in annotated_genomes[genome2]["cdss"]
@@ -830,10 +839,10 @@ class MSCommScores:
             member_models, com_model, compatibilized==False, printing=printing)
         sc = None
         if not prior_values:
-            mp = MSCommScores.mp(member_models, environment, com_model, abstol)
-            mu = MSCommScores.mu(member_models, environment, mp, n_solutions, abstol, compatibilized)
+            mp = CommScores.mp(member_models, environment, com_model, abstol)
+            mu = CommScores.mu(member_models, environment, mp, n_solutions, abstol, compatibilized)
             if sc_coupling:
-                sc = MSCommScores.sc(member_models, com_model, min_growth, n_solutions, abstol, compatibilized)
+                sc = CommScores.sc(member_models, com_model, min_growth, n_solutions, abstol, compatibilized)
         elif len(prior_values) == 3:  sc, mu, mp = prior_values
         else:  mu, mp = prior_values
 

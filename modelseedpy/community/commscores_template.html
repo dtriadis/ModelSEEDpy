@@ -43,20 +43,37 @@
         <h1>CommScores Results</h1>
         <ul class="nav nav-tabs" id="nav-tab" role="tablist">
             <li><a class="nav-item nav-link active" id="nav-table-tab" data-toggle="tab" href="#nav-table" role="tab" aria-controls="nav-table" aria-selected="true">Full Table</a> </li>
-            <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Metabolites/Features</a> </li>
+            <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Metabolites</a> </li>
             <li><a class="nav-item nav-link" id="nav-heatmap-tab" data-toggle="tab" href="#nav-heatmap" role="tab" aria-controls="nav-heatmap" aria-selected="true">Heatmap</a> </li>
             <li><a class="nav-item nav-link" id="nav-info-tab" data-toggle="tab" href="#nav-info" role="tab" aria-controls="nav-info" aria-selected="true">Score Information</a> </li>
             <!-- <li><a class="nav-item nav-link" id="nav-mets-tab" data-toggle="tab" href="#nav-mets" role="tab" aria-controls="nav-mets" aria-selected="true">Interacted mets</a> </li> -->
         </ul>
         <div class="tab-content" id="nav-tabContent">
             <div class="tab-pane fade show active" id="nav-table" role="tabpanel" aria-labelledby="nav-table-tab">
-                <p>The biomass yields are expressed in [gm/hr*(gm CDW)]</p>
+                <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css"/>
+                <script type="text/javascript" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+                <script type="text/javascript">
+                    $(document).ready( function(){  $('#main').DataTable(); } );
+                </script>
+                <p>
+                    Blank cells signify scores that failed to simulate in the given conditions.
+                    The biomass yields are expressed in [gm/hr*(gm CDW)]
+                </p>
                 {{ table|safe }}
             </div>
             <div class="tab-pane fade" id="nav-mets" role="tabpanel" aria-labelledby="nav-mets-tab">
+                <p>The <i>MRO metabolites</i> entries are the metabolites that are under competition in the simulated system.
+                    The <i>MIP model1 metabolites</i> and <i>MIP model2 metabolites</i> entries are the metabolites that are donated by Model1 or Model2 and consumed by Model2 or Model1, respectively.
+                    The <i>CIP metabolites</i> entries are the combined set of metabolites that the models excrete during their maximal growths.</p>
                 {{ mets_table|safe }}
             </div>
             <div class="tab-pane fade" id="nav-heatmap" role="tabpanel" aria-labelledby="nav-heatmap-tab">
+                <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css"/>
+                <script type="text/javascript" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+                <script type="text/javascript">
+                    $(document).ready( function(){  $('#heat').DataTable(); } );
+                </script>
+                <p><i>c_MIP1</i> and <i>c_MIP2</i> represent the costless MIP sub-score for Model1 and Model2, respectively.</p>
                 {{ heatmap|safe }}
             </div>
             <div class="tab-pane fade" id="nav-info" role="tabpanel" aria-labelledby="nav-info-tab">
