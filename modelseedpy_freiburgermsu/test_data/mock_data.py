@@ -196,7 +196,7 @@ def mock_model():
 
 def remap(model, bigg_to_seed_cpd, bigg_to_seed_rxn, index='0'):
     from cobra.core import Model, Metabolite, Reaction
-    from modelseedpy.core.msmodel import get_cmp_token
+    from modelseedpy_freiburgermsu.core.msmodel import get_cmp_token
     model_result = Model(model.id)
     metabolites = {}
     for m in model.metabolites:

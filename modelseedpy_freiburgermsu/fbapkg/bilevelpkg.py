@@ -10,7 +10,7 @@ from cobra.core import (
     Model,
     Reaction,
 )  # !!! None of these imports are used
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
 import re
 
 # Base class for FBA packages

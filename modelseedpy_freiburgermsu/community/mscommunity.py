@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.community.mssteadycom import MSSteadyCom
-from modelseedpy.community.commhelper import build_from_species_models
-from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, FeasibilityError, NoFluxError
-from modelseedpy.core.msgapfill import MSGapfill
-from modelseedpy.core.fbahelper import FBAHelper
-#from modelseedpy.fbapkg.gapfillingpkg import default_blacklist
-from modelseedpy.core.msatpcorrection import MSATPCorrection
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.community.mssteadycom import MSSteadyCom
+from modelseedpy_freiburgermsu.community.commhelper import build_from_species_models
+from modelseedpy_freiburgermsu.core.exceptions import ObjectAlreadyDefinedError, FeasibilityError, NoFluxError
+from modelseedpy_freiburgermsu.core.msgapfill import MSGapfill
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+#from modelseedpy_freiburgermsu.fbapkg.gapfillingpkg import default_blacklist
+from modelseedpy_freiburgermsu.core.msatpcorrection import MSATPCorrection
 from cobra import Reaction
 from cobra.core.dictlist import DictList
 from cobra.io import save_matlab_model

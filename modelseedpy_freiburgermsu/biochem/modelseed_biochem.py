@@ -4,11 +4,11 @@ import os
 import json
 import pandas as pd
 from cobra.core.dictlist import DictList
-from modelseedpy.biochem.modelseed_compound import ModelSEEDCompound, ModelSEEDCompound2
-from modelseedpy.biochem.modelseed_reaction import ModelSEEDReaction, ModelSEEDReaction2
-from modelseedpy.core.msmodel import get_reaction_constraints_from_direction
-from modelseedpy.helpers import config
-from modelseedpy.core.msmodel import get_reaction_constraints_from_direction
+from modelseedpy_freiburgermsu.biochem.modelseed_compound import ModelSEEDCompound, ModelSEEDCompound2
+from modelseedpy_freiburgermsu.biochem.modelseed_reaction import ModelSEEDReaction, ModelSEEDReaction2
+from modelseedpy_freiburgermsu.core.msmodel import get_reaction_constraints_from_direction
+from modelseedpy_freiburgermsu.helpers import config
+from modelseedpy_freiburgermsu.core.msmodel import get_reaction_constraints_from_direction
 
 logger = logging.getLogger(__name__)
 
@@ -329,8 +329,8 @@ def load_reactions_from_df(
     aliases: dict,
     reaction_ecs: dict,
 ):
-    from modelseedpy.core.msmodel import get_reaction_constraints_from_direction
-    from modelseedpy.biochem.modelseed_reaction import get_cstoichiometry
+    from modelseedpy_freiburgermsu.core.msmodel import get_reaction_constraints_from_direction
+    from modelseedpy_freiburgermsu.biochem.modelseed_reaction import get_cstoichiometry
 
     reactions = []
     metabolites_indexed = {}

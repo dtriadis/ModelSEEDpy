@@ -9,20 +9,20 @@ import pandas as pd
 from os.path import abspath as _abspath
 from os.path import dirname as _dirname
 from optlang.symbolics import Zero, add
-from modelseedpy.core.rast_client import RastClient
-from modelseedpy.core.msgenome import normalize_role
-from modelseedpy.core.msmodel import (
+from modelseedpy_freiburgermsu.core.rast_client import RastClient
+from modelseedpy_freiburgermsu.core.msgenome import normalize_role
+from modelseedpy_freiburgermsu.core.msmodel import (
     get_gpr_string,
     get_reaction_constraints_from_direction,
 )
 from cobra.core import Gene, Metabolite, Model, Reaction
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.fbahelper import FBAHelper
-from modelseedpy.core.msgapfill import MSGapfill
-from modelseedpy.core.msmedia import MSMedia
-from modelseedpy.core.mstemplate import MSTemplateBuilder
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.helpers import get_template
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.msgapfill import MSGapfill
+from modelseedpy_freiburgermsu.core.msmedia import MSMedia
+from modelseedpy_freiburgermsu.core.mstemplate import MSTemplateBuilder
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.helpers import get_template
 
 logger = logging.getLogger(__name__)
 logger.setLevel(

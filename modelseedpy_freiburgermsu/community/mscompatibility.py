@@ -1,8 +1,8 @@
 from collections import OrderedDict, namedtuple
 from cobra import Reaction
 from cobra.io.json import save_json_model
-from modelseedpy.core.fbahelper import FBAHelper
-from modelseedpy.core.mseditorapi import MSEditorAPI
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.mseditorapi import MSEditorAPI
 from itertools import chain
 from typing import Iterable
 from zipfile import ZipFile, ZIP_LZMA

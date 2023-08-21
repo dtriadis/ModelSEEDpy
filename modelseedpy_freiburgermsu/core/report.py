@@ -203,7 +203,7 @@ def convert_to_int(element):
 
 
 categories_dir = os.path.join(package_dir, "data", "categories")
-sugars, aminoacids = load(os.path.join(categories_dir, "sugars.npy")), load(os.path.join(categories_dir, "aminoAcids.npy"))
+sugars, aminoacids = load(os.path.join(categories_dir, "categorized_sugars.npy")), load(os.path.join(categories_dir, "aminoAcids.npy"))
 vitamins, minerals = load(os.path.join(categories_dir, "vitamins.npy")), load(os.path.join(categories_dir, "minerals.npy"))
 energy_compounds = load(os.path.join(categories_dir, "energy_compounds.npy"))
 sugars_dic, aminoacids_dic = dict(zip(sugars[:,0], sugars[:,1])), dict(zip(aminoacids[:,0], aminoacids[:,1]))
@@ -231,7 +231,7 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
         for metID in metIDs:
             if metID not in cpdNames:
                 if "msdb" not in locals().keys():
-                    from modelseedpy.biochem import from_local
+                    from modelseedpy_freiburgermsu.biochem import from_local
                     msdb = from_local(msdb_path)
                 name = msdb.compounds.get_by_id(metID).name
                 update_cpdNames[metID] = name

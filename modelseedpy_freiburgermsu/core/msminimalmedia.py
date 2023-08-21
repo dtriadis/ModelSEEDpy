@@ -1,8 +1,8 @@
-from modelseedpy.core.exceptions import ObjectiveError, FeasibilityError
-from modelseedpy.fbapkg.reactionusepkg import ReactionUsePkg
-from modelseedpy.core.fbahelper import FBAHelper
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.core.exceptions import ObjectiveError, FeasibilityError
+from modelseedpy_freiburgermsu.fbapkg.reactionusepkg import ReactionUsePkg
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
 from itertools import combinations, permutations, chain
 from optlang import Variable, Constraint
 from cobra.medium import minimal_medium
@@ -38,7 +38,7 @@ def _var_to_ID(var):
 
 
 def _compatibilize(org_models, printing=False):
-    from modelseedpy.community.mscompatibility import MSCompatibility
+    from modelseedpy_freiburgermsu.community.mscompatibility import MSCompatibility
     return MSCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
 
 

@@ -8,9 +8,9 @@ import pandas as pd
 import cobra
 from cobra import Model, Reaction, Metabolite
 from cobra.io.json import from_json, to_json
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.exceptions import *
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.exceptions import *
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 from itertools import chain
 from optlang.symbolics import Zero
 from optlang import Constraint, Objective
@@ -258,7 +258,7 @@ class MSModelUtil:
         return [rxn for rxn in self.model.reactions if re.search(r"(^bio\d+)", rxn.id)]
 
     def compatibilize(self, conflicts_file_name="orig_conflicts.json", printing=False):
-        from modelseedpy.community.mscompatibility import MSCompatibility
+        from modelseedpy_freiburgermsu.community.mscompatibility import MSCompatibility
         self.model = MSCompatibility.standardize(
             [self.model], conflicts_file_name=conflicts_file_name, printing=printing)[0]
         return self.model
@@ -370,8 +370,8 @@ class MSModelUtil:
     def add_ms_reaction(self, rxn_dict, msdb_path=None, msdb_object=None, comp_trans=["c0", "e0"]):
         if msdb_object:  modelseed = msdb_object
         else:
-            # from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
-            from modelseedpy.biochem import from_local
+            # from modelseedpy_freiburgermsu.biochem.modelseed_biochem import ModelSEEDBiochem
+            from modelseedpy_freiburgermsu.biochem import from_local
             # modelseed = ModelSEEDBiochem.get()
             modelseed = from_local(msdb_path)
         output = []

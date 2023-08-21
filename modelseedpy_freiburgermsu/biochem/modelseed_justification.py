@@ -1,6 +1,6 @@
-from modelseedpy.core.optlanghelper import OptlangHelper, Bounds, tupVariable, tupConstraint, tupObjective
-from modelseedpy.core.exceptions import FeasibilityError, ObjectAlreadyDefinedError
-from modelseedpy.biochem import from_local
+from modelseedpy_freiburgermsu.core.optlanghelper import OptlangHelper, Bounds, tupVariable, tupConstraint, tupObjective
+from modelseedpy_freiburgermsu.core.exceptions import FeasibilityError, ObjectAlreadyDefinedError
+from modelseedpy_freiburgermsu.biochem import from_local
 from collections import Counter
 from time import process_time
 from json import dump

@@ -13,8 +13,8 @@ import numpy as np
 import cobra
 import networkx as nx
 
-from modelseedpy.community import commhelper
-from modelseedpy import MSModelUtil
+from modelseedpy_freiburgermsu.community import commhelper
+from modelseedpy_freiburgermsu import MSModelUtil
 
 warnings.filterwarnings("ignore")
 

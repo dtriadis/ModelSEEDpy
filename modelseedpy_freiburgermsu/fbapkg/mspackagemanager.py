@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from modelseedpy.core.exceptions import PackageError
+from modelseedpy_freiburgermsu.core.exceptions import PackageError
 
 import sys
 import inspect
@@ -28,7 +28,7 @@ class MSPackageManager:
         self.model = model
         self.packages = {}
         self.available_packages = {}
-        for name, obj in inspect.getmembers(sys.modules["modelseedpy"]):
+        for name, obj in inspect.getmembers(sys.modules["modelseedpy_freiburgermsu"]):
             if name != "BaseFBAPkg" and name[-3:] == "Pkg":
                 self.available_packages[name] = obj
 

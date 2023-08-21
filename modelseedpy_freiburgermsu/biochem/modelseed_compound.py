@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from modelseedpy.biochem.seed_object import ModelSEEDObject
-from modelseedpy.core.mstemplate import MSTemplateSpecies, MSTemplateMetabolite
+from modelseedpy_freiburgermsu.biochem.seed_object import ModelSEEDObject
+from modelseedpy_freiburgermsu.core.mstemplate import MSTemplateSpecies, MSTemplateMetabolite
 from cobra.core import Metabolite
 import pandas as pd
 

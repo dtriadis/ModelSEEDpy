@@ -1,8 +1,8 @@
-from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
-from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
-from modelseedpy.community.mscompatibility import MSCompatibility
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
+from modelseedpy_freiburgermsu.core.exceptions import NoFluxError, ObjectiveError
+from modelseedpy_freiburgermsu.community.mscompatibility import MSCompatibility
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
 from cobra.medium import minimal_medium
 from cobra.flux_analysis import pfba

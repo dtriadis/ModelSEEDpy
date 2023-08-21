@@ -16,8 +16,8 @@ from cobra.io import (
     read_sbml_model,
     write_sbml_model,
 )
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 
 logger = logging.getLogger(__name__)
 logger.setLevel(

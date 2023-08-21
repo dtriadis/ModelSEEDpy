@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-# from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.exceptions import FeasibilityError, ParameterError, ObjectAlreadyDefinedError, NoFluxError
-from modelseedpy.core.optlanghelper import OptlangHelper, Bounds, tupVariable, tupConstraint, tupObjective, isIterable, define_term
-from modelseedpy.community.datastandardization import GrowthData
-from modelseedpy.core.fbahelper import FBAHelper
-from modelseedpy.biochem import from_local
+# from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.exceptions import FeasibilityError, ParameterError, ObjectAlreadyDefinedError, NoFluxError
+from modelseedpy_freiburgermsu.core.optlanghelper import OptlangHelper, Bounds, tupVariable, tupConstraint, tupObjective, isIterable, define_term
+from modelseedpy_freiburgermsu.community.datastandardization import GrowthData
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.biochem import from_local
 from scipy.constants import hour, minute
 from zipfile import ZipFile, ZIP_LZMA
 from optlang import Model, Objective
@@ -1267,7 +1267,7 @@ class BIOLOGPhitting(MSCommPhitting):
                                 for signal in self.biolog_df if ":" in signal])
         self.community_members = community_members
         # import os
-        from modelseedpy.biochem import from_local
+        from modelseedpy_freiburgermsu.biochem import from_local
         self.msdb_path = msdb_path ; self.msdb = from_local(msdb_path)
 
     def fitAll(self, parameters: dict = None, rel_final_conc: float = None,

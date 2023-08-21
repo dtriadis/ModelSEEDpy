@@ -2,7 +2,7 @@
 
 from __future__ import absolute_import
 
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
 from optlang.symbolics import Zero
 
 

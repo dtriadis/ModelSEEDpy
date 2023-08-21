@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from modelseedpy.core.rpcclient import RPCClient
-from modelseedpy.core.msgenome import MSFeature  # !!! import is never used
+from modelseedpy_freiburgermsu.core.rpcclient import RPCClient
+from modelseedpy_freiburgermsu.core.msgenome import MSFeature  # !!! import is never used
 import re
-from modelseedpy.core.msgenome import (
+from modelseedpy_freiburgermsu.core.msgenome import (
     MSGenome,
     read_fasta,
     normalize_role,

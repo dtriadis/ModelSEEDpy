@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 from optlang.symbolics import Zero, add  # !!! Zero is never used
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
 
 # Base class for FBA packages
 class FluxFittingPkg(BaseFBAPkg):

@@ -3,10 +3,10 @@ import pandas as pd
 import logging
 import cobra
 from cobra.core.dictlist import DictList
-from modelseedpy.core.msmedia import MSMedia
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.msgapfill import MSGapfill
+from modelseedpy_freiburgermsu.core.msmedia import MSMedia
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.msgapfill import MSGapfill
 
 logger = logging.getLogger(__name__)
 logger.setLevel(

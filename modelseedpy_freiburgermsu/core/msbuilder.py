@@ -3,18 +3,18 @@ import logging
 import itertools
 from enum import Enum
 import cobra
-from modelseedpy.core.exceptions import ModelSEEDError
-from modelseedpy.core.rast_client import RastClient
-from modelseedpy.core.msgenome import normalize_role
-from modelseedpy.core.msmodel import (
+from modelseedpy_freiburgermsu.core.exceptions import ModelSEEDError
+from modelseedpy_freiburgermsu.core.rast_client import RastClient
+from modelseedpy_freiburgermsu.core.msgenome import normalize_role
+from modelseedpy_freiburgermsu.core.msmodel import (
     get_gpr_string,
     get_reaction_constraints_from_direction,
 )
 from cobra.core import Gene, Metabolite, Model, Reaction, Group
-from modelseedpy.core import FBAHelper
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.helpers import get_template, get_classifier
-from modelseedpy.core.mstemplate import MSTemplateBuilder
+from modelseedpy_freiburgermsu.core import FBAHelper
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.helpers import get_template, get_classifier
+from modelseedpy_freiburgermsu.core.mstemplate import MSTemplateBuilder
 
 SBO_ANNOTATION = "sbo"
 
@@ -578,8 +578,8 @@ class MSBuilder:
 
         :return: genome class
         """
-        from modelseedpy.helpers import get_template, get_classifier
-        from modelseedpy.core.mstemplate import MSTemplateBuilder
+        from modelseedpy_freiburgermsu.helpers import get_template, get_classifier
+        from modelseedpy_freiburgermsu.core.mstemplate import MSTemplateBuilder
 
         genome_classifier = get_classifier("knn_ACNP_RAST_filter_01_17_2023")
         self.genome_class = genome_classifier.classify(self.genome)

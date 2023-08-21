@@ -1,6 +1,6 @@
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.biochem import from_local
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.biochem import from_local
 from numpy import percentile
 
 

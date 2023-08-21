@@ -21,7 +21,7 @@ def get_or_download_file(filename, k, value, config):
         os.makedirs(folder_path)
     if not os.path.exists(file_path):
         logger.warning("downloading data file to: %s", file_path)
-        url = "https://bioseed.mcs.anl.gov/~fliu/modelseedpy/" + filename
+        url = "https://bioseed.mcs.anl.gov/~fliu/modelseedpy_freiburgermsu/" + filename
         r = requests.get(url, allow_redirects=True)
         with open(file_path, "wb") as fh:
             fh.write(r.content)
@@ -33,7 +33,7 @@ def get_file(filename, k, value):
 
 
 def get_classifier(classifier_id):
-    from modelseedpy.core.msgenomeclassifier import MSGenomeClassifier
+    from modelseedpy_freiburgermsu.core.msgenomeclassifier import MSGenomeClassifier
 
     cls_pickle = get_file(f"{classifier_id}.pickle", "data", "classifier_folder")
     cls_features = get_file(

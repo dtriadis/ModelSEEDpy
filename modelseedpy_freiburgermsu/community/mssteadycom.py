@@ -1,8 +1,8 @@
 from icecream import ic
 
-from modelseedpy import FBAHelper
-from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, ParameterError, NoFluxError
-# from modelseedpy.community.commhelper import build_from_species_models, CommHelper
+from modelseedpy_freiburgermsu import FBAHelper
+from modelseedpy_freiburgermsu.core.exceptions import ObjectAlreadyDefinedError, ParameterError, NoFluxError
+# from modelseedpy_freiburgermsu.community.commhelper import build_from_species_models, CommHelper
 from optlang import Constraint, Variable
 from itertools import combinations
 from optlang.symbolics import Zero
@@ -215,7 +215,7 @@ class MSSteadyCom:
                             msdb_path=None, view_figure=True, node_metabolites=True):
         # load the MSDB
         assert msdb or msdb_path, ValueError("Either the MSDB object or the local MSDB path must be provided")
-        from modelseedpy.biochem import from_local
+        from modelseedpy_freiburgermsu.biochem import from_local
         msdb = msdb or from_local(msdb_path)
         # construct the structure of the cross-feeding DataFrame
         if "Metabolite/Donor ID" in cross_feeding_df.columns:

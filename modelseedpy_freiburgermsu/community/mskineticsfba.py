@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from scipy.constants import milli, hour, minute, day, femto
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy import MSModelUtil
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu import MSModelUtil
 from optlang import Constraint
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 from collections import OrderedDict
 from optlang.symbolics import Zero
 from numpy import log10, nan, mean

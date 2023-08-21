@@ -8,8 +8,8 @@ import numpy as np
 from cobra.core import Metabolite, Reaction
 from cobra.core.dictlist import DictList
 from cobra.util import format_long_string
-from modelseedpy.core.fbahelper import FBAHelper
-from modelseedpy.core.msmodel import (
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.core.msmodel import (
     get_direction_from_constraints,
     get_reaction_constraints_from_direction,
     get_cmp_token,

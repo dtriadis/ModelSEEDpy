@@ -4,10 +4,10 @@ import cobra
 import re
 import json
 from optlang.symbolics import Zero, add
-from modelseedpy.core import FBAHelper  # !!! the import is never used
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.exceptions import GapfillingError
+from modelseedpy_freiburgermsu.core import FBAHelper  # !!! the import is never used
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.exceptions import GapfillingError
 
 logger = logging.getLogger(__name__)
 logger.setLevel(

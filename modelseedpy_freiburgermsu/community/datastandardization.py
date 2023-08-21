@@ -4,10 +4,10 @@ Created on Mon Aug  1 11:44:07 2022
 
 @author: Andrew Freiburger
 """
-from modelseedpy.community.commhelper import phenotypes
-from modelseedpy.core.exceptions import ParameterError
-from modelseedpy.core.optlanghelper import isIterable
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.community.commhelper import phenotypes
+from modelseedpy_freiburgermsu.core.exceptions import ParameterError
+from modelseedpy_freiburgermsu.core.optlanghelper import isIterable
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 from optlang import Constraint
 from optlang.symbolics import Zero
 from scipy.constants import hour

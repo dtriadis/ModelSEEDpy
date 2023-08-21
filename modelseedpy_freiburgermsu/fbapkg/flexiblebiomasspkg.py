@@ -7,9 +7,9 @@ import logging
 logger = logging.getLogger(__name__)
 from optlang.symbolics import Zero, add  # !!! Neither import is ever used
 from cobra import Model, Reaction, Metabolite  # !!! Model and Metabolite are never used
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 
 classes = {
     "rna": {"cpd00052": -1, "cpd00038": -1, "cpd00002": -1, "cpd00062": -1},

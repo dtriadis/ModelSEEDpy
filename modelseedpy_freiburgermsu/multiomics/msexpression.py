@@ -6,7 +6,7 @@ import copy
 from cobra.core.dictlist import DictList
 from cobra.core.gene import Gene, ast2str, eval_gpr, parse_gpr
 from ast import And, BitAnd, BitOr, BoolOp, Expression, Name, NodeTransformer, Or
-from modelseedpy.core.msgenome import MSGenome, MSFeature
+from modelseedpy_freiburgermsu.core.msgenome import MSGenome, MSFeature
 
 # Types of expression data
 GENOME = 10

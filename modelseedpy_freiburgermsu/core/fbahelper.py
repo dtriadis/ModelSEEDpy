@@ -123,7 +123,7 @@ class FBAHelper:
 
     @staticmethod
     def get_modelseed_db_api(modelseed_path):
-        from modelseedpy.biochem import from_local
+        from modelseedpy_freiburgermsu.biochem import from_local
 
         return from_local(modelseed_path)
 

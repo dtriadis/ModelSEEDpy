@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import math
-from modelseedpy.biochem.seed_object import ModelSEEDObject
+from modelseedpy_freiburgermsu.biochem.seed_object import ModelSEEDObject
 from cobra.core import Reaction
-from modelseedpy.core.mstemplate import MSTemplateReaction
+from modelseedpy_freiburgermsu.core.mstemplate import MSTemplateReaction
 
 
 def to_str2(rxn, cmp_replace=None, cpd_replace={}):
@@ -172,7 +172,7 @@ class ModelSEEDReaction2(Reaction):
     def to_template_reaction(self, compartment_setup=None):
         if compartment_setup is None:
             raise ValueError("invalid compartment setup")
-        from modelseedpy.core.msmodel import get_cmp_token
+        from modelseedpy_freiburgermsu.core.msmodel import get_cmp_token
 
         reaction_compartment = get_cmp_token(compartment_setup.values())
         rxn_id = f"{self.id}_{reaction_compartment}"

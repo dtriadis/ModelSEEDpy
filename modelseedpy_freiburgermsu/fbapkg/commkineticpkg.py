@@ -3,8 +3,8 @@
 from __future__ import absolute_import
 
 import logging
-from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
-from modelseedpy.core.fbahelper import FBAHelper
+from modelseedpy_freiburgermsu.fbapkg.basefbapkg import BaseFBAPkg
+from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
 
 # Base class for FBA packages
 class CommKineticPkg(BaseFBAPkg):

@@ -12,9 +12,9 @@ from cobra.core import (
     Model,
     Reaction,
 )  # !!! none of these imports are used
-from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy.core.msmodelutl import MSModelUtil
-from modelseedpy.core.exceptions import FeasibilityError
+from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
+from modelseedpy_freiburgermsu.core.exceptions import FeasibilityError
 
 logger = logging.getLogger(__name__)
 
