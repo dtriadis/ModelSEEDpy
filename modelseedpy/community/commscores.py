@@ -327,6 +327,8 @@ class CommScores:
                     g1, g2, comm = CommScores._determine_growths([model_utils[model1.id], model_utils[model2.id], community.util])
                     g1, g2, comm = _sigfig_check(g1, 5, ""), _sigfig_check(g2, 5, ""), _sigfig_check(comm, 5, "")
                     kbase_dic.update({"media": environName, "model1 growth": g1, "model2 growth": g2, "community growth": comm})
+                    coculture_growths = {mem.id: comm_sol.fluxes[mem.primary_biomass.id] for mem in community.members}
+                    kbase_dic.update({f"coculture growth model{modelIDs.index(mem.id)}": growth for mem, growth in coculture_growths.items()})
                     # define the MRO content
                     mro_values = CommScores.mro(grouping, models_media, raw_content=True, environment=environ)
                     kbase_dic.update({f"MRO_model{modelIDs.index(models_string.split('--')[0])+1}":
@@ -370,11 +372,11 @@ class CommScores:
                     kbase_dic.update({"PC_comm": _sigfig_check(pc_values[0], 5, ""),
                                       "PC_model1": _sigfig_check(list(pc_values[1].values())[0], 5, ""),
                                       "PC_model2": _sigfig_check(list(pc_values[1].values())[1], 5, ""),
-                                      "BIT": pc_values[2]})
+                                      "BIT": pc_values[3]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
-                    gyd, g1, g2 = list(CommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
-                    kbase_dic.update({"GYD": _sigfig_check(gyd, 5, "")})
+                    gyd1, gyd2, g1, g2 = list(CommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
+                    kbase_dic.update({"GYD1": _sigfig_check(gyd1, 5, ""), "GYD2": _sigfig_check(gyd2, 5, "")})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
                         fs_values = list(CommScores.fs(grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]
@@ -435,7 +437,7 @@ class CommScores:
             if missing_models != set():
                 print(f"Media of the {missing_modelID} models are not defined, and will be calculated separately.")
                 models_media.update(_get_media(model_s_=missing_models), skip_bad_media=skip_bad_media)
-        if see_media and not mem_media:  print(f"The minimal media of all members:\n{models_media}")
+        if see_media:  print(f"The minimal media of all members:\n{models_media}")
         print(f"\nExamining the {len(list(model_pairs))} model pairs")
         if pool_size is not None:
             from datetime import datetime  ;  from multiprocess import Pool
@@ -704,7 +706,7 @@ class CommScores:
                 G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
             if G_m2 <= 0 and G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
             if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
-            gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (abs(G_m1-G_m2) / min([G_m1, G_m2]), G_m1, G_m2)
+            gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (abs(G_m1-G_m2)/G_m1, abs(G_m2-G_m1)/G_m2, G_m1, G_m2)
         return gyds
 
     @staticmethod
@@ -735,7 +737,7 @@ class CommScores:
         elif all(growth_diffs < th_pos) and any(growth_diffs < th_neg):  bit = "amensalism"
         elif any(growth_diffs > th_pos) and any(growth_diffs < th_neg):  bit = "parasitism"
         else: print(f"The relative growths {comm_growth_effect} from {comm_member_growths} are not captured.")  ;  bit = ""
-        return (pc_score, comm_growth_effect, bit)
+        return (pc_score, comm_growth_effect, comm_member_growths, bit)
 
     @staticmethod
     def bss(member_models:Iterable=None, model_utils:Iterable=None, environments=None, minMedia=None, skip_bad_media=False):

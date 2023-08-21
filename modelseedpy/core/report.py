@@ -1,5 +1,5 @@
 # from django import shortcuts
-from numpy import nan, isnan, unique
+from numpy import nan, isnan, unique, load
 import jinja2
 import os, re, math, json
 
@@ -189,20 +189,43 @@ def steadycom_report(flux_df, exMets_df, export_html_path="steadycom_report.html
     with open(export_html_path, "w") as out:  out.writelines(html_report)
     return html_report
 
+
+
+rm_costless = re.compile("(\s\(.+\))")
+def remove_metadata(element):
+    try:  element = float(rm_costless.sub("", str(element)).replace("%", ""))
+    except: pass
+    return element
+def convert_to_int(element):
+    try:  element = int(element)
+    except: pass
+    return element
+
+
+categories_dir = os.path.join(package_dir, "data", "categories")
+sugars, aminoacids = load(os.path.join(categories_dir, "sugars.npy")), load(os.path.join(categories_dir, "aminoAcids.npy"))
+vitamins, minerals = load(os.path.join(categories_dir, "vitamins.npy")), load(os.path.join(categories_dir, "minerals.npy"))
+energy_compounds = load(os.path.join(categories_dir, "energy_compounds.npy"))
+sugars_dic, aminoacids_dic = dict(zip(sugars[:,0], sugars[:,1])), dict(zip(aminoacids[:,0], aminoacids[:,1]))
+vitamins_dic, minerals_dic = dict(zip(vitamins[:,0], vitamins[:,1])), dict(zip(minerals[:,0], minerals[:,1]))
+energy_compounds_dic = dict(zip(energy_compounds[:,0], energy_compounds[:,1]))
+def categorize_mets(metIDs):
+    met_sugars, met_aminoAcids, met_vitamins, met_minerals, met_energy, met_other = [], [], [], [], [], []
+    for metID in metIDs:
+        if metID in sugars[:, 0]:  met_sugars.append(f"{sugars_dic[metID]} ({metID})")
+        elif metID in aminoacids[:, 0]:  met_aminoAcids.append(f"{aminoacids_dic[metID]} ({metID})")
+        elif metID in vitamins[:, 0]:  met_vitamins.append(f"{vitamins_dic[metID]} ({metID})")
+        elif metID in minerals[:, 0]:  met_minerals.append(f"{minerals_dic[metID]} ({metID})")
+        elif metID in energy_compounds[:, 0]:  met_energy.append(f"{energy_compounds_dic[metID]} ({metID})")
+        else:  met_other.append(metID)
+    return met_sugars, met_aminoAcids, met_vitamins, met_minerals, met_energy, met_other
+
+def process_mets(metIDs):
+    return [", ".join(lst) for lst in categorize_mets(metIDs)]
+
+
 def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_path=None):
     from pandas import to_numeric
-
-    # construct a heatmap
-    rm_costless = re.compile("(\s\(.+\))")
-    costless = re.compile(r"(?<=\s\()(\d)(?=\))")
-    def remove_metadata(element):
-        try:  element = float(rm_costless.sub("", str(element)).replace("%", ""))
-        except: pass
-        return element
-    def convert_to_int(element):
-        try:  element = int(element)
-        except: pass
-        return element
     def names_updateCPD(metIDs, update_cpdNames):
         names = []
         for metID in metIDs:
@@ -216,6 +239,7 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
             names.append(name)
         return names, update_cpdNames
 
+    # construct a heatmap
     df.index.name = "Community_index"
     heatmap_df = df.copy(deep=True) # takes some time
     heatmap_df_index = zip(heatmap_df["model1"].to_numpy(), heatmap_df["model2"].to_numpy())
@@ -229,6 +253,7 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
     heatmap_df = heatmap_df.loc[~heatmap_df.index.duplicated(), :]
     heatmap_df = heatmap_df.drop(["model1", "model2"], axis=1)
     if "media" in heatmap_df:  heatmap_df = heatmap_df.drop(["media"], axis=1)
+    costless = re.compile(r"(?<=\s\()(\d)(?=\))")
     if "MIP_model1 (costless)" in heatmap_df.columns:
         mip_model1, mip_model2 = [], []
         for e in heatmap_df["MIP_model1 (costless)"]:
@@ -258,7 +283,7 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
     mro_mets, mro_mets_names, mip_model1_mets, mip_model1_mets_names = [], [], [], []
     mip_model2_mets, mip_model2_mets_names, cip_mets, cip_mets_names = [], [], [], []
     from json import load, dump
-    cpdNames_path = os.path.join(os.path.dirname(__file__), "..", "data", "cpdNames.json")
+    cpdNames_path = os.path.join(package_dir, "data", "cpdNames.json")
     with open(cpdNames_path, "r") as jsonIn:
         cpdNames = load(jsonIn)
     update_cpdNames = {}
@@ -294,7 +319,7 @@ def commscores_report(df, mets, export_html_path="commscores_report.html", msdb_
     # print(list(map(len, df_content.values())))
     mets_table = DataFrame(data=df_content)
     mets_table.index.name = "Community_index"
-    
+
     # populate the HTML template with the assembled simulation data from the DataFrame -> HTML conversion
     content = {'table': df.to_html(table_id="main", classes="display"), "mets_table": mets_table.to_html(),
                "heatmap": heatmap_df.applymap(lambda x: round(x, 3)).style.background_gradient().to_html(table_id="heat", classes="display")}
