@@ -9,7 +9,7 @@ with open("LICENSE") as f:
     license = f.read()
 
 setup(
-    name="ModelSEEDpy",
+    name="ModelSEEDpy-freiburgermsu",
     version="0.3.1",
     description="Python package for building and analyzing models using ModelSEED",
     long_description_content_type="text/x-rst",
