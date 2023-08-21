@@ -10,7 +10,7 @@ with open("LICENSE") as f:
 
 setup(
     name="ModelSEEDpy-freiburgermsu",
-    version="0.3.1",
+    version="0.3.2",
     description="Python package for building and analyzing models using ModelSEED",
     long_description_content_type="text/x-rst",
     long_description=readme,
@@ -20,7 +20,7 @@ setup(
     license=license,
     packages=find_packages(exclude=("docs")),
     package_data={
-        "modelseedpy": ["config.cfg", "community/*.html", "core/*.html", "data/*"],
+        "modelseedpy_freiburgermsu": ["config.cfg", "community/*.html", "core/*.html", "data/*", "data/categories/*", "data/templates/*"],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",
