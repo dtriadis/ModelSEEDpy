@@ -39,7 +39,7 @@ from modelseedpy_freiburgermsu.core import (
 )
 from modelseedpy_freiburgermsu.core.exceptions import *
 from modelseedpy_freiburgermsu.community import (
-    MSCommunity, CommunityMember, MSCompatibility, MSKineticsFBA, CommScores, MSCommPhitting,
+    MSCommunity, CommunityMember, MSCompatibility, MSKineticsFBA, CommScores, CommPhitting,
     MSSteadyCom, build_from_species_models, phenotypes)
 
 from modelseedpy_freiburgermsu.biochem import ModelSEEDBiochem
