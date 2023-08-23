@@ -40,7 +40,7 @@ from modelseedpy.core import (
 from modelseedpy.core.exceptions import *
 
 from modelseedpy.community import (
-    MSCommunity, CommunityMember, MSCompatibility, MSKineticsFBA, CommScores, MSCommPhitting,
+    MSCommunity, CommunityMember, MSCompatibility, MSKineticsFBA, CommScores, CommPhitting,
     MSSteadyCom, build_from_species_models, phenotypes)
 
 from modelseedpy.biochem import ModelSEEDBiochem

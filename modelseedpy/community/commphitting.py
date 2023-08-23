@@ -116,7 +116,7 @@ def _partition_coefs(initial_val, divisor):
 biomass_partition_coefs = [_partition_coefs(10, 10), _partition_coefs(2, 2), _partition_coefs(1, 3)]
 
 
-class MSCommPhitting:
+class CommPhitting:
 
     def __init__(self, msdb_path, community_members: dict=None, fluxes_df=None, data_df=None, carbon_conc=None,
                  media_conc=None, experimental_metadata=None, base_media=None, solver: str = 'glpk', all_phenotypes=True,
@@ -159,11 +159,11 @@ class MSCommPhitting:
         requisite_biomass = requisite_biomass or self.requisite_biomass
         for index, coefs in enumerate(biomass_partition_coefs):
             # solve for growth rate constants with the previously solved biomasses
-            newSim = MSCommPhitting(self.msdb_path, None, self.fluxes_df, self.data_df, self.carbon_conc,
-                                    self.media_conc, self.experimental_metadata, None, self.solver, self.all_phenotypes,
-                                    self.data_paths, self.species_abundances, self.ignore_trials, self.ignore_timesteps,
-                                    self.species_identities_rows, self.significant_deviation, self.extract_zip_path,
-                                    True, self.consumed_mets)
+            newSim = CommPhitting(self.msdb_path, None, self.fluxes_df, self.data_df, self.carbon_conc,
+                                  self.media_conc, self.experimental_metadata, None, self.solver, self.all_phenotypes,
+                                  self.data_paths, self.species_abundances, self.ignore_trials, self.ignore_timesteps,
+                                  self.species_identities_rows, self.significant_deviation, self.extract_zip_path,
+                                  True, self.consumed_mets)
             newSim.define_problem(parameters, mets_to_track, rel_final_conc, zero_start, abs_final_conc,
                                   data_timesteps, export_zip_name, export_parameters, export_lp,
                                   kcat_primal, coefs, requisite_biomass)
@@ -968,7 +968,7 @@ class MSCommPhitting:
     def assign_values(param, var, next_dimension, kcat=True):
         dic = {var: {}}
         for dim1, dim2_list in next_dimension.items():
-            if isinstance(dim2_list, dict):  dic[var].update(MSCommPhitting.assign_values(param, dim1, dim2_list))
+            if isinstance(dim2_list, dict):  dic[var].update(CommPhitting.assign_values(param, dim1, dim2_list))
             else:
                 if kcat:  dic[var][dim1] = param
                 else:  dic[var][dim1] = {dim2: param for dim2 in dim2_list}
@@ -986,8 +986,8 @@ class MSCommPhitting:
                 else:
                     if species in next_dimension:  next_dimension[species].update({pheno: self.time_ranges})
                     else:  next_dimension[species] = {pheno: self.time_ranges}
-        if FBAHelper.isnumber(param):  return MSCommPhitting.assign_values(param, var, next_dimension)
-        elif FBAHelper.isnumber(param[var]):  return MSCommPhitting.assign_values(param[var], var, next_dimension)
+        if FBAHelper.isnumber(param):  return CommPhitting.assign_values(param, var, next_dimension)
+        elif FBAHelper.isnumber(param[var]):  return CommPhitting.assign_values(param[var], var, next_dimension)
         elif isinstance(param[var], dict):
             return {var: {dim1: {dim2: param[var][dim1] for dim2 in dim2_list}
                           for dim1, dim2_list in next_dimension.items()}}
@@ -1257,7 +1257,7 @@ class MSCommPhitting:
         pass
 
 
-class BIOLOGPhitting(MSCommPhitting):
+class BIOLOGPhitting(CommPhitting):
     def __init__(self, carbon_conc, media_conc, biolog_df, fluxes_df,
                  experimental_metadata, msdb_path, community_members):
         self.biolog_df = biolog_df; self.experimental_metadata = experimental_metadata
@@ -1320,7 +1320,7 @@ class BIOLOGPhitting(MSCommPhitting):
             kcat_primal = None
             for coef_index, coefs in enumerate(biomass_partition_coefs):
                 # solve for growth rate constants with the previously solved biomasses
-                new_simulation = MSCommPhitting(self.fluxes_df, self.carbon_conc, self.media_conc,
+                new_simulation = CommPhitting(self.fluxes_df, self.carbon_conc, self.media_conc,
                                               self.msdb_path, self.biolog_df.loc[exp_index,:],
                                               self.experimental_metadata)
                 new_simulation.define_problem(
