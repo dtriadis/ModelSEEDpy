@@ -105,10 +105,9 @@ class MSCommunity:
                     if self.biomass_cpd not in rxn.metabolites:  continue
                     print(self.biomass_cpd, rxn, end=";\t")
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
-                        if self.primary_biomass:
-                            raise ObjectAlreadyDefinedError(
-                                f"The primary biomass {self.primary_biomass} is already defined,"
-                                f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
+                        if self.primary_biomass:  raise ObjectAlreadyDefinedError(
+                            f"The primary biomass {self.primary_biomass} is already defined,"
+                            f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn

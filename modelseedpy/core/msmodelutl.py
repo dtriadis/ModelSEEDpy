@@ -111,7 +111,7 @@ class MSModelUtil:
             org_obj_val = model.slim_optimize()
             self.model = model.copy()  ;  self.model.objective = model.objective
             new_obj_val = self.model.slim_optimize()
-            if not isclose(org_obj_val, new_obj_val, rel_tol=1e-2):
+            if not isclose(org_obj_val, new_obj_val, rel_tol=1e-2) and org_obj_val > 1e-2:
                 raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
                                  f" where the original objective value is {org_obj_val}"
                                  f" and the new objective value is {new_obj_val}.")
