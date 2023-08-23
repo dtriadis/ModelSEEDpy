@@ -361,6 +361,7 @@ class CommScores:
                         kbase_dic.update({f"MIP_model1 (costless)": "", f"MIP_model2 (costless)": ""})
                         mets[-1].update({"MIP model1 metabolites": [None], "MIP model2 metabolites": [None]})
                     if print_progress:  print("MIP done", end="\t")
+                    # define the BSS content
                     bss_values = CommScores.bss(grouping, grouping_utils, environments, models_media, skip_bad_media)
                     kbase_dic.update({f"BSS_model{modelIDs.index(name.split(' supporting ')[0])+1}":
                                       f"{_sigfig_check(100*val, 5, '')}%" for name, (mets, val) in bss_values.items()})
@@ -368,6 +369,7 @@ class CommScores:
                                      "BSS model2 metabolites": [met_set for met_set, val in bss_values.values()][1]})
                     # mets[-1].update({"bss_mets": list(bss_values[0].values())})
                     if print_progress:  print("BSS done", end="\t")
+                    # define the PC content
                     pc_values = CommScores.pc(grouping, grouping_utils, comm_model, None, comm_sol, environ, True, community)
                     kbase_dic.update({"PC_comm": _sigfig_check(pc_values[0], 5, ""),
                                       "PC_model1": _sigfig_check(list(pc_values[1].values())[0], 5, ""),
@@ -375,9 +377,11 @@ class CommScores:
                                       "BIT": pc_values[3]})
                     if print_progress:  print("PC  done\tBIT done", end="\t")
                     # print([mem.slim_optimize() for mem in grouping])
+                    # define the GYD content
                     gyd1, gyd2, g1, g2 = list(CommScores.gyd(grouping, grouping_utils, environ, False, community, anme_comm).values())[0]
                     kbase_dic.update({"GYD1": _sigfig_check(gyd1, 5, ""), "GYD2": _sigfig_check(gyd2, 5, "")})
                     if print_progress:  print("GYD done\t\t", end="\t" if annotated_genomes else "\n")
+                    # define the FS content
                     if kbase_obj is not None and annotated_genomes and not anme_comm:
                         fs_values = list(CommScores.fs(grouping, kbase_obj, annotated_genomes=annotated_genomes).values())[0]
                         print(len(fs_values[0]) if fs_values[0] is not None else "NaN", fs_values[1])
@@ -390,12 +394,17 @@ class CommScores:
         return series, mets
 
     @staticmethod
-    def kbase_output(all_models:iter=None,  # a list of distinct lists is provided for specifying exclusive groups
-                     pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
-                     exclude_pairs:list=None, kbase_obj=None, annotated_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
-                     see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
-                     pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
-                     print_progress=False):
+    def html_report(df, mets, export_html_path="commscores_report.html", msdb_path=None):
+        from modelseedpy.core.report import commscores_report
+        return commscores_report(df, mets, export_html_path, msdb_path)
+
+    @staticmethod
+    def report_generation(all_models:iter=None,  # a list of distinct lists is provided for specifying exclusive groups
+                          pairs:dict=None, mem_media:dict=None, pair_limit:int=None,
+                          exclude_pairs:list=None, kbase_obj=None, annotated_genomes:dict=True,  # True triggers internal acquisition of the genomes, where None skips
+                          see_media=True, environments:iter=None,  # a collection of environment dicts or KBase media objects
+                          pool_size:int=None, cip_score=True, costless=True, skip_bad_media=False, anme_comm=False,
+                          print_progress=False):
         from pandas import concat
 
         if pairs:  model_pairs = unique([{model1, model2} for model1, models in pairs.items() for model2 in models])
