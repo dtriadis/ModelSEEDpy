@@ -143,14 +143,14 @@ All of the defined scores can be simulated on the initalized community system th
 
  
 --------------------------
-kbase_output()
+report_generation()
 --------------------------
 
 The scores can be calculated over a large range of models, either for specified pairs or for all combinations of all models. This process can be expedited with optional parallelization. This function is a **Staticmethod**, and therefore cannot access any content that is loaded in the class object of the aforementioned functions.
 
 .. code-block:: python
 
- scores_df, mets = mssmet.kbase_output(all_models:iter=None, pairs:dict=None, mem_media:dict=None,
+ scores_df, mets = mssmet.report_generation(all_models:iter=None, pairs:dict=None, mem_media:dict=None,
                                        pair_limit:int=None, exclude_pairs:list=None, kbase_obj=None, 
                                        RAST_genomes:dict=None, see_media:bool=True,
                                        environment:Union[dict]=None,  # can be KBase media object

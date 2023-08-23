@@ -20,7 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class CommunityMembers:
+class CommunityMember:
     def __init__(self, community, biomass_cpd, name=None, index=None, abundance=0):
         self.community, self.biomass_cpd = community, biomass_cpd
         self.index = index or int(self.biomass_cpd.compartment[1:])
@@ -117,7 +117,7 @@ class MSCommunity:
         # assign community members and their abundances
         abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)
         self.members = DictList(
-            CommunityMembers(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances)
+            CommunityMember(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances[memIndex])
             for memIndex, biomass_cpd in enumerate(other_biomass_cpds))
         # assign the MSCommunity constraints and objective
         self.abundances_set = False
@@ -128,6 +128,7 @@ class MSCommunity:
             for rxn in self.util.model.reactions:
                 if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
                     vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
+            print(member.id, flux_limit, member.abundance)
             self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
                                                    name=f"{member.id}_resource_balance"), coef=vars_coef)
 

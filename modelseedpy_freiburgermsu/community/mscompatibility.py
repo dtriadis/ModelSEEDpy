@@ -69,6 +69,7 @@ class MSCompatibility:
         if not isinstance(models, (list, tuple, set)):  models = [models]  ;  single_model = True
         for org_model in models:  # Develop a singular model function and then an abstracted version for multiple models
             model = org_model.copy()  # model_util cannot be used, since it would cause a circular import
+            rxnIDs = [rxn.id for rxn in model.reactions]
             model_exchanges = [rxn for rxn in model.reactions if "EX_" in rxn.id]
             ex_mets_map = {ex_rxn: [met.id for met in ex_rxn.metabolites] for ex_rxn in model_exchanges}
             mets_ex_map = {metID: ex for ex, mets in ex_mets_map.items() for metID in mets}
@@ -78,6 +79,10 @@ class MSCompatibility:
             if not metabolites:
                 # TODO develop a correction of reactions based upon their stoichiometry
                 break
+            if "bio1" not in rxnIDs:
+                for rxn in model.reactions:
+                    if "biomass" in rxn.name:
+                        rxn.id = "bio1"  ;  break
             ## standardize exchanges
             if exchanges:   # TODO this may need to be expanded to capture the biomass reaction
                 if printing:
