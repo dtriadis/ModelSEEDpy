@@ -282,9 +282,10 @@ class MSMinimalMedia:
             # if duplicate_reactions:
             #     logger.critical(f'CodeError: The model {model.id} contains {duplicate_reactions}'
             #                     f' that compromise the model.')
-            media["members"][model_util.model.id] = {"media": MSMinimalMedia.determine_min_media(
-                model_util.model, minimization_method, min_growth, environment, interacting, n_solutions, printing)}
-            media["members"][model_util.model.id]["solution"] = FBAHelper.solution_to_dict(model_util.model.optimize())
+            media["members"][model_util.model.id] = {
+                "media": MSMinimalMedia.determine_min_media(model_util.model, minimization_method, min_growth,
+                                                            environment, interacting, n_solutions, printing),
+                "solution": FBAHelper.solution_to_dict(model_util.model.optimize())}
             if minimization_method == "jenga":
                 media["community_media"] = FBAHelper.sum_dict(
                     media["members"][model_util.model.id]["media"], media["community_media"])

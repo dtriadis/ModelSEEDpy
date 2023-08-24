@@ -215,7 +215,7 @@ def create_graph(file_names, no_of_orgs):
     return H, full_name_map
 
 
-def forward_pass(graph_object, seedmets):
+def forward_pass(graph_object, media):
     """
     This function carries out the Guided Breadth First Search on a directed
     bipartite graph starting from the entries in seed metabolite set.
@@ -225,7 +225,7 @@ def forward_pass(graph_object, seedmets):
     graph_object : NetworkX DiGraph Object
         Bipartite graph of the metabolic network
 
-    seedmets : set
+    seedmet : set
         Set of seed metabolites including the source
 
     Returns
@@ -252,28 +252,25 @@ def forward_pass(graph_object, seedmets):
     """
     pred = graph_object.predecessors
     succ = graph_object.successors
-    seed_metabolite_set = seedmets.copy()
-    lower_bound_metabolite = defaultdict(list)
+    lower_bound_metabolite = {cpd: [0] for cpd in media}
     lower_bound_reaction = defaultdict(list)
-    # Defaultdict is used simply because to avoid initialisations
     status_dict = defaultdict(str)
     # Using a deque since deques have O(1) speed for appendleft() and popleft()
     # while lists have O(n) performance for inserting and popping.
     queue = deque([])
     # All seed metabolites are always present, hence require 0 steps
-    for seedmetabs in seed_metabolite_set:
-        lower_bound_metabolite[seedmetabs].append(0)
     stage = 1
-    scope = seed_metabolite_set.copy()
+    mediaMets = list(media.keys())
+    scope = list(media.keys())
     starting_rxn_node = []
     # First stage where starting_rxn_node list contains all the reactions
     # which require only the seed metabolites as input
-    for starting_met_nodes in seed_metabolite_set:
+    for starting_met_nodes in mediaMets:
         # Essential when analysing mutiple networks with same seed metabolite
         # set, although would be redundant in case of single network
         if starting_met_nodes in graph_object:
             for startingrxns in succ(starting_met_nodes):
-                if set(pred(startingrxns)).issubset(seed_metabolite_set):
+                if set(pred(startingrxns)).issubset(mediaMets):
                     if startingrxns not in starting_rxn_node:
                         starting_rxn_node.append(startingrxns)
                     for metsprod in succ(startingrxns):
@@ -522,37 +519,11 @@ def find_relievedrxns(model, org_info, org_info_pert):
 
     return relieved, detailed_rel_rxns, rel_rxns_name
 
-def preprocess_seedmets(seedmet_file, model):
-    with open(seedmet_file, 'r') as f:
-        seedmets, temp_seedmets = [], []
-        while True:
-            l = f.readline().strip()
-            if l == '': break
-            temp_seedmets.append(l)
-
-    exc_rxns = model[0].exchanges
-    met_id = list(exc_rxns[0].metabolites.keys())[0].id
-    pattern = re.compile(r'[_[][a-z]\d*[]]*')
-    exc_marker = pattern.findall(met_id)
-
-    for m in model:
-        for i in temp_seedmets:
-            seedmets.append(m.id + ' ' + i + exc_marker[0])
-            seedmets.append(m.id + ' ' + i + exc_marker[0].replace('e', 'c'))
-
-    return set(seedmets)
-
-
-def find_stuckrxns(model, community, seedmet_file, no_of_orgs):
+def find_stuckrxns(model, community, media, no_of_orgs):
     # Constructing graphs
-
     warnings.filterwarnings("ignore")
     G, full_name_map = create_graph(community, no_of_orgs)
     if not os.path.exists('results'):  os.makedirs('results')
-    # f = open(seedmet_file, 'r')
-
-    seedmets = preprocess_seedmets(seedmet_file, model)
-
     all_possible_combis = list(combinations(list(range(len(community))), int(no_of_orgs)))
     if no_of_orgs > 1 and sorted(community)[0][0] == '0':
         all_possible_combis = all_possible_combis[:len(community) - 1]
@@ -561,9 +532,8 @@ def find_stuckrxns(model, community, seedmet_file, no_of_orgs):
     print('No. of graphs constructed: ', len(G))
 
     # This loop finds all the stuck reaction
-
     for i in range(len(all_possible_combis)):
-        lbm, sd, s = forward_pass(G[i], seedmets)
+        lbm, sd, s = forward_pass(G[i], media)
         for j in range(len(all_possible_combis[i])):
             stuck, rxnNode = [], []
             model1 = model[all_possible_combis[i][j]].id
@@ -602,9 +572,9 @@ def make_perturbed_community(rem_org, pert_models, pert_community):
 
     return pert_models, pert_community, pert_model_ids
 
-def perform_task(sd_file, model, transport_rxns, pert_community,
+def perform_task(media, model, transport_rxns, pert_community,
                  org_info_wo_trans_rxn, rem_org_list, n):
-    org_info_pert, scope_pert, namemap_pert = find_stuckrxns(model, pert_community, sd_file, len(pert_community))
+    org_info_pert, scope_pert, namemap_pert = find_stuckrxns(model, pert_community, media, len(pert_community))
     org_info_pert = decrypt_orginfo(org_info_pert, namemap_pert)
     org_info_pert_wo_trans_rxn = {i:list(set(org_info_pert[i]) - set(transport_rxns)) for i in org_info_pert}
 
@@ -639,11 +609,11 @@ def write_relieved_rxn_metadata(h, org_info_wo_trans_rxn, org_info_pert_wo_trans
             h.write(i + ',' + str(len(org_info_wo_trans_rxn[i])) + ',' + str(
                 len(org_info_pert_wo_trans_rxn[i])) + ',' + str(nrelieved[i]) + '\n')
 
-def find_relieved_rxn(model, seed_name, org_info_single, org_info_pair):
+def find_relieved_rxn(model, media_name, org_info_single, org_info_pair):
     """
     This function extracts and writes the relieved rxns into a tsv file
     :param model:
-    :param seed_name: name of the media used (identifer to know what media is used when analysis is done using multiple media)
+    :param media_name: name of the media used (identifer to know what media is used when analysis is done using multiple media)
     :param org_info_single: Dictionary containing stuck reactions of all microbes in the community
     :param org_info_pair: Dictionary containing stuck reactions of all microbes in the community
     :return: None
@@ -671,7 +641,7 @@ def find_relieved_rxn(model, seed_name, org_info_single, org_info_pair):
                     detailed_rel_rxns[org1 + '_' + org2].append(rel_rxn)
                     rel_rxns_name[org1 + '_' + org2].append(i.reactions[rxn_ids.index(rel)].name)
 
-    relieved_rxn_output_file = f'results/relieved_rxns_{seed_name}_w_excrxns.tsv'
+    relieved_rxn_output_file = f'results/relieved_rxns_{media_name}_w_excrxns.tsv'
     with open(relieved_rxn_output_file, 'w') as g:
         header = 'acceptor\tdonor\trelieved reactions\n'
         g.write(header)
@@ -691,55 +661,29 @@ def find_relieved_rxn(model, seed_name, org_info_single, org_info_pair):
                         g.write(k + '\t\n')
     print('relieved reactions are written at:\n', relieved_rxn_output_file)
 
-def preprocess_seedmets(seedmet_file, model):
-    f = open(seedmet_file, 'r')
-    seedmets, temp_seedmets = [], []
-    while True:
-        l = f.readline().strip()
-        if l == '':  break
-        temp_seedmets.append(l)
-    f.close()
-
-    exc_rxns = model[0].exchanges
-    met_id = list(exc_rxns[0].metabolites.keys())[0].id
-    pattern = re.compile(r'[_[][a-z]\d*[]]*')
-    exc_marker = pattern.findall(met_id)
-
-    for m in model:
-        for i in temp_seedmets:
-            seedmets.append(m.id + ' ' + i + exc_marker[0])
-            seedmets.append(m.id + ' ' + i + exc_marker[0].replace('e', 'c'))
-
-    return set(seedmets)
-
-def find_stuck_rxns(models, community, seedmet_file):
+def find_stuck_rxns(models, community, media, comm_size):
     """
     Constructs graphs using MetQuest and finds all stuck reactions in the cellular compartment
     :param models: list of GEMs
     :param community: the community model
     :param seedmet_file: path to txt file containing seed metabolites
-    :param no_of_orgs: number of organisms in a community
+    :param comm_size: number of organisms in a community
     :return:
         org_info: Dictionary containing stuck reactions of all microbes in the community
         scope: Dictionary containing all the metabolites that can be produced by the microbes in the community
         namemap: Dictionaru containing all the decrypted rxn ids
     """
     warnings.filterwarnings("ignore")
-    G, full_name_map = create_graph(community, len(models))
+    G, full_name_map = create_graph(community, comm_size)
     if not os.path.exists('results'):  os.makedirs('results')
 
-    seedmets = preprocess_seedmets(seedmet_file, models)
-
-    all_possible_combis = combinations(models, 2)
-    if len(models) > 1 and sorted(community)[0][0] == '0':
-        all_possible_combis = all_possible_combis[:len(community) - 1]
+    all_possible_combis = combinations(models, comm_size)
     org_info, scope, vis = {}, {}, {}
     print('No. of graphs constructed: ', len(G))
 
     # This loop finds all the stuck reaction
-
     for i in range(len(all_possible_combis)):
-        lbm, sd, s = forward_pass(G[i], seedmets)
+        lbm, sd, s = forward_pass(G[i], media)
         for j in range(len(all_possible_combis[i])):
             stuck, rxnNode = [], []
             model1 = models[all_possible_combis[i][j]].id
@@ -769,7 +713,7 @@ def decrypt_org_info(org_info, namemap):
             org_info[i][j] = namemap[org_info[i][j]]
     return org_info
 
-def pMSI(models, sd_file):
+def pMSI(models, media):
     """
     Calculates MSI for CarveMe models
     Extracts and writes relieved reactions in every pair
@@ -781,8 +725,8 @@ def pMSI(models, sd_file):
     community_model = commhelper.build_from_species_models(models)
     comm_util = MSModelUtil(community_model)
     # find stuck reactions
-    org_info_single, scope_sin, namemap_sin, vis = find_stuck_rxns(models, community_model, sd_file, 1)
-    org_info_pair, scope_pair, namemap_pair, vis = find_stuck_rxns(models, models, sd_file, 2)
+    org_info_single, scope_sin, namemap_sin, vis = find_stuck_rxns(models, community_model, media, 1)
+    org_info_pair, scope_pair, namemap_pair, vis = find_stuck_rxns(models, models, media, 2)
     # decrypt the stuck reactions
     org_info_single = decrypt_org_info(org_info_single, namemap_sin)
     org_info_pair = decrypt_org_info(org_info_pair, namemap_pair)
@@ -793,7 +737,7 @@ def pMSI(models, sd_file):
     for i in org_info_pair:
         org_info_pair_wo_trans_rxn[i] = list(set(org_info_pair[i]) - set(comm_util.transport_list()))
     # find all the relieved reactions in every pairs
-    find_relieved_rxn(models, os.path.basename(sd_file).replace('.txt', ''), org_info_single, org_info_pair)
+    find_relieved_rxn(models, "relieved_rxns", org_info_single, org_info_pair)
     # calculate MSI for every pair
     msi = {}
     for org1 in models:
@@ -805,7 +749,7 @@ def pMSI(models, sd_file):
                 else:  msi[org1.id + '_' + org2.id] = 1 - (stuck_AUB / stuck_A)
     return msi, community_model
 
-def calculate_pairwiseMSI(models, sd_file):
+def calculate_pairwiseMSI(models, media):
     """
     This function calculates pairwise-MSI for all given microbes.
 
@@ -819,8 +763,8 @@ def calculate_pairwiseMSI(models, sd_file):
     """
 
     warnings.filterwarnings("ignore")
-    msi, community_model = pMSI(models, sd_file)
-    msi_output_file = f"results/MSI_{os.path.basename(sd_file).replace('.txt', '')}.csv"
+    msi, community_model = pMSI(models, media)
+    msi_output_file = f"results/MSI_{os.path.basename(media).replace('.txt', '')}.csv"
     with open(msi_output_file, 'w') as f:
         header = 'organism,in_the_presence,msi_value\n'
         f.write(header)
@@ -829,10 +773,10 @@ def calculate_pairwiseMSI(models, sd_file):
                 f.write(f"{org1.id},{org2.id},{str(msi[org1.id + '_' + org2.id])}\n")
     print('MSI values are written at:\n', msi_output_file)
 
-def calculate_higherorderMSI(models, sd_file, clusters = 'individual_clusters'):
+def calculate_higherorderMSI(models, media, clusters = 'individual_clusters'):
     community_model = commhelper.build_from_species_models(models)
     comm_util = MSModelUtil(community_model)
-    org_info, scope, namemap = find_stuckrxns(model, community, sd_file, len(community))
+    org_info, scope, namemap = find_stuckrxns(model, community, media, len(community))
     org_info = decrypt_orginfo(org_info, namemap)
     org_info_wo_trans_rxn = {i: list(set(org_info[i]) - set(comm_util.transport_list())) for i in org_info}
 
@@ -870,7 +814,7 @@ def calculate_higherorderMSI(models, sd_file, clusters = 'individual_clusters'):
                                                                                    new_community)
 
             org_info_pert, org_info_pert_wo_trans_rxn, msi = perform_task(
-                sd_file, pert_models, transport_rxns, pert_community, org_info_wo_trans_rxn, rem_org_list2[n], n)
+                media, pert_models, transport_rxns, pert_community, org_info_wo_trans_rxn, rem_org_list2[n], n)
             for i in rem_org_list2[n]:
                 f.write('Comm,clus_' + str(n) + '#' + i + ',' + str(msi) + '\n')
 
@@ -896,7 +840,7 @@ def calculate_higherorderMSI(models, sd_file, clusters = 'individual_clusters'):
             ko_org_list = [x for x in pert_model_ids]
             if len(ko_org_list) < len(model):
                 org_info_pert, org_info_pert_wo_trans_rxn, msi = perform_task(
-                    sd_file, ko_models, transport_rxns, ko_community, org_info_wo_trans_rxn, ko_org_list, n)
+                    media, ko_models, transport_rxns, ko_community, org_info_wo_trans_rxn, ko_org_list, n)
                 for i in ko_community:
                     f.write('clus_' + str(n) + '#' + i + ',Comm,' + str(msi) + '\n')
 

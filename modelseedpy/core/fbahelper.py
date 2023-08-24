@@ -139,7 +139,9 @@ class FBAHelper:
         # TODO: check for SBO
         return reaction.id[0:3] == "bio"
 
+    @staticmethod
     def isnumber(string):
+        if str(string) in ["nan", "inf"]:  return False
         try:  float(string);  return True
         except:  return False
 
@@ -262,5 +264,7 @@ class FBAHelper:
             return {met.id: stoich for met, stoich in rxn.items()}
 
     @staticmethod
-    def convert_kbase_media(kbase_media):
-        return {"EX_"+exID: -bound[0] for exID, bound in kbase_media.get_media_constraints().items()}
+    def convert_kbase_media(kbase_media, uniform_uptake=None):
+        if uniform_uptake is None:
+            return {"EX_"+exID: -bound[0] for exID, bound in kbase_media.get_media_constraints().items()}
+        return {"EX_"+exID: uniform_uptake for exID in kbase_media.get_media_constraints().keys()}
