@@ -5,12 +5,12 @@ from modelseedpy.core.fbahelper import FBAHelper
 from typing import Iterable
 from zipfile import ZipFile, ZIP_LZMA
 from math import isclose
-from icecream import ic
+# from icecream import ic
 from pprint import pprint
 from deepdiff import DeepDiff
 import platform, logging, json, re, os #, lzma
 
-ic.configureOutput(includeContext=True, contextAbsPath=False)
+# ic.configureOutput(includeContext=True, contextAbsPath=False)
 
 logging.basicConfig(filename="mscompatability.log", format='%(asctime)s %(message)s', filemode='w')
 logger = logging.getLogger(__name__)
