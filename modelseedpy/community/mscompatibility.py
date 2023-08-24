@@ -309,8 +309,7 @@ class MSCompatibility:
             compartment = met.compartment
         else:
             comp = re.compile("(_\w\d+$)")
-            if not comp.search(met.id):
-                comp = re.compile("(\[\w\])")
+            if not comp.search(met.id):  comp = re.compile("(\[\w\])")
             compartment = comp.search(met.id).group()
         change_comp = comp != re.compile("(_\w\d+$)")
         if change_comp:  compartment = re.sub('(\[|\])', '', compartment) + "0"
@@ -347,7 +346,7 @@ class MSCompatibility:
                     logger.warning(f"ModelSEEDError: The old metabolite {met.id} cross-references"
                     f" ({compounds_cross_references[general_met]}) do not overlap with those"
                     f" ({compounds_cross_references[compoundNames[met_name]]}) of the new metabolite {new_met_id}.")
-        new_met_id = compoundNames[met_name]+compartment
+        new_met_id = compoundNames[met_name]+compartment if not change_comp else f"{compoundNames[met_name]}_{compartment}"
         if new_met_id in model.metabolites:
             ## replace the undesirable compound in each of its reactions, since the new compound ID already exists
             for org_rxn in met.reactions:
@@ -416,7 +415,7 @@ class MSCompatibility:
         else:
             ## rename the undesirable compound
             met.name = f"{met_name}_{compartment}"
-            met.id = new_met_id if not change_comp else f"{compoundNames[met_name]}_{compartment}"
+            met.id = new_met_id
             change = {'original': {'id': original_id, 'name': original_name},
                       'new': {'id': met.id, 'name': met.name},
                       'justification': f'The {original_id} and {met.id} distinction in {model.id} is incompatible; '

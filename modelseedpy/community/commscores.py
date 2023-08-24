@@ -720,8 +720,7 @@ class CommScores:
                 community.run_fba()
                 member_growths = community.parse_member_growths()
                 G_m1, G_m2 = member_growths[model1_util.model.id], member_growths[model2_util.model.id]
-            if G_m2 <= 0 and G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
-            if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", G_m1, G_m2)  ;  continue
+            if G_m2 <= 0 or G_m1 <= 0: gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = ("", "", G_m1, G_m2)  ;  continue
             gyds[f"{model1_util.model.id} ++ {model2_util.model.id}"] = (abs(G_m1-G_m2)/G_m1, abs(G_m2-G_m1)/G_m2, G_m1, G_m2)
         return gyds
 
@@ -752,7 +751,8 @@ class CommScores:
         elif all(growth_diffs > th_neg) and any(growth_diffs > th_pos):  bit = "commensalism"
         elif all(growth_diffs < th_pos) and any(growth_diffs < th_neg):  bit = "amensalism"
         elif any(growth_diffs > th_pos) and any(growth_diffs < th_neg):  bit = "parasitism"
-        else: print(f"The relative growths {comm_growth_effect} from {comm_member_growths} are not captured.")  ;  bit = ""
+        else: print(f"The relative growths {comm_growth_effect} from {comm_member_growths} coculture and"
+                    f" {isolate_growths} monoculture are not captured.")  ;  bit = ""
         return (pc_score, comm_growth_effect, comm_member_growths, bit)
 
     @staticmethod
