@@ -203,7 +203,7 @@ def convert_to_int(element):
 
 
 categories_dir = os.path.join(package_dir, "data", "categories")
-sugars, aminoacids = load(os.path.join(categories_dir, "categorized_sugars.npy")), load(os.path.join(categories_dir, "aminoAcids.npy"))
+sugars, aminoacids = load(os.path.join(categories_dir, "sugars.npy")), load(os.path.join(categories_dir, "aminoAcids.npy"))
 vitamins, minerals = load(os.path.join(categories_dir, "vitamins.npy")), load(os.path.join(categories_dir, "minerals.npy"))
 energy_compounds = load(os.path.join(categories_dir, "energy_compounds.npy"))
 sugars_dic, aminoacids_dic = dict(zip(sugars[:,0], sugars[:,1])), dict(zip(aminoacids[:,0], aminoacids[:,1]))
