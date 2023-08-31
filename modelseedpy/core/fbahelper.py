@@ -101,10 +101,14 @@ class FBAHelper:
 
     @staticmethod
     def metabolite_mw(metabolite):
+        fixed_masses = {"cpd11416": 1, "cpd17041": 0, "cpd17042": 0, "cpd17043": 0}
+        msid = FBAHelper.modelseed_id_from_cobra_metabolite(metabolite)
+        if msid in fixed_masses:
+            return fixed_masses[msid]
+        if not metabolite.formula:
+            return 0
+        formula = re.sub("R\d*", "", metabolite.formula)
         try:
-            if not metabolite.formula:
-                return 0
-            formula = re.sub("R\d*", "", metabolite.formula)
             chem_mw = ChemMW(printing=False)
             chem_mw.mass(formula)
             return chem_mw.raw_mw
@@ -136,40 +140,47 @@ class FBAHelper:
         return reaction.id[0:3] == "bio"
 
     @staticmethod
+    def isnumber(string):
+        if str(string) in ["nan", "inf"]:  return False
+        try:  float(string);  return True
+        except:  return False
+
+    @staticmethod
     def rxn_mets_list(rxn):
         return [met for met in rxn.reactants+rxn.products]
 
     @staticmethod
     def sum_dict(d1,d2):
         for key, value in d1.items():
-            if key in d2:
-                d2[key] += value
-            else:
-                d2[key] = value
+            if key in d2:  d2[key] += value
+            else:  d2[key] = value
         return d2
 
     @staticmethod
     def rxn_compartment(reaction):
         compartments = list(reaction.compartments)
-        if len(compartments) == 1:
-            return compartments[0]
-        cytosol = None
+        if len(compartments) == 1:  return compartments[0]
         for comp in compartments:
-            if comp[0:1] == "c":
-                cytosol = comp
-            elif comp[0:1] != "e":
-                return comp
-        return cytosol
-    
+            if comp[0:1] != "e":  return comp
+            elif comp[0:1] == "e":  extracellular = comp
+        return extracellular
+
+    @staticmethod
+    def remove_compartment(objID):
+        return re.sub(r"(\_\w\d+)", "", objID)
+
+    @staticmethod
+    def compartment_index(string):
+        return int(re.search(r"(?<=\_|\w)(\d+)(?=$)", string).group())
+
     @staticmethod
     def id_from_ref(ref):
         array = ref.split("/")
         return array[-1]
 
     @staticmethod
-    def medianame(media):
-        if media == None:
-            return "Complete"
+    def mediaName(media):
+        if media == None:  return "Complete"
         return media.id
 
     @staticmethod
@@ -253,5 +264,7 @@ class FBAHelper:
             return {met.id: stoich for met, stoich in rxn.items()}
 
     @staticmethod
-    def convert_kbase_media(kbase_media):
-        return {"EX_"+exID: -bound[0] for exID, bound in kbase_media.get_media_constraints().items()}
+    def convert_kbase_media(kbase_media, uniform_uptake=None):
+        if uniform_uptake is None:
+            return {"EX_"+exID: -bound[0] for exID, bound in kbase_media.get_media_constraints().items()}
+        return {"EX_"+exID: uniform_uptake for exID in kbase_media.get_media_constraints().keys()}

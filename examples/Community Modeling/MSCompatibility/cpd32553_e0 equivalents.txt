@@ -1,3 +1,0 @@
-cps_bt_e0
-pe_cer1_bt_e0
-lps_bt_e0

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import math
 from modelseedpy.biochem.seed_object import ModelSEEDObject

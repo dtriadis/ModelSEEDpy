@@ -9,7 +9,7 @@ from modelseedpy.core.msmedia import MSMedia
 from modelseedpy.core.mseditorapi import MSEditorAPI, MSEquation
 from modelseedpy.core.msgapfill import MSGapfill
 from modelseedpy.core.msatpcorrection import MSATPCorrection
-from modelseedpy.core.msgrowthphenotypes import MSGrowthPhenotypes
+from modelseedpy.core.msgrowthphenotypes import MSGrowthPhenotypes, MSGrowthPhenotype
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.msminimalmedia import MSMinimalMedia
 from modelseedpy.core.optlanghelper import OptlangHelper

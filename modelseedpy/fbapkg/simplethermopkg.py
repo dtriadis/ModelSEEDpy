@@ -88,21 +88,6 @@ class SimpleThermoPkg(BaseFBAPkg):
         return built_constraint
 
     def optimize_dgbin(self):
-        # create the sum of dgbin variables
-        dgbin_sum_coef = {}
-        for reaction in self.variables["dgbinF"]:
-            print(f"{self.model.solver.status} status for {reaction}")
-            try:
-                dgbin_sum_coef[self.variables["dgbinF"][reaction].primal] = 1
-            except:
-                print("--> ERROR: The simulation lack a solution.")
-        for reaction in self.variables["dgbinR"]:
-            print(f"{self.model.solver.status} status for {reaction}")
-            try:
-                dgbin_sum_coef[self.variables["dgbinR"][reaction].primal] = 1
-            except:
-                print("--> ERROR: The simulation lack a solution.")
-
-        # set the dgbin sum as the model objective
-        self.model.objective = self.model.problem.Objective(Zero, direction="max")
-        self.model.objective.set_linear_coefficients(dgbin_sum_coef)
+        dgbin_vars = [self.variables["dgbinF"][reaction] for reaction in self.variables["dgbinF"]
+                      ] + [self.variables["dgbinR"][reaction] for reaction in self.variables["dgbinR"]]
+        self.modelutl.add_objective(dgbin_vars, "max")
