@@ -9,8 +9,8 @@ ________________________________________________________________________
    :target: https://modelseedpy.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
 
-.. |PyPI version| image:: https://img.shields.io/pypi/v/modelseedpy.svg?logo=PyPI&logoColor=brightgreen
-   :target: https://pypi.org/project/modelseedpy/
+.. |PyPI version| image:: https://img.shields.io/pypi/v/modelseedpy_freiburgermsu.svg?logo=PyPI&logoColor=brightgreen
+   :target: https://pypi.org/project/modelseedpy_freiburgermsu/
    :alt: PyPI version
 
 .. |Actions Status| image:: https://github.com/modelseed/modelseedpy/workflows/Test%20modelseedpy/badge.svg
@@ -21,8 +21,8 @@ ________________________________________________________________________
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-.. |Downloads| image:: https://pepy.tech/badge/modelseedpy
-   :target: https://pepy.tech/project/modelseedpy
+.. |Downloads| image:: https://pepy.tech/badge/modelseedpy_freiburgermsu
+   :target: https://pepy.tech/project/modelseedpy_freiburgermsu
    :alt: Downloads
 
 
