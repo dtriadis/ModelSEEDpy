@@ -9,7 +9,6 @@ from modelseedpy.community.commscores import CommScores
 from modelseedpy.community.datastandardization import *
 from modelseedpy.community.mssteadycom import MSSteadyCom
 from modelseedpy.community.commphitting import CommPhitting
-from modelseedpy.community.mscompatibility import MSCompatibility
 from modelseedpy.community.commhelper import build_from_species_models, phenotypes
 from modelseedpy.community.mskineticsfba import MSKineticsFBA
 
