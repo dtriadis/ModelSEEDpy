@@ -36,8 +36,8 @@ def _var_to_ID(var):
 
 
 def _compatibilize(org_models, printing=False):
-    from modelseedpy.community.mscompatibility import MSCompatibility
-    return MSCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
+from commscores import GEMCompatibility
+    return GEMCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
 
 
 def verify(org_model, min_media):
