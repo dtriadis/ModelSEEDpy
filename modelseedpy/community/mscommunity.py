@@ -97,6 +97,9 @@ class MSCommunity:
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
         msid_cobraid_hash = self.util.msid_hash()
         # print(msid_cobraid_hash)
+
+        # TODO this logic needs to be updated to accommodate non-MS models
+
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:

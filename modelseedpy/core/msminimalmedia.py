@@ -19,10 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def _exchange_solution(sol_dict):
-    if isinstance(list(sol_dict.keys())[0], str):
-        return {rxn:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn and flux < 0}
-    elif hasattr(list(sol_dict.keys())[0], "id"):
-        return {rxn.id:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.id and flux < 0}
+    if isinstance(list(sol_dict.keys())[0], str):   return {rxn:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn and flux < 0}
+    elif hasattr(list(sol_dict.keys())[0], "id"):   return {rxn.id:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.id and flux < 0}
     return {rxn.name:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.name and flux < 0}
 
 
@@ -49,7 +47,8 @@ def verify(org_model, min_media):
 
 def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
     sol_dict = sol_dict or FBAHelper.solution_to_variables_dict(sol, model)
-    simulated_growth = sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)])
+    # print({k:v for k,v in sol_dict.items() if v > 1E-8})
+    simulated_growth = max(sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)]), sol.objective_value)
     if simulated_growth < min_growth*0.9999:
         raise ObjectiveError(f"The assigned minimal_growth of {min_growth} was not maintained during the simulation,"
                              f" where the observed growth value was {simulated_growth}.")
@@ -60,7 +59,10 @@ def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
 def minimizeFlux_withGrowth(model_util, min_growth, obj):
     model_util.add_minimal_objective_cons(min_growth)
     model_util.add_objective(obj, "min")
+    # print(model_util.model.objective)
+    # print([(cons.lb, cons.expression) for cons in model_util.model.constraints if "min" in cons.name])
     sol = model_util.model.optimize()
+    # print(sol.objective_value)
     sol_dict = bioFlux_check(model_util.model, sol, min_growth=min_growth)
     return sol, sol_dict
 
