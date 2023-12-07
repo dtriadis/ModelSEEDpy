@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-from modelseedpy_freiburgermsu.fbapkg.mspackagemanager import MSPackageManager
-from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
-from modelseedpy_freiburgermsu.community.mssteadycom import MSSteadyCom
-from modelseedpy_freiburgermsu.community.commhelper import build_from_species_models
-from modelseedpy_freiburgermsu.core.exceptions import ObjectAlreadyDefinedError, FeasibilityError, NoFluxError
-from modelseedpy_freiburgermsu.core.msgapfill import MSGapfill
-from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
-#from modelseedpy_freiburgermsu.fbapkg.gapfillingpkg import default_blacklist
-from modelseedpy_freiburgermsu.core.msatpcorrection import MSATPCorrection
-from cobra import Reaction
+from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy.core.msmodelutl import MSModelUtil
+from modelseedpy.community.mssteadycom import MSSteadyCom
+from modelseedpy.community.commhelper import build_from_species_models
+from modelseedpy.core.exceptions import ObjectAlreadyDefinedError, FeasibilityError, NoFluxError
+from modelseedpy.core.msgapfill import MSGapfill
+from modelseedpy.core.fbahelper import FBAHelper
+#from modelseedpy.fbapkg.gapfillingpkg import default_blacklist
+from modelseedpy.core.msatpcorrection import MSATPCorrection
+from cobra.io import save_matlab_model, write_sbml_model
 from cobra.core.dictlist import DictList
-from cobra.io import save_matlab_model
 from optlang.symbolics import Zero
 from optlang import Constraint
 from pandas import DataFrame
 from pprint import pprint
+from cobra import Reaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,14 @@ class MSCommunity:
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
         msid_cobraid_hash = self.util.msid_hash()
         # print(msid_cobraid_hash)
+        write_sbml_model(model, "test_comm.xml")
+
+        # TODO this logic needs to be updated to accommodate non-MS models
+
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
-            if self.biomass_cpd.compartment == "c0":
+            if "c0" in self.biomass_cpd.id:
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
                     print(self.biomass_cpd, rxn, end=";\t")
@@ -111,7 +115,7 @@ class MSCommunity:
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
-            elif 'c' in self.biomass_cpd.compartment:  # TODO expand to capture nonMS models
+            elif 'c' in self.biomass_cpd.compartment:
                 other_biomass_cpds.append(self.biomass_cpd)
         # assign community members and their abundances
         abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)

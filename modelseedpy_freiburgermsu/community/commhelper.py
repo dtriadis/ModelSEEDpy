@@ -1,10 +1,10 @@
-from modelseedpy_freiburgermsu.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
-from modelseedpy_freiburgermsu.core.exceptions import NoFluxError, ObjectiveError
-from modelseedpy_freiburgermsu.community.mscompatibility import MSCompatibility
-from modelseedpy_freiburgermsu.core.msmodelutl import MSModelUtil
-from modelseedpy_freiburgermsu.core.fbahelper import FBAHelper
+from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
+from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
+from modelseedpy.core.msmodelutl import MSModelUtil
+from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
 from cobra.medium import minimal_medium
+from commscores import GEMCompatibility
 from cobra.flux_analysis import pfba
 from collections import OrderedDict
 from optlang.symbolics import Zero
@@ -28,13 +28,14 @@ def correct_nonMSID(nonMSobject, output, model_index):
     name, compartment = output
     index = 0 if compartment == "e" else model_index
     nonMSobject.compartment = compartment + str(index)
-    comp = re.search(r"(_\w\d+$)", nonMSobject.id)
-    if comp is None:  return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    comp = re.search(r"(_[a-z]\d+$)", nonMSobject.id)
+    if comp is None and rf"[{compartment}]" in nonMSobject.id:  return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    elif comp is None:  return nonMSobject.id + f"_{nonMSobject.compartment}"
     return "_".join([nonMSobject.id.replace(comp.group(), ""), nonMSobject.compartment])
 
 
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
-                              standardize=False, copy_models=True, printing=False):
+                              standardize=False, MSmodel = True, copy_models=True, printing=False):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -55,7 +56,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     ------
     """
     # construct the new model
-    models = org_models if not standardize else MSCompatibility.standardize(
+    models = org_models if not standardize else GEMCompatibility.standardize(
         org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
     biomass_indices = []
     biomass_index = minimal_biomass_index = 2
@@ -65,6 +66,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
         model_index += 1
+        # if MSmodel:
         # Rename metabolites
         for met in model_util.model.metabolites:
             # Renaming compartments
@@ -112,8 +114,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if printing:  print(f"The {rxn.id} ({output}; {hasattr(rxn, 'compartment')}) is unpredictable.")
-                        try:
-                            rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                        try:   rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
                         except ValueError: pass
                     elif len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
                     elif len(output) == 3:
@@ -124,10 +125,14 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
                     finalID = str(rxn.id)
-                    string_diff = set(initialID).symmetric_difference(set(finalID))
-                    if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
-                        print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
+                    string_diff = ""
+                    for index, let in enumerate(finalID):
+                        if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
+                    if string_diff != f"_{compartment}{model_index}":  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
+        # else:
+        #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
+        #     pass
     # adds only unique reactions and metabolites to the community model
     newmodel = Model(model_id or "+".join([model.id for model in models]),
                      name or "+".join([model.name for model in models]))

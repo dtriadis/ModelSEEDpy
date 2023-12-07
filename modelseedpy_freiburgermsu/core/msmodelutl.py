@@ -258,8 +258,8 @@ class MSModelUtil:
         return [rxn for rxn in self.model.reactions if re.search(r"(^bio\d+)", rxn.id)]
 
     def compatibilize(self, conflicts_file_name="orig_conflicts.json", printing=False):
-        from modelseedpy_freiburgermsu.community.mscompatibility import MSCompatibility
-        self.model = MSCompatibility.standardize(
+        from commscores import GEMCompatibility
+        self.model = GEMCompatibility.standardize(
             [self.model], conflicts_file_name=conflicts_file_name, printing=printing)[0]
         return self.model
 
