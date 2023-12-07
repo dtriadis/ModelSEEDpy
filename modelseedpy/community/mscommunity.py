@@ -103,7 +103,7 @@ class MSCommunity:
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
-            if self.biomass_cpd.compartment == "c0":
+            if "c" in self.biomass_cpd.compartment:
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
                     print(self.biomass_cpd, rxn, end=";\t")

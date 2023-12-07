@@ -36,7 +36,7 @@ def _var_to_ID(var):
 
 
 def _compatibilize(org_models, printing=False):
-from commscores import GEMCompatibility
+    from commscores import GEMCompatibility
     return GEMCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
 
 
@@ -61,7 +61,7 @@ def minimizeFlux_withGrowth(model_util, min_growth, obj):
     model_util.add_objective(obj, "min")
     # print(model_util.model.objective)
     # print([(cons.lb, cons.expression) for cons in model_util.model.constraints if "min" in cons.name])
-    sol = model_util.model.optimize()
+    sol = model_util.model.optimize()   
     # print(sol.objective_value)
     sol_dict = bioFlux_check(model_util.model, sol, min_growth=min_growth)
     return sol, sol_dict
