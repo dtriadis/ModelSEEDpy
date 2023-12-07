@@ -125,9 +125,10 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
                     finalID = str(rxn.id)
-                    string_diff = set(initialID).symmetric_difference(set(finalID))
-                    if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
-                        print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
+                    string_diff = ""
+                    for index, let in enumerate(finalID):
+                        if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
+                    if string_diff != f"_{compartment}{model_index}":  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
         # else:
         #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
