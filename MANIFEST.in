@@ -1,3 +1,4 @@
 include LICENSE
-Include modelseedpy/config.cfg
+Include modelseedpy_freiburgermsu/config.cfg
+recursive-include modelseedpy_freiburgermsu/data *
 graft data
