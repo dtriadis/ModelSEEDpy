@@ -37,10 +37,10 @@ from modelseedpy_freiburgermsu.core import (
     FBAHelper, MSEditorAPI, MSATPCorrection, MSGapfill, MSEquation, OptlangHelper,
     commscores_report, steadycom_report
 )
-from modelseedpy.core.exceptions import *
+from modelseedpy_freiburgermsu.core.exceptions import *
 
-from modelseedpy.community import (
-    MSCommunity, CommunityMember, MSKineticsFBA, CommScores, CommPhitting,
+from modelseedpy_freiburgermsu.community import (
+    MSCommunity, CommunityMember, MSKineticsFBA, CommPhitting,
     MSSteadyCom, build_from_species_models, phenotypes)
 
 from modelseedpy_freiburgermsu.biochem import ModelSEEDBiochem
