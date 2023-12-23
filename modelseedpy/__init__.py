@@ -14,7 +14,7 @@ from modelseedpy.helpers import config
 
 __author__ = "Christopher Henry"
 __email__ = "chenry@anl.gov"
-__version__ = "0.2.2"
+__version__ = "0.3.3"
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,9 @@ if "e0" not in cobra.medium.annotations.compartment_shortlist["e"]:
 
 import modelseedpy
 from modelseedpy.core import (
-    RastClient, MSGenome, MSBuilder, MSMedia, MSGrowthPhenotypes, MSModelUtil,
+    RastClient, MSGenome, MSBuilder, MSMedia, MSGrowthPhenotypes, MSGrowthPhenotype, MSModelUtil,
     FBAHelper, MSEditorAPI, MSATPCorrection, MSGapfill, MSEquation, OptlangHelper,
-    commscores_report, steadycom_report
+    commscores_report, steadycom_report, MSModelReport, AnnotationOntology,
 )
 from modelseedpy.core.exceptions import *
 

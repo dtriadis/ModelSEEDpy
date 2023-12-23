@@ -61,6 +61,29 @@ ALIAS_MODELS = {
     "TS_Athaliana",
 }
 
+def convert_to_searchname(name):
+    OriginalName = name
+    ending = "";
+    if name[-1] == "-":
+        ending = "-"
+    name = name.lower()
+    name.replace(" ","")
+    name.replace(",","")
+    name.replace("-","")
+    name.replace("_","")
+    name.replace("(","")
+    name.replace(")","")
+    name.replace("}","")
+    name.replace("{","")
+    name.replace("[","")
+    name.replace("]","")
+    name.replace(":","")
+    name.replace("�","")
+    name.replace("'","")
+    name.replace("_","")
+    name += ending
+    name.replace("icacid","ate")
+    return name;
 
 def get_low(ids):
     low = None
@@ -309,6 +332,9 @@ def _load_reactions(
                             o.get("status"),
                             o.get("source"),
                         )
+                        if "linked_reaction" in o and o.get("linked_reaction"):
+                            ids = o.get("linked_reaction").split(";")
+                            rxn.annotation["modelseed"] = ids[0]
                         rxn.add_metabolites(reaction_metabolites)
                         if rxn.id in aliases:
                             rxn.annotation.update(aliases[rxn.id])
@@ -496,7 +522,7 @@ class ModelSEEDBiochem:
     @staticmethod
     def get(create_if_missing=True):
         if not ModelSEEDBiochem.default_biochemistry:
-            ModelSEEDBiochem.default_biochemistry = from_local2(
+            ModelSEEDBiochem.default_biochemistry = from_local(
                 config.get("biochem", "path")
             )
         return ModelSEEDBiochem.default_biochemistry

@@ -32,8 +32,15 @@ class GapfillingPkg(BaseFBAPkg):
     """ """
 
     def __init__(self, model):
-        BaseFBAPkg.__init__(self, model, "gapfilling", {}, {})
+        BaseFBAPkg.__init__(
+            self,
+            model,
+            "gapfilling",
+            {"rmaxf": "reaction", "fmaxf": "reaction"},
+            {"rmaxfc": "reaction", "fmaxfc": "reaction"},
+        )
         self.gapfilling_penalties = None
+        self.maxflux_variables = {}
 
     def build(self, template, minimum_objective=0.01):
         parameters = {
@@ -84,6 +91,7 @@ class GapfillingPkg(BaseFBAPkg):
                 "blacklist": [],
             },
         )
+        
         # Adding model reactions to original reaction list
         self.parameters["original_reactions"] = []
         for rxn in self.model.reactions:
@@ -95,15 +103,28 @@ class GapfillingPkg(BaseFBAPkg):
                 self.parameters["original_reactions"].append([rxn, "<"])
             if rxn.upper_bound > 0:
                 self.parameters["original_reactions"].append([rxn, ">"])
+        
         # Adding constraint for target reaction
         self.parameters["origobj"] = self.model.objective
         self.pkgmgr.getpkg("ObjConstPkg").build_package(
             self.parameters["minimum_obj"], None
         )
 
+        #Computing gapfilling penalties
+        self.compute_gapfilling_penalties()
+
+        # Creating the gapfilling objective function and saving it under self.parameters["gfobj"]
+        self.build_gapfilling_objective_function()
+
+    def compute_gapfilling_penalties(self,exclusion_solution=None,reaction_scores=None):
+        """Builds gapfilling objective function for model
+        Parameters
+        ----------
+        exclusion_solution : [string rxn_id,string direction]
+            Solution with reaction directions that should be removed from the gapfilling objective function
+        """
         # Determine all indecies that should be gapfilled
         indexhash = self.get_model_index_hash()
-
         # Iterating over all indecies with more than 10 intracellular compounds:
         self.gapfilling_penalties = dict()
         for index, val in indexhash.items():
@@ -125,14 +146,24 @@ class GapfillingPkg(BaseFBAPkg):
                 if self.parameters["gapfill_all_indecies_with_default_models"]:
                     for gfmdl in self.parameters["default_gapfill_models"]:
                         self.gapfilling_penalties.update(self.extend_model_with_model_for_gapfilling(gfmdl, index))
+        #Removing exclusion solution reactions from penalties dictionary
+        if exclusion_solution:
+            for item in exclusion_solution:
+                if item[0] in self.gapfilling_penalties:
+                    if item[1] == ">" and "forward" in self.gapfilling_penalties[item[0]]:
+                        del self.gapfilling_penalties[item[0]]["forward"]
+                    elif item[1] == "<" and "reverse" in self.gapfilling_penalties[item[0]]:
+                        del self.gapfilling_penalties[item[0]]["reverse"]
         # Rescaling penalties by reaction scores and saving genes
+        if not reaction_scores:
+            reaction_scores = self.parameters["reaction_scores"]
         for reaction in self.gapfilling_penalties:
             rxnid = reaction.split("_")[0]
-            if rxnid in self.parameters["reaction_scores"]:
+            if rxnid in reaction_scores:
                 highest_score = 0
-                for gene in self.parameters["reaction_scores"][rxnid]:
-                    if highest_score < self.parameters["reaction_scores"][rxnid][gene]:
-                        highest_score = self.parameters["reaction_scores"][rxnid][gene]
+                for gene in reaction_scores[rxnid]:
+                    if highest_score < reaction_scores[rxnid][gene]:
+                        highest_score = reaction_scores[rxnid][gene]
                 factor = 0.1
                 if "reverse" in self.gapfilling_penalties[reaction]:
                     self.gapfilling_penalties[reaction]["reverse"] = (
@@ -143,8 +174,9 @@ class GapfillingPkg(BaseFBAPkg):
                         factor * self.gapfilling_penalties[reaction]["forward"]
                     )
 
-        self.model.solver.update()
-
+    def build_gapfilling_objective_function(self):
+        """Builds gapfilling objective function for model
+        """
         reaction_objective = self.model.problem.Objective(Zero, direction="min")
         obj_coef = dict()
         for reaction in self.model.reactions:
@@ -165,6 +197,46 @@ class GapfillingPkg(BaseFBAPkg):
         self.model.objective = reaction_objective
         reaction_objective.set_linear_coefficients(obj_coef)
         self.parameters["gfobj"] = self.model.objective
+
+    def create_max_flux_variables(self):
+        """Creates max flux variables needed for the global gapfilling formulation
+        Parameters
+        ----------
+        """           
+        for reaction in self.model.reactions:
+            if reaction.id in self.gapfilling_penalties:
+                if "reverse" in self.gapfilling_penalties[reaction.id]:
+                    self.maxflux_variables[reaction.id][
+                        "reverse"
+                    ] = self.build_variable(
+                        "rmaxf", 0, 1000, "continuous", reaction
+                    )
+                    self.build_constraint(
+                        "rmaxfc",
+                        0,
+                        None,
+                        {
+                            reaction.reverse_variable: -1,
+                            self.maxflux_variables[reaction.id]["reverse"]: 1,
+                        },
+                        reaction,
+                    )
+                if "forward" in self.gapfilling_penalties[reaction.id]:
+                    self.maxflux_variables[reaction.id][
+                        "forward"
+                    ] = self.build_variable(
+                        "fmaxf", 0, 1000, "continuous", reaction
+                    )
+                    self.build_constraint(
+                        "fmaxfc",
+                        0,
+                        None,
+                        {
+                            reaction.forward_variable: -1,
+                            self.maxflux_variables[reaction.id]["forward"]: 1,
+                        },
+                        reaction,
+                    )
 
     def reset_original_objective(self):
         self.parameters["origobj"] = self.model.objective
