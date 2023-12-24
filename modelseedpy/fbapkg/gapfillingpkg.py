@@ -47,7 +47,7 @@ class GapfillingPkg(BaseFBAPkg):
             "default_gapfill_templates": [template],
             "gapfill_all_indecies_with_default_templates": 1,
             "minimum_obj": minimum_objective,
-            "set_objective": 1,
+            "set_objective": 1
         }
         self.build_package(parameters)
 
@@ -262,7 +262,7 @@ class GapfillingPkg(BaseFBAPkg):
         # Adding metabolites from source model to gapfill model
         for cobra_met in source_model.metabolites:
             original_id = cobra_met.id
-            if re.search('(.+)_([a-z])\d+$', cobra_met.id) is not None:
+            if re.search('(.+)_([a-z])\d+$', cobra_met.id):
                 m = re.search('(.+)_([a-z])\d+$', cobra_met.id)
                 if m[2] == "e":
                     cobra_met.compartment = "e0"
@@ -284,7 +284,7 @@ class GapfillingPkg(BaseFBAPkg):
         self.model.add_metabolites(self.new_metabolites.values())
         # Adding reactions from source model to gapfill model
         for modelreaction in source_model.reactions:
-            if re.search("(.+)_([a-z])\d+$", modelreaction.id) != None:
+            if re.search("(.+)_([a-z])\d+$", modelreaction.id):
                 m = re.search("(.+)_([a-z])\d+$", modelreaction.id)
                 if m[1] not in self.parameters["blacklist"]:
                     cobra_rxn = modelreaction.copy()

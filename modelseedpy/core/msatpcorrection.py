@@ -288,7 +288,7 @@ class MSATPCorrection:
         self.msgapfill.default_gapfill_templates = [self.coretemplate]
         if self.lp_filename:
             self.msgapfill.lp_filename = self.lp_filename
-        results = {}
+        output = {}
         with self.model:
             self.model.objective = self.atp_hydrolysis.id
             pkgmgr = MSPackageManager.get_pkg_mgr(self.model)

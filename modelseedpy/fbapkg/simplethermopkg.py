@@ -31,7 +31,7 @@ class SimpleThermoPkg(BaseFBAPkg):
         )
         self.pkgmgr.getpkg("RevBinPkg").build_package(self.parameters["filter"])
         for metabolite in self.model.metabolites:
-            self.build_vars(metabolite)
+            self.build_variable(metabolite)
         for reaction in self.model.reactions:
             if reaction.id[:3] not in ["EX_", "SK_", "DM_"]:
                 # determine the range of Delta_rG values
@@ -49,13 +49,13 @@ class SimpleThermoPkg(BaseFBAPkg):
 
                 # build constraints for the filtered reactions
                 if self.parameters["filter"] is None or reaction.id in self.parameters["filter"]:
-                    self.build_cons(reaction, min_value, max_value)
+                    self.build_constraint(reaction, min_value, max_value)
 
         if self.parameters["dgbin"]:
             # define the model objective as the sum of the dgbin variables
             self.optimize_dgbin()
 
-    def build_vars(self, obj):
+    def build_variable(self, obj):
         return BaseFBAPkg.build_variable(
             self,
             "potential",
@@ -65,7 +65,7 @@ class SimpleThermoPkg(BaseFBAPkg):
             obj,
         )
 
-    def build_cons(self, obj, min_energy, max_energy):
+    def build_constraint(self, obj, min_energy, max_energy):
         # Gibbs: dg = Sum(n_(i,j)*\Delta G_(j))
         # 0 <= max_abs_energy*revbin(i) - |min_energy|*dgbinR + max_energy*dgbinF + dg <= max_abs_energy
 

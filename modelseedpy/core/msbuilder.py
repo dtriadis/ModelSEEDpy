@@ -1113,7 +1113,7 @@ class MSBuilder:
     @staticmethod
     def gapfill_model(original_mdl, target_reaction, template, media):
         FBAHelper.set_objective_from_target_reaction(original_mdl, target_reaction)
-        model = cobra.io.json.from_json(cobra.io.json.to_json(original_mdl))  #!!! what is the benefit of this I/O processing?
+        model = cobra.io.json.from_json(cobra.io.json.to_json(original_mdl))
         pkgmgr = MSPackageManager.get_pkg_mgr(model)
         pkgmgr.getpkg("GapfillingPkg").build_package(
             {

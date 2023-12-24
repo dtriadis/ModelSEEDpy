@@ -126,8 +126,8 @@ class GapfillingHelper:
                 for test in tests:
                     testmodel = model
                     with testmodel:
-                        self.apply_media_to_model(testmodel,test["media"],test["default_uptake"],test["default_excretion"])  #!!! where is this function defined?
-                        self.set_objective_from_target_reaction(testmodel,test["target"],test["maximize"])  #!!! where is this function defined?
+                        self.apply_media_to_model(testmodel,test["media"],test["default_uptake"],test["default_excretion"])
+                        self.set_objective_from_target_reaction(testmodel,test["target"],test["maximize"])
                         solution = testmodel.optimize()
                         if test.maximize == 1:
                             if testmodel.objective.value() > test.limit:
@@ -136,30 +136,30 @@ class GapfillingHelper:
 
     def build_model_extended_for_gapfilling(self,extend_with_template = 1, source_models = [], input_templates = [], model_penalty = 1, reaction_scores = {}):
         #Determine all indecies that should be gapfilled
-        indices = [0]*1000
+        indexlist= [0]*1000
         compounds = self.fbamodel["modelcompounds"]
         for compound in compounds:
             compartment = compound["modelcompartment_ref"].split("/").pop()
             basecomp = compartment[0:1]
             if not basecomp == "e":
-                indices[int(compartment[1:])] += 1
+                indexlist[int(compartment[1:])] += 1
 
         # Iterating over all indecies with more than 10 intracellular compounds:
-        gapfilling_penalties = dict()
-        for i, val in enumerate(indices):
+        penalties = dict()
+        for i, val in enumerate(indexlist):
             if val > 10:
                 if extend_with_template == 1:
                     new_penalties = self.temp_extend_model_index_for_gapfilling(
                         i, input_templates
                     )
-                    gapfilling_penalties.update(new_penalties)
+                    penalties.update(new_penalties)
                 if i < len(source_models) and source_models[i] != None:
                     new_penalties = self.mdl_extend_model_index_for_gapfilling(
                         i, source_models[i], model_penalty
                     )
-                    gapfilling_penalties.update(new_penalties)
+                    penalties.update(new_penalties)
         # Rescaling penalties by reaction scores and saving genes
-        for reaction in gapfilling_penalties:
+        for reaction in penalties:
             rxnid = reaction.split("_")[0]
             if rxnid in reaction_scores:
                 highest_score = 0
@@ -167,12 +167,12 @@ class GapfillingHelper:
                     if highest_score < reaction_scores[rxnid][gene]:
                         highest_score = reaction_scores[rxnid][gene]
                 factor = 1 - 0.9 * highest_score
-                if "reverse" in gapfilling_penalties[reaction]:
-                    gapfilling_penalties[reaction.id]["reverse"] = factor*gapfilling_penalties[reaction.id]["reverse"]
-                if "forward" in gapfilling_penalties[reaction]:
-                    gapfilling_penalties[reaction.id]["forward"] = factor*gapfilling_penalties[reaction.id]["forward"]
+                if "reverse" in penalties[reaction]:
+                    penalties[reaction.id]["reverse"] = factor*penalties[reaction.id]["reverse"]
+                if "forward" in penalties[reaction]:
+                    penalties[reaction.id]["forward"] = factor*penalties[reaction.id]["forward"]
         self.cobramodel.solver.update()
-        return gapfilling_penalties
+        return penalties
 
     #Possible new function to add to the KBaseFBAModelToCobraBuilder to extend a model with a template for gapfilling for a specific index
     def mdl_extend_model_index_for_gapfilling(self, model, index, source_model, model_penalty):
@@ -197,12 +197,12 @@ class GapfillingHelper:
             ):
                 new_metabolites[cobra_metabolite.id] = cobra_metabolite
                 if original_id in self.auto_sink:
-                    self.demand_compounds.add(cobra_metabolite.id)  #!!! where is demand_compounds defined?
+                    self.demand_compounds.add(cobra_metabolite.id)
                     new_demand.append(cobra_metabolite)
                 if cobra_metabolite.compartment == self.auto_exchange:
                     self.exchange_compounds.add(cobra_metabolite.id)
                     new_exchange.append(cobra_metabolite)
-            if cobra_metabolite.id in self.cobramodel.metabolites: #!!! where is cobramodel defined?
+            if cobra_metabolite.id in self.cobramodel.metabolites:
                 cobra_metabolite = self.cobramodel.metabolites.get_by_id(
                     cobra_metabolite.id
                 )
@@ -306,7 +306,7 @@ class GapfillingHelper:
         template = None
         if index < len(input_templates):
             template = input_templates[index]
-        elif index in self.fbamodel['template_refs']:  #!!! where is fbamodel defined?
+        elif index in self.fbamodel['template_refs']:
             template = self.kbapi.get_from_ws(self.fbamodel['template_refs'][index])
         else:
             template = self.kbapi.get_from_ws(self.fbamodel['template_ref'])
@@ -504,20 +504,20 @@ class GapfillingHelper:
             )
 
     def binary_check_gapfilling_solution(
-        self, gapfilling_penalties, add_solution_exclusion_constraint
+        self, penalties, add_solution_exclusion_constraint
     ):
         objcoef = {}
         flux_values = self.compute_flux_values_from_variables()
         for rxnobj in self.cobramodel.reactions:
-            if rxnobj.id in gapfilling_penalties:
+            if rxnobj.id in penalties:
                 if (
-                    "reverse" in gapfilling_penalties[rxnobj.id]
+                    "reverse" in penalties[rxnobj.id]
                     and flux_values[rxnobj.id]["reverse"] > Zero
                 ):
                     self.create_binary_variables(rxnobj, 0, 1)
                     objcoef[self.binary_flux_variables[rxnobj.id]["reverse"]] = 1
                 if (
-                    "forward" in gapfilling_penalties[rxnobj.id]
+                    "forward" in penalties[rxnobj.id]
                     and flux_values[rxnobj.id]["forward"] > Zero
                 ):
                     self.create_binary_variables(rxnobj, 1, 0)
@@ -528,14 +528,14 @@ class GapfillingHelper:
                 Zero, direction="min"
             )
             for rxnobj in self.cobramodel.reactions:
-                if rxnobj.id in gapfilling_penalties:
+                if rxnobj.id in penalties:
                     if (
-                        "reverse" in gapfilling_penalties[rxnobj.id]
+                        "reverse" in penalties[rxnobj.id]
                         and flux_values[rxnobj.id]["reverse"] <= Zero
                     ):
                         rxnobj.lower_bound = 0
                     if (
-                        "forward" in gapfilling_penalties[rxnobj.id]
+                        "forward" in penalties[rxnobj.id]
                         and flux_values[rxnobj.id]["forward"] <= Zero
                     ):
                         rxnobj.upper_bound = 0
@@ -622,7 +622,7 @@ class GapfillingHelper:
             "string_attributes": {},
         }
         cpd_data = AttrDict(cpd_data)
-        if kbmodel:
+        if add_to_model:
             kbmodel.modelcompounds.append(cpd_data)
         return cpd_data
 
@@ -815,9 +815,8 @@ class GapfillingHelper:
     def test_reaction_additions_againt_limits(self, reactions, directions, tests):
         filtered_rxn = []
         filtered_direction = []
-        # Using "with" to ensure we don't alter the model with these tests
         model = self.cobramodel
-        with model: # conserve the original model through WITH
+        with model:
             for rxn in reactions:
                 if rxn.id in self.cobramodel.reactions:
                     rxn_obj = self.cobramodel.reactions.get_by_id(rxn.id)
@@ -845,10 +844,10 @@ class GapfillingHelper:
     def set_reaction_bounds_from_direction(self, reaction, direction, add=0):
         if direction == "<":
             reaction.lower_bound = -100
-            if add:
+            if not add:
                 reaction.upper_bound = 0
         if direction == ">":
             reaction.upper_bound = 100
-            if add:
+            if not add:
                 reaction.lower_bound = 0
         reaction.update_variable_bounds()
