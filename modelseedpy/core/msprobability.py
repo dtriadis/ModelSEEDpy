@@ -2,6 +2,7 @@ from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
 from cobra.io import write_sbml_model, read_sbml_model
 from cobra import Model, Reaction
 from numpy import load as npload
+from optlang import Objective
 from os import path, environ
 from json import load, dump
 from glob import glob
@@ -10,37 +11,36 @@ import cobrakbase
 import re
 
 
-with open(f"reaction_counts/all_models.json", "r") as jsonIn:  reaction_counts = load(jsonIn)
-with open("model_gcf_mapping.json", "r") as jsonIn:   model_gcf_mapping = load(jsonIn)
-with open("unique_asv_mappings.json", "r") as jsonIn:  unique_asv_mappings = load(jsonIn)
-# with open("broken_model_gcfs.npy", "r") as aryIn:  broken_model_gcfs = npload(aryIn)
-
-
 class MSProbability:
         
     @staticmethod
-    def megaModel(kbase_api, clades_paths, threshold = .5, cobrakbase_path=""):
+    def megaModel(clades_paths, kbase_api=None, threshold = .5, reaction_counts_path=None):
         # compute the reaction frequency of the models in a given clade
-        if not kbase_api:
-            with open(cobrakbase_path) as token_file:   kbase_api = cobrakbase.KBaseAPI(token_file.readline())
         broken_models = []
         # models_paths = glob(f"{models_path}/*.xml")
         for clade, paths in clades_paths.items():
-            for model_path in paths:
+            if not reaction_counts_path:
                 reaction_counts = {}
-                try:
-                    model = read_sbml_model(model_path)
+                for index, model_path in enumerate(paths):
+                    print(f"{model_path}\tindex {index}\t\t\t\t\t\t\t\t\t\t\t\t", end="\r")
+                    try:
+                        if not kbase_api:   model = read_sbml_model(model_path)
+                        else:   model = kbase_api.get_from_ws(model_path)
+                    except Exception as e:
+                            print("broken", e, model_path)
+                            broken_models.append(model_path)
+                            continue
+                    # print(f"\n{len(model.reactions)} reactions", )
                     for rxn in model.reactions:
                         if rxn.id in reaction_counts:  reaction_counts[rxn.id] += 1
-                        else: reaction_counts[rxn.id] = 1
+                        else:  reaction_counts[rxn.id] = 1
                         # TODO storing a list of the rxn objects will save computational effort in the subsequent step
-                    print(f"{model.id}\t\t\t\t\t\t\t\t\t\t\t", end="\r")
-                except Exception as e:
-                    print("broken", model_path)
-                    broken_models.append(model_path)
-            reaction_counts = {"numMembers": len(paths)-len(broken_models)}
-            reaction_counts.update({rxnID:(count/reaction_counts["numMembers"]) for rxnID,count in reaction_counts.items()})
-            with open(f"reaction_counts/{clade}.json", "w") as jsonOut:   dump(reaction_counts, jsonOut, indent=3)
+                reaction_counts.update({"numMembers": len(paths)-len(broken_models)})
+                reaction_counts.update({rxnID:(count/reaction_counts["numMembers"]) for rxnID,count in reaction_counts.items() if rxnID != "numMembers"})
+                with open(f"reaction_counts/{clade}_reactions.json", "w") as jsonOut:   dump(reaction_counts, jsonOut, indent=3)
+            else:
+                with open(reaction_counts_path, "r") as jsonIn:
+                    reaction_counts = load(jsonIn)
 
             # constructing the probabilistic clade model
             megaModel = CobraModelConverter(Model(clade, f"MegaModel for {clade} from {reaction_counts['numMembers']} members")).build()
@@ -49,18 +49,25 @@ class MSProbability:
             print("\n", clade)
             for model_path in paths:
                 try:
-                    model = read_sbml_model(model_path)
-                    print(model.id)
+                    if not kbase_api:   model = read_sbml_model(model_path)
+                    else:   model = kbase_api.get_from_ws(model_path)
                 except Exception as e:
-                    print(f"Broken: {model_path}") ; continue
+                        print("broken", e, model_path)
+                        broken_models.append(model_path)
+                        continue
                 captured_reactions.extend([rxn for rxn in model.reactions if rxn.id not in captured_rxnIDs])
                 captured_rxnIDs.update([rxn.id for rxn in model.reactions])
                 remaining_rxnIDs -= captured_rxnIDs
+                if remaining_rxnIDs == set():   break
             if captured_reactions == []:
                 print(f"No models for {clade} are defined.")
                 continue
             megaModel.add_reactions(list(captured_reactions))
             for rxn in megaModel.reactions:
                 rxn.probability = reaction_counts[rxn.id]
-            print(len(megaModel.reactions), len(reaction_counts), megaModel.reactions[0].probability)
-            write_sbml_model(megaModel, path.join(path.dirname(model_path), clade))
+            megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
+            megaModel.solver.update()
+            print(set([rxn.id for rxn in megaModel.reactions]).symmetric_difference(set([rxnID for rxnID in reaction_counts])), megaModel.reactions[0].probability)
+            export_name = path.join("reaction_counts", f"{clade}.xml") if \
+                re.search(f"[0-9]+\/[0-9]+\/[0-9]+", model_path) else f"{path.join(path.dirname(model_path), clade)}.xml"
+            write_sbml_model(megaModel, export_name)
