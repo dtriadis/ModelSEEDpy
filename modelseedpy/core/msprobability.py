@@ -1,22 +1,21 @@
-from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
 from cobra.io import write_sbml_model, read_sbml_model
-from cobra import Model, Reaction
+from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from numpy import load as npload
 from optlang import Objective
 from os import path, environ
 from json import load, dump
 from glob import glob
 from os import path
-import cobrakbase
 import re
 
 
 class MSProbability:
         
     @staticmethod
-    def megaModel(clades_paths, kbase_api=None, threshold = .5, reaction_counts_path=None):
+    def megaModel(clades_paths, kbase_api=None, reaction_counts_path=None):
         # compute the reaction frequency of the models in a given clade
         broken_models = []
+        megaModels = []
         # models_paths = glob(f"{models_path}/*.xml")
         for clade, paths in clades_paths.items():
             if not reaction_counts_path:
@@ -43,7 +42,7 @@ class MSProbability:
                     reaction_counts = load(jsonIn)
 
             # constructing the probabilistic clade model
-            megaModel = CobraModelConverter(Model(clade, f"MegaModel for {clade} from {reaction_counts['numMembers']} members")).build()
+            megaModel = FBAModel({clade, f"MegaModel for {clade} from {reaction_counts['numMembers']} members"}).build()
             remaining_rxnIDs = set(list(reaction_counts.keys()))
             captured_reactions, captured_rxnIDs = [], set()
             print("\n", clade)
@@ -67,7 +66,15 @@ class MSProbability:
                 rxn.probability = reaction_counts[rxn.id]
             megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
             megaModel.solver.update()
-            print(set([rxn.id for rxn in megaModel.reactions]).symmetric_difference(set([rxnID for rxnID in reaction_counts])), megaModel.reactions[0].probability)
-            export_name = path.join("reaction_counts", f"{clade}.xml") if \
-                re.search(f"[0-9]+\/[0-9]+\/[0-9]+", model_path) else f"{path.join(path.dirname(model_path), clade)}.xml"
+            print("missing reactions: ", set([rxnID for rxnID in reaction_counts])-set([rxn.id for rxn in megaModel.reactions]))
+            export_name = path.join("reaction_counts", f"{clade}.xml") if re.search(f"[0-9]+\/[0-9]+\/[0-9]+", model_path) else f"{path.join(path.dirname(model_path), clade)}.xml"
             write_sbml_model(megaModel, export_name)
+            megaModels.append(megaModel)
+        return megaModels if len(clades_paths) > 1 else megaModels[0]
+
+    @staticmethod
+    def apply_threshold(model, threshold=0.5):
+        for rxn in model.reactions:
+            if rxn.probability < threshold:
+                rxn.lower_bound = rxn.upper_bound = 0
+        return model
