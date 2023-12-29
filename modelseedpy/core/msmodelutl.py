@@ -1362,6 +1362,7 @@ class MSModelUtil:
 
     def add_medium(self, media, uniform_uptake=None):
         # add the new media and its flux constraints
+        if media is None:  return self.model.medium
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
         if not hasattr(media, "items"):  media = FBAHelper.convert_kbase_media(media)
         self.model.medium = {ex: uptake for ex, uptake in media.items() if ex in exIDs}

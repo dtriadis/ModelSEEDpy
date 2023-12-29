@@ -101,7 +101,7 @@ class MSMinimalMedia:
         if simulated_sol.status != "optimal":
             raise FeasibilityError(f"The simulation was not optimal, with a status of {simulated_sol.status}")
         if printing:
-            print(f"The minimal flux media consists of {len(min_media)} compounds and a {total_flux} total influx,"
+            print(f"The minimal flux media for {org_model.id} consists of {len(min_media)} compounds and a {total_flux} total influx,"
                   f" with a growth value of {simulated_sol.objective_value}")
         return min_media, sol
 

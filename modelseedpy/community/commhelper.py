@@ -4,7 +4,7 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
 from cobra.medium import minimal_medium
-from commscores import GEMCompatibility
+# from commscores import GEMCompatibility
 from cobra.flux_analysis import pfba
 from collections import OrderedDict
 from optlang.symbolics import Zero
@@ -56,8 +56,8 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     ------
     """
     # construct the new model
-    models = org_models if not standardize else GEMCompatibility.standardize(
-        org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
+    models = org_models #if not standardize else GEMCompatibility.standardize(
+        #org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
     biomass_indices = []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
