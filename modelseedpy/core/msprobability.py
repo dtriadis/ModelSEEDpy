@@ -1,10 +1,7 @@
 from cobra.io import write_sbml_model, read_sbml_model
 from cobrakbase.core.kbasefba.fbamodel import FBAModel
-from numpy import load as npload
 from optlang import Objective
-from os import path, environ
 from json import load, dump
-from glob import glob
 from os import path
 import re
 
@@ -14,8 +11,7 @@ class MSProbability:
     @staticmethod
     def megaModel(clades_paths, kbase_api=None, reaction_counts_path=None):
         # compute the reaction frequency of the models in a given clade
-        broken_models = []
-        megaModels = []
+        broken_models, megaModels = [], []
         # models_paths = glob(f"{models_path}/*.xml")
         for clade, paths in clades_paths.items():
             if not reaction_counts_path:
@@ -38,8 +34,7 @@ class MSProbability:
                 reaction_counts.update({rxnID:(count/reaction_counts["numMembers"]) for rxnID,count in reaction_counts.items() if rxnID != "numMembers"})
                 with open(f"reaction_counts/{clade}_reactions.json", "w") as jsonOut:   dump(reaction_counts, jsonOut, indent=3)
             else:
-                with open(reaction_counts_path, "r") as jsonIn:
-                    reaction_counts = load(jsonIn)
+                with open(reaction_counts_path, "r") as jsonIn:   reaction_counts = load(jsonIn)
 
             # constructing the probabilistic clade model
             megaModel = FBAModel({clade, f"MegaModel for {clade} from {reaction_counts['numMembers']} members"}).build()
@@ -58,9 +53,7 @@ class MSProbability:
                 captured_rxnIDs.update([rxn.id for rxn in model.reactions])
                 remaining_rxnIDs -= captured_rxnIDs
                 if remaining_rxnIDs == set():   break
-            if captured_reactions == []:
-                print(f"No models for {clade} are defined.")
-                continue
+            if captured_reactions == []:   print(f"No models for {clade} are defined.")  ;  continue
             megaModel.add_reactions(list(captured_reactions))
             for rxn in megaModel.reactions:
                 rxn.probability = reaction_counts[rxn.id]
@@ -75,6 +68,5 @@ class MSProbability:
     @staticmethod
     def apply_threshold(model, threshold=0.5):
         for rxn in model.reactions:
-            if rxn.probability < threshold:
-                rxn.lower_bound = rxn.upper_bound = 0
+            if rxn.probability < threshold:   rxn.lower_bound = rxn.upper_bound = 0
         return model
