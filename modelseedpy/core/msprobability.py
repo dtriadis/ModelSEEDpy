@@ -10,6 +10,7 @@ import re
 
 class MSProbability:
         
+    # TODO - parallelize the code
     @staticmethod
     def megaModel(clades_paths, kbase_api=None, reaction_counts_path=None, numTotal="numMembers"):
         # compute the reaction frequency of the models in a given clade
@@ -46,6 +47,7 @@ class MSProbability:
             captured_reactions, captured_rxnIDs = [], set()
             print("\n", clade, end="\t")
             for model_path in paths:
+                print(model_path)
                 try:   model = read_sbml_model(model_path) if not kbase_api else kbase_api.get_from_ws(model_path)
                 except Exception as e:
                     print("broken", e, model_path)
