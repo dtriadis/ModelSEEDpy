@@ -1,5 +1,5 @@
-from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
+from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from cobra.io import write_sbml_model, read_sbml_model
 from optlang import Objective
 from json import load, dump
@@ -8,9 +8,22 @@ from cobra import Model
 import re
 
 
+
+def add_biomass_objective(megaModel, captured_rxnIDs):
+    if "bio1" in captured_rxnIDs:
+        megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
+    else:
+        for rxn in megaModel.reactions:
+            if "biomass" and not "EX_" in rxn.id:
+                megaModel.objective = Objective(rxn.flux_expression, direction="max")
+                break
+    megaModel.solver.update()
+    return megaModel
+
+
 class MSProbability:
         
-    # TODO - parallelize the code
+    # TODO - add the parallelization code with an argument flag
     @staticmethod
     def megaModel(clades_paths, kbase_api=None, reaction_counts_path=None, numTotal="numMembers"):
         # compute the reaction frequency of the models in a given clade
@@ -45,9 +58,9 @@ class MSProbability:
             # megaModel = CobraModelConverter(Model(clade, name=f"MegaModel for {clade} from {reaction_counts[numTotal]} members")).build()
             remaining_rxnIDs = set(list(reaction_counts.keys()))
             captured_reactions, captured_rxnIDs = [], set()
-            print("\n", clade, end="\t")
+            print("\n", clade)#, end="\t")
             for model_path in paths:
-                print(model_path)
+                print(f"{model_path}\t\t\t\t\t\t\t\t\t\t\t\t", end="\r")
                 try:   model = read_sbml_model(model_path) if not kbase_api else kbase_api.get_from_ws(model_path)
                 except Exception as e:
                     print("broken", e, model_path)
@@ -63,8 +76,7 @@ class MSProbability:
             for rxn in megaModel.reactions:
                 rxn.notes["probability"] = reaction_counts[rxn.id]
             ## add objective
-            megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
-            megaModel.solver.update()
+            megaModel = add_biomass_objective(megaModel, captured_rxnIDs)
             ## evaluate the model and export
             missingRxns = set([rxnID for rxnID in reaction_counts]) - set([rxn.id for rxn in megaModel.reactions]) - {numTotal}
             if missingRxns != set():  print("\nmissing reactions: ", missingRxns)
@@ -79,3 +91,21 @@ class MSProbability:
         for rxn in model.reactions:
             if rxn.notes["probability"] < threshold:   rxn.lower_bound = rxn.upper_bound = 0
         return model
+    
+
+    @staticmethod
+    def community_simulation(comm_model, environment, metabolomics_data):
+        from modelseedpy.core.msmodelutl import MSModelUtil
+        from modelseedpy.fbapkg.elementuptakepkg import ElementUptakePkg
+
+        mdlUtil = MSModelUtil(comm_model)
+        # constrain the model to 95% of the optimum growth
+        mdlUtil.add_medium(environment)
+        maxBioSol = mdlUtil.model.optimize()
+        mdlUtil.add_minimal_objective_cons(maxBioSol*.95)
+        # constrain carbon consumption
+        elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
+        # evaluate the metabolomics data over time
+        metabolomics_data
+
+        return
