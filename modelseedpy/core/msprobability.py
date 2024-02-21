@@ -21,20 +21,6 @@ def add_biomass_objective(megaModel, captured_rxnIDs):
     megaModel.solver.update()
     return megaModel
 
-def print_lp(self, filename=None):
-    if filename is None:
-        filename = self.lp_filename
-    if filename is not None:
-        with open(filename + ".lp", "w") as out:
-            complete_line = ""
-            for line in str(self.model.solver).splitlines():
-                if ":" in line:
-                    if complete_line != "":
-                        out.write(complete_line)
-                    complete_line = ""
-                else:
-                    complete_line += line
-
 
 class MSProbability:
         
@@ -126,32 +112,45 @@ class MSProbability:
 
 
     @staticmethod
-    def prFBA(model_s_, environment=None, min_prob=0.01, prob_exp=1, ex_weight=100, printLP=False):
+    def prFBA(model_s_, environment=None, abundances=None, min_prob=0.01, prob_exp=1, ex_weight=100, printLP=False):
         from modelseedpy.community.commhelper import build_from_species_models
         from modelseedpy.core.msmodelutl import MSModelUtil
         from modelseedpy.fbapkg.elementuptakepkg import ElementUptakePkg
         from optlang.symbolics import Zero
 
-        if len(model_s_) > 1:   model_s_ = build_from_species_models(model_s_)
-        mdlUtil = MSModelUtil(model_s_)
-        # constrain the model to 95% of the optimum growth
+        mdlUtil = MSModelUtil(model_s_ if len(model_s_) == 1 else build_from_species_models(model_s_, abundances=abundances))
         if environment is not None:  mdlUtil.add_medium(environment)
+        # constrain carbon consumption and community composition
+        elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
+        # TODO add kinetic constraint, to limit skewed member usage
+
+        ## the total flux through the members proportional to their relative abundances
+        # constrain the model to 95% of the optimum growth
         maxBioSol = mdlUtil.model.slim_optimize()
         mdlUtil.add_minimal_objective_cons(maxBioSol*.95)
 
-        # constrain carbon consumption
-        # elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
-
         # weight internal reactions based on their probabilities
         ## minimize:   sum_r^R ((1-probabilities^prob_exp_r)*flux_r + min_prob) + sum_ex^EX(ex_weight*EX)
-        coef = {rxn.forward_variable: max(min_prob, (1-float(rxn.notes["probability"])**prob_exp))
-                for rxn in mdlUtil.internal_list() if "rxn" == rxn.id[0:3]}
-        ## also minimize exchange reactions for a pseudo-parsimonious solution
-        coef.update({ex.forward_variable: ex_weight for ex in mdlUtil.exchange_list()})
-        print(coef)
+        coef = {}
+        for rxn in mdlUtil.model.reactions:
+            if "rxn" == rxn.id[0:3]:
+                coef.update({rxn.forward_variable: max(min_prob, (1-float(rxn.notes["probability"])**prob_exp))})
+                coef.update({rxn.reverse_variable: max(min_prob, (1-float(rxn.notes["probability"])**prob_exp))})
+            elif "EX_" == rxn.id[0:3]:
+                coef.update({rxn.forward_variable: ex_weight})
+                coef.update({rxn.reverse_variable: ex_weight})
         mdlUtil.add_objective(Zero, "min", coef)
 
-        if printLP:  print_lp("prFBA")
+        if printLP:
+            with open("prFBA.lp", "w") as out:
+                complete_line = ""
+                for line in str(mdlUtil.model.solver).splitlines():
+                    if ":" in line:
+                        if complete_line != "":
+                            out.write(complete_line)
+                        complete_line = ""
+                    else:
+                        complete_line += line
 
 
         # simulate the probabilistic model with the respective probabilities

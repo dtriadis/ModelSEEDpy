@@ -142,8 +142,19 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     # Create community biomass
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
-    if abundances:  abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
-    else:  abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
+    ## constrain the community abundances
+    if abundances:
+        abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
+    else:
+        abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
+    ## proportionally limit the fluxes to their abundances 
+    coef = {}
+    for model in models:
+        coef[member_biomasses[model.id]] = -abundances[model.id]
+        for rxn in model.reactions:
+            if rxn.id[:3] == "rxn":
+                coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
+    ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
