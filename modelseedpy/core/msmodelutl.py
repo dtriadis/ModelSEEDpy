@@ -219,6 +219,7 @@ class MSModelUtil:
 
     def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
+    
     def internal_list(self):
         exchanges, transports = self.exchange_list(), self.transport_list()
         return [rxn for rxn in self.model.reactions if rxn not in exchanges and rxn not in transports]
@@ -227,6 +228,8 @@ class MSModelUtil:
         all_transports = [rxn for rxn in self.model.reactions if len(set([
             met.id.split("_")[0] for met in rxn.reactants]).intersection(set([
             met.id.split("_")[0] for met in rxn.products]))) > 0]
+        # TODO look for compounds that have compounds in different compartments
+        # TODO PTS transporters would fail this logic
         # remove biomass reactions
         for rxn in all_transports:
             if "cpd11416" in [met.id.split("_")[0] for met in rxn.metabolites]:  all_transports.remove(rxn)
@@ -399,12 +402,21 @@ class MSModelUtil:
               f" were added to the model.")
         return output
 
-    def create_constraint(self, constraint, coef=None, sloppy=False):
+    def create_constraint(self, constraint, coef=None, sloppy=False, printing=False):
+        if printing:   print(coef)
         self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
-        if coef:
-            constraint.set_linear_coefficients(coef)
-            self.model.solver.update()
+        if coef:   constraint.set_linear_coefficients(coef)
+        self.model.solver.update()
+
+            # self.model.solver.update()
+            # for cons in self.model.constraints:
+            #     if cons.name == constraint.name:
+            #         cons.set_linear_coefficients(coef)
+            #         self.model.solver.update()
+        
+        # self.model.add_cons_vars(constraint, sloppy=sloppy)
+        # self.model.solver.update()
 
     def add_cons_vars(self, vars_cons, sloppy=False):
         self.model.add_cons_vars(vars_cons, sloppy=sloppy)

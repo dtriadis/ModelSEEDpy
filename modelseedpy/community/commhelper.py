@@ -1,5 +1,6 @@
 from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
 from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
+from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
@@ -35,7 +36,7 @@ def correct_nonMSID(nonMSobject, output, model_index):
 
 
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
-                              standardize=False, MSmodel = True, copy_models=True, printing=False):
+                              standardize=False, MSmodel = True, commkinetics=True, copy_models=True, printing=False):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -128,7 +129,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     string_diff = ""
                     for index, let in enumerate(finalID):
                         if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
-                    if string_diff != f"_{compartment}{model_index}":  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
+                    if string_diff != f"_{compartment}{model_index}" and printing:  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
         # else:
         #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
@@ -147,13 +148,6 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
     else:
         abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
-    ## proportionally limit the fluxes to their abundances 
-    coef = {}
-    for model in models:
-        coef[member_biomasses[model.id]] = -abundances[model.id]
-        for rxn in model.reactions:
-            if rxn.id[:3] == "rxn":
-                coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
     ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
@@ -162,10 +156,23 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
-    newmodel.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
+    newutl.model.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
+    ## proportionally limit the fluxes to their abundances 
+    if commkinetics:  add_commkinetics(newutl, models, member_biomasses, abundances)
+    # add the metadata of community composition
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
+    # print([cons.name for cons in newutl.model.constraints])
     return newutl.model
+
+def add_commkinetics(util, models, member_biomasses, abundances):
+    # TODO this creates an error with the member biomass reactions not being identified in the model
+    coef = {}
+    for model in models:
+        coef[member_biomasses[model.id]] = -abundances[member_biomasses[model.id]]
+        for rxn in model.reactions:
+            if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
+    util.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
 
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):

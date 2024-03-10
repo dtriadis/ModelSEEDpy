@@ -1,4 +1,6 @@
 from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
+from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
+from modelseedpy.community.mscommunity import MSCommunity
 from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from cobra.io import write_sbml_model, read_sbml_model
 from optlang import Objective
@@ -112,19 +114,24 @@ class MSProbability:
 
 
     @staticmethod
-    def prFBA(model_s_, environment=None, abundances=None, min_prob=0.01, prob_exp=1, ex_weight=100, printLP=False):
+    def prFBA(model_s_, environment=None, abundances=None, min_prob=0.01, prob_exp=1, ex_weight=100,
+              commkinetics=None, kinetics_coef=1000, printLP=False):
         from modelseedpy.community.commhelper import build_from_species_models
         from modelseedpy.core.msmodelutl import MSModelUtil
         from modelseedpy.fbapkg.elementuptakepkg import ElementUptakePkg
         from optlang.symbolics import Zero
 
-        mdlUtil = MSModelUtil(model_s_ if len(model_s_) == 1 else build_from_species_models(model_s_, abundances=abundances))
+        # commkinetics = commkinetics if commkinetics is not None else len(model_s_) > 1
+        mdlUtil = MSModelUtil(model_s_ if len(model_s_) == 1 else build_from_species_models(model_s_, abundances=abundances, commkinetics=commkinetics))
         if environment is not None:  mdlUtil.add_medium(environment)
         # constrain carbon consumption and community composition
         elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
-        # TODO add kinetic constraint, to limit skewed member usage
-
         ## the total flux through the members proportional to their relative abundances
+        if not commkinetics and len(model_s_) > 1:
+            pkgmgr = MSPackageManager.get_pkg_mgr(mdlUtil.model)
+            MSCommObj = MSCommunity(mdlUtil.model, model_s_)
+            pkgmgr.getpkg("CommKineticPkg").build_package(kinetics_coef, MSCommObj)
+
         # constrain the model to 95% of the optimum growth
         maxBioSol = mdlUtil.model.slim_optimize()
         mdlUtil.add_minimal_objective_cons(maxBioSol*.95)
@@ -141,20 +148,23 @@ class MSProbability:
                 coef.update({rxn.reverse_variable: ex_weight})
         mdlUtil.add_objective(Zero, "min", coef)
 
+
+        print([cons.name for cons in mdlUtil.model.constraints])
+
+
         if printLP:
             with open("prFBA.lp", "w") as out:
-                complete_line = ""
-                for line in str(mdlUtil.model.solver).splitlines():
-                    if ":" in line:
-                        if complete_line != "":
-                            out.write(complete_line)
-                        complete_line = ""
-                    else:
-                        complete_line += line
+                out.write(str(mdlUtil.model.solver))
 
 
         # simulate the probabilistic model with the respective probabilities
         return mdlUtil.model.optimize()
+
+
+    @staticmethod
+    def iterative_simulation(time_iterative_data):
+        pass
+
     
     
     def expressionData(data):
