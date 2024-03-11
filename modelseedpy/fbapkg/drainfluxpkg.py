@@ -3,17 +3,19 @@
 from __future__ import absolute_import
 
 import logging
+
 logger = logging.getLogger("modelseedpy")
 
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 
-#Base class for FBA packages
+
+# Base class for FBA packages
 class DrainFluxPkg(BaseFBAPkg):
     def __init__(self, model):
         BaseFBAPkg.__init__(self, model, "drain flux", {}, {"drain"})
         self.update_drain_fluxes()
-        
+
         self.validate_parameters(
             parameters,
             [],

@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 from optlang.symbolics import add
@@ -12,6 +13,7 @@ from modelseedpy.multiomics.msexpression import GENOME, COLUMN_NORM
 
 # Options for default behavior
 LOWEST = 10
+
 
 # Base class for FBA packages
 class ProteomeFittingPkg(BaseFBAPkg):

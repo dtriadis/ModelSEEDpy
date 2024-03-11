@@ -44,7 +44,6 @@ def parse_fasta_str(faa_str, split=DEFAULT_SPLIT, h_func=None):
                         1
                     ]  # The unit test throws an error when this is commented
 
-
             seq = MSFeature(seq_id, "", desc)
         else:
             if seq:

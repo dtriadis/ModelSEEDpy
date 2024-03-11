@@ -32,9 +32,9 @@ class Template:
             charge=comp_compound.charge,
             compartment=compartment,
         )
-        met.annotation[
-            "sbo"
-        ] = "SBO:0000247"  # simple chemical - Simple, non-repetitive chemical entity.
+        met.annotation["sbo"] = (
+            "SBO:0000247"  # simple chemical - Simple, non-repetitive chemical entity.
+        )
         met.annotation["seed.compound"] = base_id
         return met
 

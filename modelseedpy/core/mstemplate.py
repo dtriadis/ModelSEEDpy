@@ -51,17 +51,17 @@ class TemplateBiomassCoefficientType(Enum):
 
 class MSTemplateMetabolite:
     def __init__(
-            self,
-            cpd_id,
-            formula=None,
-            name="",
-            default_charge=None,
-            mass=None,
-            delta_g=None,
-            delta_g_error=None,
-            is_cofactor=False,
-            abbreviation="",
-            aliases=None,
+        self,
+        cpd_id,
+        formula=None,
+        name="",
+        default_charge=None,
+        mass=None,
+        delta_g=None,
+        delta_g_error=None,
+        is_cofactor=False,
+        abbreviation="",
+        aliases=None,
     ):
         self.id = cpd_id
         self.formula = formula
@@ -226,20 +226,20 @@ class MSTemplateSpecies(Metabolite):
 
 class MSTemplateReaction(Reaction):
     def __init__(
-            self,
-            rxn_id: str,
-            reference_id: str,
-            name="",
-            subsystem="",
-            lower_bound=0.0,
-            upper_bound=None,
-            reaction_type=TemplateReactionType.CONDITIONAL,
-            gapfill_direction="=",
-            base_cost=1000,
-            reverse_penalty=1000,
-            forward_penalty=1000,
-            status="OK",
-            reference_reaction_id=None,
+        self,
+        rxn_id: str,
+        reference_id: str,
+        name="",
+        subsystem="",
+        lower_bound=0.0,
+        upper_bound=None,
+        reaction_type=TemplateReactionType.CONDITIONAL,
+        gapfill_direction="=",
+        base_cost=1000,
+        reverse_penalty=1000,
+        forward_penalty=1000,
+        status="OK",
+        reference_reaction_id=None,
     ):
         """
 
@@ -265,7 +265,11 @@ class MSTemplateReaction(Reaction):
         self.reverse_penalty = reverse_penalty
         self.forward_penalty = forward_penalty
         self.status = status
-        self.type = reaction_type.value if isinstance(reaction_type, TemplateReactionType) else reaction_type
+        self.type = (
+            reaction_type.value
+            if isinstance(reaction_type, TemplateReactionType)
+            else reaction_type
+        )
         self.complexes = DictList()
         self.templateReactionReagents = {}
         self._template = None
@@ -352,7 +356,10 @@ class MSTemplateReaction(Reaction):
 
     @property
     def cstoichiometry(self):
-        return {(met.id, met.compartment): coefficient for (met, coefficient) in self.metabolites.items()}
+        return {
+            (met.id, met.compartment): coefficient
+            for (met, coefficient) in self.metabolites.items()
+        }
 
     def remove_role(self, role_id):
         pass
@@ -386,7 +393,7 @@ class MSTemplateReaction(Reaction):
                         role_id = complex_role["templaterole_ref"].split("/")[-1]
                         res[complex_id].add(role_id)
                 else:
-                    print(f'The complex for ID {complex_id} does not exist.')
+                    print(f"The complex for ID {complex_id} does not exist.")
         return res
 
     def get_data(self):
@@ -445,12 +452,12 @@ class MSTemplateReaction(Reaction):
 
 class MSTemplateBiomassComponent:
     def __init__(
-            self,
-            metabolite,
-            comp_class: str,
-            coefficient: float,
-            coefficient_type: str,
-            linked_metabolites,
+        self,
+        metabolite,
+        comp_class: str,
+        coefficient: float,
+        coefficient_type: str,
+        linked_metabolites,
     ):
         """
         :param metabolite:MSTemplateMetabolite
@@ -501,18 +508,18 @@ class MSTemplateBiomassComponent:
 
 class MSTemplateBiomass:
     def __init__(
-            self,
-            bio_id,
-            name,
-            type,
-            dna,
-            rna,
-            protein,
-            lipid,
-            cellwall,
-            cofactor,
-            energy,
-            other,
+        self,
+        bio_id,
+        name,
+        type,
+        dna,
+        rna,
+        protein,
+        lipid,
+        cellwall,
+        cofactor,
+        energy,
+        other,
     ):
         """
 
@@ -544,19 +551,19 @@ class MSTemplateBiomass:
 
     @staticmethod
     def from_table(
-            filename_or_df,
-            template,
-            bio_id,
-            name,
-            type,
-            dna,
-            rna,
-            protein,
-            lipid,
-            cellwall,
-            cofactor,
-            energy,
-            other,
+        filename_or_df,
+        template,
+        bio_id,
+        name,
+        type,
+        dna,
+        rna,
+        protein,
+        lipid,
+        cellwall,
+        cofactor,
+        energy,
+        other,
     ):
         self = MSTemplateBiomass(
             bio_id,
@@ -584,8 +591,8 @@ class MSTemplateBiomass:
                 )
                 linked_mets = {}
                 if (
-                        isinstance(row["linked_compounds"], str)
-                        and len(row["linked_compounds"]) > 0
+                    isinstance(row["linked_compounds"], str)
+                    and len(row["linked_compounds"]) > 0
                 ):
                     array = row["linked_compounds"].split("|")
                     for item in array:
@@ -625,7 +632,7 @@ class MSTemplateBiomass:
         return self
 
     def add_biomass_component(
-            self, metabolite, comp_class, coefficient, coefficient_type, linked_mets={}
+        self, metabolite, comp_class, coefficient, coefficient_type, linked_mets={}
     ):
         biocomp = MSTemplateBiomassComponent(
             metabolite, comp_class, coefficient, coefficient_type, linked_mets
@@ -701,16 +708,14 @@ class MSTemplateBiomass:
             )
             specific_reactions["dna"].name = "DNA synthesis"
             if "rxn13783_c" + index in model.reactions:
-                specific_reactions[
-                    "dna"
-                ].gene_reaction_rule = model.reactions.get_by_id(
-                    "rxn13783_c" + index
-                ).gene_reaction_rule
-                specific_reactions["dna"].notes[
-                    "modelseed_complex"
-                ] = model.reactions.get_by_id("rxn13783_c" + index).notes[
-                    "modelseed_complex"
-                ]
+                specific_reactions["dna"].gene_reaction_rule = (
+                    model.reactions.get_by_id("rxn13783_c" + index).gene_reaction_rule
+                )
+                specific_reactions["dna"].notes["modelseed_complex"] = (
+                    model.reactions.get_by_id("rxn13783_c" + index).notes[
+                        "modelseed_complex"
+                    ]
+                )
                 model.remove_reactions(
                     [model.reactions.get_by_id("rxn13783_c" + index)]
                 )
@@ -727,16 +732,14 @@ class MSTemplateBiomass:
             )
             specific_reactions["protein"].name = "Protein synthesis"
             if "rxn13782_c" + index in model.reactions:
-                specific_reactions[
-                    "protein"
-                ].gene_reaction_rule = model.reactions.get_by_id(
-                    "rxn13782_c" + index
-                ).gene_reaction_rule
-                specific_reactions["protein"].notes[
-                    "modelseed_complex"
-                ] = model.reactions.get_by_id("rxn13782_c" + index).notes[
-                    "modelseed_complex"
-                ]
+                specific_reactions["protein"].gene_reaction_rule = (
+                    model.reactions.get_by_id("rxn13782_c" + index).gene_reaction_rule
+                )
+                specific_reactions["protein"].notes["modelseed_complex"] = (
+                    model.reactions.get_by_id("rxn13782_c" + index).notes[
+                        "modelseed_complex"
+                    ]
+                )
                 model.remove_reactions(
                     [model.reactions.get_by_id("rxn13782_c" + index)]
                 )
@@ -752,16 +755,14 @@ class MSTemplateBiomass:
             )
             specific_reactions["rna"].name = "mRNA synthesis"
             if "rxn13784_c" + index in model.reactions:
-                specific_reactions[
-                    "rna"
-                ].gene_reaction_rule = model.reactions.get_by_id(
-                    "rxn13784_c" + index
-                ).gene_reaction_rule
-                specific_reactions["rna"].notes[
-                    "modelseed_complex"
-                ] = model.reactions.get_by_id("rxn13784_c" + index).notes[
-                    "modelseed_complex"
-                ]
+                specific_reactions["rna"].gene_reaction_rule = (
+                    model.reactions.get_by_id("rxn13784_c" + index).gene_reaction_rule
+                )
+                specific_reactions["rna"].notes["modelseed_complex"] = (
+                    model.reactions.get_by_id("rxn13784_c" + index).notes[
+                        "modelseed_complex"
+                    ]
+                )
                 model.remove_reactions(
                     [model.reactions.get_by_id("rxn13784_c" + index)]
                 )
@@ -783,19 +784,19 @@ class MSTemplateBiomass:
                         bio_type_hash[type] = {"items": [], "total_mw": 0}
                     if FBAHelper.metabolite_mw(met):
                         bio_type_hash[type]["total_mw"] += (
-                                -1 * FBAHelper.metabolite_mw(met) * comp.coefficient / 1000
+                            -1 * FBAHelper.metabolite_mw(met) * comp.coefficient / 1000
                         )
                     bio_type_hash[type]["items"].append(comp)
         for type in bio_type_hash:
             for comp in bio_type_hash[type]["items"]:
                 coef = None
                 if (
-                        comp.coefficient_type == "MOLFRACTION"
-                        or comp.coefficient_type == "MOLSPLIT"
+                    comp.coefficient_type == "MOLFRACTION"
+                    or comp.coefficient_type == "MOLSPLIT"
                 ):
                     coef = (
-                                   type_abundances[type] / bio_type_hash[type]["total_mw"]
-                           ) * comp.coefficient
+                        type_abundances[type] / bio_type_hash[type]["total_mw"]
+                    ) * comp.coefficient
                 elif comp.coefficient_type == "MULTIPLIER":
                     coef = type_abundances[type] * comp.coefficient
                 elif comp.coefficient_type == "EXACT":
@@ -831,7 +832,7 @@ class MSTemplateBiomass:
                         if type not in ("dna", "protein", "rna") or classic:
                             if met in metabolites:
                                 metabolites[met] += (
-                                        coef * comp.linked_metabolites[l_met]
+                                    coef * comp.linked_metabolites[l_met]
                                 )
                             else:
                                 metabolites[met] = coef * comp.linked_metabolites[l_met]
@@ -927,7 +928,7 @@ class NewModelTemplateRole:
 
 class NewModelTemplateComplex:
     def __init__(
-            self, complex_id, name, source="", reference="", confidence=0, template=None
+        self, complex_id, name, source="", reference="", confidence=0, template=None
     ):
         """
 
@@ -990,15 +991,27 @@ class NewModelTemplateComplex:
 
     def __str__(self):
         return " and ".join(
-            ["{}{}{}".format(role[0].id, ":trig" if role[1][0] else "", ":optional" if role[1][1] else "") for role in
-             self.roles.items()])
+            [
+                "{}{}{}".format(
+                    role[0].id,
+                    ":trig" if role[1][0] else "",
+                    ":optional" if role[1][1] else "",
+                )
+                for role in self.roles.items()
+            ]
+        )
 
     def __repr__(self):
         return "<%s %s at 0x%x>" % (self.__class__.__name__, self.id, id(self))
 
     def _repr_html_(self):
         complexes = format_long_string(
-            ', '.join("{}:{}:{}:{}".format(r[0].id, r[0].name, r[1][0], r[1][1]) for r in self.roles.items()), 200)
+            ", ".join(
+                "{}:{}:{}:{}".format(r[0].id, r[0].name, r[1][0], r[1][1])
+                for r in self.roles.items()
+            ),
+            200,
+        )
         return f"""
         <table>
             <tr>
@@ -1017,7 +1030,7 @@ class NewModelTemplateComplex:
 
 class MSTemplateCompartment:
     def __init__(
-            self, compartment_id: str, name: str, ph: float, hierarchy=0, aliases=None
+        self, compartment_id: str, name: str, ph: float, hierarchy=0, aliases=None
     ):
         self.id = compartment_id
         self.name = name
@@ -1044,14 +1057,14 @@ class MSTemplateCompartment:
 
 class MSTemplate:
     def __init__(
-            self,
-            template_id,
-            name="",
-            domain="",
-            template_type="",
-            version=1,
-            info=None,
-            args=None,
+        self,
+        template_id,
+        name="",
+        domain="",
+        template_type="",
+        version=1,
+        info=None,
+        args=None,
     ):
         self.id = template_id
         self.name = name
@@ -1072,19 +1085,19 @@ class MSTemplate:
 
     ################# Replaces biomass reactions from an input TSV table ############################
     def overwrite_biomass_from_table(
-            self,
-            filename_or_df,
-            bio_id,
-            name,
-            type,
-            dna,
-            rna,
-            protein,
-            lipid,
-            cellwall,
-            cofactor,
-            energy,
-            other,
+        self,
+        filename_or_df,
+        bio_id,
+        name,
+        type,
+        dna,
+        rna,
+        protein,
+        lipid,
+        cellwall,
+        cofactor,
+        energy,
+        other,
     ):
         if isinstance(filename_or_df, str):
             filename_or_df = pd.read_table(filename_or_df)
@@ -1135,7 +1148,9 @@ class MSTemplate:
         """
         duplicates = list(set(self.compartments).intersection(compartments))
         if len(duplicates) > 0:
-            logger.error(f"The duplicate compartments {duplicates} cannot be added to the template")
+            logger.error(
+                f"The duplicate compartments {duplicates} cannot be added to the template"
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         for x in compartments:
@@ -1150,7 +1165,9 @@ class MSTemplate:
         """
         duplicates = list(set(self.roles).intersection(roles))
         if len(duplicates) > 0:
-            logger.error(f"The duplicate roles {duplicates} cannot be added to the template")
+            logger.error(
+                f"The duplicate roles {duplicates} cannot be added to the template"
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         for x in roles:
@@ -1165,7 +1182,9 @@ class MSTemplate:
         """
         duplicates = list(set(self.complexes).intersection(complexes))
         if len(duplicates) > 0:
-            logger.error(f"The duplicate complexes {duplicates} cannot be added to the template")
+            logger.error(
+                f"The duplicate complexes {duplicates} cannot be added to the template"
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         roles_to_add = []
@@ -1193,7 +1212,9 @@ class MSTemplate:
         """
         duplicates = list(set(self.compounds).intersection(compounds))
         if len(duplicates) > 0:
-            logger.error(f"The duplicate compounds {duplicates} cannot be added to the template")
+            logger.error(
+                f"The duplicate compounds {duplicates} cannot be added to the template"
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         for cpd in compounds:
@@ -1208,7 +1229,9 @@ class MSTemplate:
         """
         duplicates = list(set(self.compcompounds).intersection(comp_compounds))
         if len(duplicates) > 0:
-            logger.error(f"The duplicate comp compounds {duplicates} cannot be added to the template")
+            logger.error(
+                f"The duplicate comp compounds {duplicates} cannot be added to the template"
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         for comp_cpd in comp_compounds:
@@ -1244,7 +1267,10 @@ class MSTemplate:
         """
         duplicates = list(set(self.reactions).intersection(reaction_list))
         if len(duplicates) > 0:
-            logger.error("unable to add reactions [%s] already present in the template", duplicates)
+            logger.error(
+                "unable to add reactions [%s] already present in the template",
+                duplicates,
+            )
             return None  # !!! Should the non-duplicate compartments still be added?
 
         for rxn in reaction_list:
@@ -1254,7 +1280,9 @@ class MSTemplate:
             for comp_cpd, coefficient in rxn.metabolites.items():
                 if comp_cpd.id not in self.compcompounds:
                     self.add_comp_compounds([comp_cpd])
-                metabolites_replace[self.compcompounds.get_by_id(comp_cpd.id)] = coefficient
+                metabolites_replace[self.compcompounds.get_by_id(comp_cpd.id)] = (
+                    coefficient
+                )
             for cpx in rxn.complexes:
                 if cpx.id not in self.complexes:
                     self.add_complexes([cpx])
@@ -1281,7 +1309,7 @@ class MSTemplate:
         last_id = 0
         for obj in object_list:
             if obj.id.startswith(prefix):
-                number_part = id[len(prefix):]
+                number_part = id[len(prefix) :]
                 if len(number_part) == 5:
                     last_id = max(last_id, int(number_part))
         return last_id
@@ -1396,17 +1424,17 @@ class MSTemplate:
 
 class MSTemplateBuilder:
     def __init__(
-            self,
-            template_id,
-            name="",
-            domain="",
-            template_type="",
-            version=1,
-            info=None,
-            biochemistry=None,
-            biomasses=None,
-            pathways=None,
-            subsystems=None,
+        self,
+        template_id,
+        name="",
+        domain="",
+        template_type="",
+        version=1,
+        info=None,
+        biochemistry=None,
+        biomasses=None,
+        pathways=None,
+        subsystems=None,
     ):
         self.id = template_id
         self.version = version
@@ -1465,20 +1493,30 @@ class MSTemplateBuilder:
         for role in role_match:
             all_roles_present &= role_match[role]
         if all_roles_present:
-            logger.debug(f'At least one complex does not express all one role of {role_ids}.')
+            logger.debug(
+                f"At least one complex does not express all one role of {role_ids}."
+            )
             return None
         complex_id = self.template.get_complex_from_roles(role_ids)
         if complex_id is None:
-            logger.warning(f'A corresponding complex for the roles {role_ids} cannot be found.')
+            logger.warning(
+                f"A corresponding complex for the roles {role_ids} cannot be found."
+            )
             if auto_complex:
-                role_names = set([self.template.get_role(role_id)['name'] for role_id in role_ids])
-                logger.warning(f'The complex {role_names} will be added to the template.')
+                role_names = set(
+                    [self.template.get_role(role_id)["name"] for role_id in role_ids]
+                )
+                logger.warning(
+                    f"The complex {role_names} will be added to the template."
+                )
                 complex_id = self.template.add_complex_from_role_names(role_names)
             else:
                 return None
-        complex_ref = '~/complexes/id/' + complex_id
-        if complex_ref in template_rxn.data['templatecomplex_refs']:
-            logger.debug(f'The template already contains a complex reference {complex_ref} for complex {complex_id}.')
+        complex_ref = "~/complexes/id/" + complex_id
+        if complex_ref in template_rxn.data["templatecomplex_refs"]:
+            logger.debug(
+                f"The template already contains a complex reference {complex_ref} for complex {complex_id}."
+            )
             return None
         return complex_ref
 
@@ -1488,8 +1526,8 @@ class MSTemplateBuilder:
     def with_compound_compartment(self):
         pass
 
-    def with_compartment(self, cmp_id, name, ph=7, index='0'):
-        res = list(x for x in self.compartments if x['id'] == cmp_id)
+    def with_compartment(self, cmp_id, name, ph=7, index="0"):
+        res = list(x for x in self.compartments if x["id"] == cmp_id)
         if len(res) > 0:
             return res[0]
 
@@ -1507,12 +1545,26 @@ class MSTemplateBuilder:
         return self
 
     def build(self):
-        template = MSTemplate(self.id, self.name, self.domain, self.template_type, self.version)
-        template.add_compartments([MSTemplateCompartment.from_dict(x) for x in self.compartments])
-        template.add_compounds([MSTemplateMetabolite.from_dict(x) for x in self.compounds])
-        template.add_comp_compounds([MSTemplateSpecies.from_dict(x) for x in self.compartment_compounds])
+        template = MSTemplate(
+            self.id, self.name, self.domain, self.template_type, self.version
+        )
+        template.add_compartments(
+            [MSTemplateCompartment.from_dict(x) for x in self.compartments]
+        )
+        template.add_compounds(
+            [MSTemplateMetabolite.from_dict(x) for x in self.compounds]
+        )
+        template.add_comp_compounds(
+            [MSTemplateSpecies.from_dict(x) for x in self.compartment_compounds]
+        )
         template.add_roles([NewModelTemplateRole.from_dict(x) for x in self.roles])
-        template.add_complexes([NewModelTemplateComplex.from_dict(x, template) for x in self.complexes])
-        template.add_reactions([MSTemplateReaction.from_dict(x, template) for x in self.reactions])
-        template.biomasses += [AttrDict(x) for x in self.biomasses]  # TODO: biomass object
+        template.add_complexes(
+            [NewModelTemplateComplex.from_dict(x, template) for x in self.complexes]
+        )
+        template.add_reactions(
+            [MSTemplateReaction.from_dict(x, template) for x in self.reactions]
+        )
+        template.biomasses += [
+            AttrDict(x) for x in self.biomasses
+        ]  # TODO: biomass object
         return template

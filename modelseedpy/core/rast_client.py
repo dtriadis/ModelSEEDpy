@@ -8,6 +8,7 @@ from modelseedpy.core.msgenome import (
     normalize_role,
 )  # move this to this lib     # !!! read_fasta is never used
 
+
 ### delete this after ####
 def aux_rast_result(res, g):
     search_name_to_genes = {}

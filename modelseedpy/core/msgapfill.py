@@ -127,9 +127,9 @@ class MSGapfill:
         if before_filtering:
             filter_msg = " before filtering "
             note = "FBF"
-        gf_sensitivity[media.id][target][
-            note
-        ] = self.mdlutl.find_unproducible_biomass_compounds(target)
+        gf_sensitivity[media.id][target][note] = (
+            self.mdlutl.find_unproducible_biomass_compounds(target)
+        )
         if target != "rxn00062_c0":
             self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity")
         logger.warning(
@@ -142,7 +142,7 @@ class MSGapfill:
         )
         return False
 
-    def prefilter(self,test_conditions=None):
+    def prefilter(self, test_conditions=None):
         """Prefilters the database by removing any reactions that break specified ATP tests
         Parameters
         ----------
@@ -201,13 +201,13 @@ class MSGapfill:
             self.gfpkgmgr.getpkg("GapfillingPkg").set_min_objective(minimum_obj)
 
         # Testing if gapfilling can work before filtering
-        if not self.test_gapfill_database(media,target,before_filtering=prefilter):
+        if not self.test_gapfill_database(media, target, before_filtering=prefilter):
             return None
 
         # Filtering
         if prefilter:
             self.prefilter()
-            if not self.test_gapfill_database(media,target,before_filtering=False):
+            if not self.test_gapfill_database(media, target, before_filtering=False):
                 return None
 
         # Printing the gapfilling LP file
@@ -256,7 +256,7 @@ class MSGapfill:
         ).parameters["minimum_obj"]
         self.last_solution["binary_check"] = binary_check
         return self.last_solution
-    
+
     def run_global_gapfilling(
         self,
         medias,
@@ -285,8 +285,8 @@ class MSGapfill:
         final_media = []
         final_targets = []
         final_thresholds = []
-        for i,media in enumerate(medias):
-            if self.test_gapfill_database(media,targets[i],before_filtering=True):
+        for i, media in enumerate(medias):
+            if self.test_gapfill_database(media, targets[i], before_filtering=True):
                 final_media.append(media)
                 final_targets.append(targets[i])
                 final_thresholds.append(thresholds[i])
@@ -296,46 +296,48 @@ class MSGapfill:
             medias = []
             targets = []
             thresholds = []
-            for i,media in enumerate(final_media):
-                if self.test_gapfill_database(media,final_targets[i],before_filtering=True):
+            for i, media in enumerate(final_media):
+                if self.test_gapfill_database(
+                    media, final_targets[i], before_filtering=True
+                ):
                     medias.append(media)
                     targets.append(targets[i])
                     thresholds.append(thresholds[i])
-        #If none of the media conditions can be gapfilled, then return None
+        # If none of the media conditions can be gapfilled, then return None
         if len(medias) == 0:
             return None
-        #Instantiating all models to be merged
+        # Instantiating all models to be merged
         merged_model = None
         model_list = []
         pkgmgrs = {}
-        for i,media in enumerate(medias):
+        for i, media in enumerate(medias):
             model_cpy = self.gfmodel.copy()
             pkgmgrs[model_cpy] = MSPackageManager.get_pkg_mgr(model_cpy)
-            #Creating max flux variables
+            # Creating max flux variables
             pkgmgrs[model_cpy].getpkg("GapfillingPkg").create_max_flux_variables()
-            #Setting the objective
+            # Setting the objective
             model_cpy.objective = self.gfmodel.problem.Objective(
                 self.gfmodel.reactions.get_by_id(targets[i]).flux_expression,
                 direction="max",
             )
             pkgmgrs[model_cpy].getpkg("GapfillingPkg").reset_original_objective()
-            #Setting the media
+            # Setting the media
             pkgmgrs[model_cpy].getpkg("KBaseMediaPkg").build_package(media)
-            #Setting the minimum objective
+            # Setting the minimum objective
             pkgmgrs[model_cpy].getpkg("GapfillingPkg").set_min_objective(thresholds[i])
             if i == 0:
                 merged_model = model_cpy
             else:
                 model_list.append(model_cpy)
-        #Merging all models
+        # Merging all models
         gfpkg = pkgmgrs[merged_model].getpkg("GapfillingPkg")
-        pkgmgrs[merged_model].getpkg("ProblemReplicationPkg").build_package({
-            "models":model_list,
-            "shared_variable_packages":{
-                gfpkg : ["rmaxf","fmaxf"]
+        pkgmgrs[merged_model].getpkg("ProblemReplicationPkg").build_package(
+            {
+                "models": model_list,
+                "shared_variable_packages": {gfpkg: ["rmaxf", "fmaxf"]},
             }
-        })
-        #Setting the objective
+        )
+        # Setting the objective
         reaction_objective = merged_model.problem.Objective(Zero, direction="min")
         obj_coef = dict()
         for reaction in merged_model.reactions:
@@ -344,19 +346,23 @@ class MSGapfill:
                     if "reverse" in gfpkg.gapfilling_penalties[reaction.id]:
                         if reaction.id in gfpkg.maxflux_variables:
                             if "reverse" in gfpkg.maxflux_variables[reaction.id]:
-                                obj_coef[gfpkg.maxflux_variables[reaction.id]["reverse"]] = abs(
+                                obj_coef[
+                                    gfpkg.maxflux_variables[reaction.id]["reverse"]
+                                ] = abs(
                                     gfpkg.gapfilling_penalties[reaction.id]["reverse"]
                                 )
                     if "forward" in gfpkg.gapfilling_penalties[reaction.id]:
                         if reaction.id in gfpkg.maxflux_variables:
                             if "forward" in gfpkg.maxflux_variables[reaction.id]:
-                                obj_coef[gfpkg.maxflux_variables[reaction.id]["forward"]] = abs(
+                                obj_coef[
+                                    gfpkg.maxflux_variables[reaction.id]["forward"]
+                                ] = abs(
                                     gfpkg.gapfilling_penalties[reaction.id]["forward"]
                                 )
         merged_model.objective = reaction_objective
         reaction_objective.set_linear_coefficients(obj_coef)
         gfpkg.parameters["gfobj"] = self.model.objective
-        
+
         # Printing the gapfilling LP file
         if self.lp_filename:
             with open(self.lp_filename, "w") as out:
@@ -372,8 +378,15 @@ class MSGapfill:
             return None
 
         # Computing solution and ensuring all tests still pass
-        self.last_solution = {"new":{},"reversed":{},"media":medias[0],"target":targets[0],"minobjective":thresholds[0],"binary_check":False}
-        #TODO : compute solution
+        self.last_solution = {
+            "new": {},
+            "reversed": {},
+            "media": medias[0],
+            "target": targets[0],
+            "minobjective": thresholds[0],
+            "binary_check": False,
+        }
+        # TODO : compute solution
         return self.last_solution
 
     def run_multi_gapfill(
@@ -387,7 +400,7 @@ class MSGapfill:
         check_for_growth=True,
         gapfilling_mode="Independent",
         run_sensitivity_analysis=True,
-        integrate_solutions=True
+        integrate_solutions=True,
     ):
         """Run gapfilling across an array of media conditions ultimately using different integration policies: simultaneous gapfilling, independent gapfilling, cumulative gapfilling
         Parameters
@@ -411,31 +424,31 @@ class MSGapfill:
         run_sensitivity_analysis : bool
             Indicates if sensitivity analysis should be run on the gapfilling solution to determine biomass dependency
         """
-        #If not integrating, backing up and replacing self.mdlutl
+        # If not integrating, backing up and replacing self.mdlutl
         oldmdlutl = self.mdlutl
         if not integrate_solutions:
             self.model = self.model.copy()
             self.mdlutl = MSModelUtil.get(self.model)
-        #Setting the default minimum objective
+        # Setting the default minimum objective
         if not default_minimum_objective:
             default_minimum_objective = self.default_minimum_objective
-        #Running prefiltering once for all media if specified. Rememeber - filtering does not care about the target or media - it is just a set of tests that are run on the database
+        # Running prefiltering once for all media if specified. Rememeber - filtering does not care about the target or media - it is just a set of tests that are run on the database
         if prefilter:
             self.prefilter()
-        #Iterating over all media and running gapfilling
+        # Iterating over all media and running gapfilling
         solution_dictionary = {}
         cumulative_solution = []
         targets = []
         thresholds = []
         for item in media_list:
             targets.append(target)
-            #Determining the minimum objective for the current media
+            # Determining the minimum objective for the current media
             minimum_obj = default_minimum_objective
             if item in minimum_objectives:
                 minimum_obj = minimum_objectives[item]
             thresholds.append(minimum_obj)
-            #Implementing specified gapfilling mode
-            if gapfilling_mode == "Independent" or gapfilling_mode == "Cumulative":           
+            # Implementing specified gapfilling mode
+            if gapfilling_mode == "Independent" or gapfilling_mode == "Cumulative":
                 solution = self.run_gapfilling(
                     item,
                     target,
@@ -443,7 +456,7 @@ class MSGapfill:
                     binary_check,
                     False,
                 )
-                #If there is a solution, go ahead and integrate it into the model
+                # If there is a solution, go ahead and integrate it into the model
                 if solution:
                     solution_dictionary[item] = self.integrate_gapfill_solution(
                         solution,
@@ -451,12 +464,16 @@ class MSGapfill:
                         remove_unneeded_reactions=True,
                         check_for_growth=check_for_growth,
                     )
-                    #If we are doing cumulative gapfilling, then we need adjust the gapfilling objective so it no longer penalizes using the current solution reactions
+                    # If we are doing cumulative gapfilling, then we need adjust the gapfilling objective so it no longer penalizes using the current solution reactions
                     if gapfilling_mode == "Cumulative":
-                        self.gfpkgmgr.getpkg("GapfillingPkg").compute_gapfilling_penalties(cumulative_solution)
-                        self.gfpkgmgr.getpkg("GapfillingPkg").build_gapfilling_objective_function()
+                        self.gfpkgmgr.getpkg(
+                            "GapfillingPkg"
+                        ).compute_gapfilling_penalties(cumulative_solution)
+                        self.gfpkgmgr.getpkg(
+                            "GapfillingPkg"
+                        ).build_gapfilling_objective_function()
         if gapfilling_mode == "Simultaneous":
-            #Now we run simultaneous gapfilling on a combination of all our various gapfilled models
+            # Now we run simultaneous gapfilling on a combination of all our various gapfilled models
             full_solution = self.run_global_gapfilling(
                 media_list,
                 targets,
@@ -465,26 +482,28 @@ class MSGapfill:
                 False,
                 check_for_growth,
             )
-            #Now we integrate the full solution into the model for every media which effectively determines which reactions are needed for each media
-            for i,item in enumerate(media_list):
+            # Now we integrate the full solution into the model for every media which effectively determines which reactions are needed for each media
+            for i, item in enumerate(media_list):
                 full_solution["media"] = item
                 full_solution["target"] = targets[i]
                 full_solution["minobjective"] = thresholds[i]
-                #In this case we donot remove unnneeded reactions from the model because they may be needed for other media
+                # In this case we donot remove unnneeded reactions from the model because they may be needed for other media
                 solution_dictionary[item] = self.integrate_gapfill_solution(
                     full_solution,
                     cumulative_solution=cumulative_solution,
                     remove_unneeded_reactions=False,
                     check_for_growth=check_for_growth,
                 )
-            #Now we remove reactions uneeded for any of the specified media conditions
-            #These is a danger here that the integration step will put a reaction into a solution that subsequently gets removed at this step. This is something to look out for
-            unneeded = self.mdlutl.test_solution(cumulative_solution,targets,media_list,thresholds,True)#Returns reactions in cumulative solution that are not needed for growth
+            # Now we remove reactions uneeded for any of the specified media conditions
+            # These is a danger here that the integration step will put a reaction into a solution that subsequently gets removed at this step. This is something to look out for
+            unneeded = self.mdlutl.test_solution(
+                cumulative_solution, targets, media_list, thresholds, True
+            )  # Returns reactions in cumulative solution that are not needed for growth
         elif gapfilling_mode == "Cumulative":
-            #Restoring the gapfilling objective function
+            # Restoring the gapfilling objective function
             self.gfpkgmgr.getpkg("GapfillingPkg").compute_gapfilling_penalties()
             self.gfpkgmgr.getpkg("GapfillingPkg").build_gapfilling_objective_function()
-        #Running sensitivity analysis once on the cumulative solution for all media
+        # Running sensitivity analysis once on the cumulative solution for all media
         """ 
         if run_sensitivity_analysis:#TODO - need to redesign this run operate on multiple solutions at once...
             logger.info(
@@ -509,14 +528,18 @@ class MSGapfill:
                 solution["target"], test_solution
             )
             self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity") """
-        #Restoring backedup model
+        # Restoring backedup model
         self.mdlutl = oldmdlutl
         self.model = oldmdlutl.model
-        #Returning the solution dictionary
+        # Returning the solution dictionary
         return solution_dictionary
-        
+
     def integrate_gapfill_solution(
-        self,solution,cumulative_solution=[],remove_unneeded_reactions=False,check_for_growth=True
+        self,
+        solution,
+        cumulative_solution=[],
+        remove_unneeded_reactions=False,
+        check_for_growth=True,
     ):
         """Integrating gapfilling solution into model
         Parameters
@@ -526,19 +549,19 @@ class MSGapfill:
         cumulative_solution : list
             Optional array to cumulatively track all reactions added to the model when integrating multiple solutions
         """
-        #Computing the initial length of cumulative solution before integrating current solution
+        # Computing the initial length of cumulative solution before integrating current solution
         starting_length = len(cumulative_solution)
         new_cumulative_reactions = []
-        #Reversing reactions reported by gapfilling solution in the model
+        # Reversing reactions reported by gapfilling solution in the model
         for rxn_id in solution["reversed"]:
             rxn = self.model.reactions.get_by_id(rxn_id)
             if solution["reversed"][rxn_id] == ">" and rxn.upper_bound <= 0:
-                new_cumulative_reactions.append([rxn_id, ">","reversed"])
+                new_cumulative_reactions.append([rxn_id, ">", "reversed"])
                 rxn.upper_bound = 100
             elif solution["reversed"][rxn_id] == "<" and rxn.lower_bound >= 0:
-                new_cumulative_reactions.append([rxn_id, "<","reversed"])
+                new_cumulative_reactions.append([rxn_id, "<", "reversed"])
                 rxn.lower_bound = -100
-        #Adding new reactions from the gapfilling solution into the model
+        # Adding new reactions from the gapfilling solution into the model
         for rxn_id in solution["new"]:
             if rxn_id not in self.model.reactions:
                 rxn = self.gfmodel.reactions.get_by_id(rxn_id)
@@ -557,22 +580,37 @@ class MSGapfill:
                     rxn = self.model.reactions.get_by_id(rxn_id)
                     rxn.gene_reaction_rule = bestgene
                 if solution["new"][rxn_id] == ">":
-                    new_cumulative_reactions.append([rxn_id, ">","new"])
+                    new_cumulative_reactions.append([rxn_id, ">", "new"])
                     rxn.upper_bound = 100
                     rxn.lower_bound = 0
                 else:
-                    new_cumulative_reactions.append([rxn_id, "<","new"])
+                    new_cumulative_reactions.append([rxn_id, "<", "new"])
                     rxn.upper_bound = 0
                     rxn.lower_bound = -100
-        #Testing the full cumulative solution to see which reactions are needed for current media/target
-        #Note - thus function does NOT change the bounds on the unneeded reactions
-        #Also, we run this only on the current solution target and media for now
+        # Testing the full cumulative solution to see which reactions are needed for current media/target
+        # Note - thus function does NOT change the bounds on the unneeded reactions
+        # Also, we run this only on the current solution target and media for now
         full_solution = cumulative_solution + new_cumulative_reactions
-        unneeded = self.mdlutl.test_solution(full_solution,[solution["target"]],[solution["media"]],[solution["minobjective"]],remove_unneeded_reactions,do_not_remove_list=cumulative_solution)#Returns reactions in cumulative solution that are not needed for growth
-        #We cannot assume unneeded reactions are truly unneeded because they may be needed for other media/target combinations
-        #But we still want to track them so we can remove them from the model if they are not needed for any media/target combination
-        #We also want to track which reactions are needed for the current media/target combination
-        current_media_target_solution = {"growth":0,"media":solution["media"],"target":solution["target"],"minobjective":solution["minobjective"],"binary_check":solution["binary_check"] ,"new":{},"reversed":{}}
+        unneeded = self.mdlutl.test_solution(
+            full_solution,
+            [solution["target"]],
+            [solution["media"]],
+            [solution["minobjective"]],
+            remove_unneeded_reactions,
+            do_not_remove_list=cumulative_solution,
+        )  # Returns reactions in cumulative solution that are not needed for growth
+        # We cannot assume unneeded reactions are truly unneeded because they may be needed for other media/target combinations
+        # But we still want to track them so we can remove them from the model if they are not needed for any media/target combination
+        # We also want to track which reactions are needed for the current media/target combination
+        current_media_target_solution = {
+            "growth": 0,
+            "media": solution["media"],
+            "target": solution["target"],
+            "minobjective": solution["minobjective"],
+            "binary_check": solution["binary_check"],
+            "new": {},
+            "reversed": {},
+        }
         for item in cumulative_solution:
             found = False
             for oitem in unneeded:
@@ -592,13 +630,13 @@ class MSGapfill:
                 cumulative_solution.append(item)
             elif not remove_unneeded_reactions:
                 cumulative_solution.append(item)
-        #Checking that the final integrated model grows
+        # Checking that the final integrated model grows
         if check_for_growth:
             self.mdlutl.pkgmgr.getpkg("KBaseMediaPkg").build_package(solution["media"])
             current_media_target_solution["growth"] = self.mdlutl.model.slim_optimize()
         # Adding the gapfilling solution data to the model, which is needed for saving the model in KBase
         self.mdlutl.add_gapfilling(current_media_target_solution)
-        #Return the stripped down solution object containing only needed reactions
+        # Return the stripped down solution object containing only needed reactions
         return current_media_target_solution
 
     def compute_reaction_weights_from_expression_data(self, omics_data, conditions=[]):

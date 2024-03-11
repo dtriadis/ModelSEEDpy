@@ -18,6 +18,7 @@ from modelseedpy.core.exceptions import FeasibilityError
 
 logger = logging.getLogger(__name__)
 
+
 # Adding a few exception classes to handle different types of errors
 class FeasibilityError(Exception):
     """Error in FBA formulation"""
@@ -47,7 +48,12 @@ class BaseFBAPkg:
             self.pkgmgr = MSPackageManager.get_pkg_mgr(model, 1)
         self.pkgmgr.addpkgobj(self)
 
-        self.constraints, self.variables, self.parameters, self.new_reactions = {}, {}, {}, {}
+        self.constraints, self.variables, self.parameters, self.new_reactions = (
+            {},
+            {},
+            {},
+            {},
+        )
         self.variable_types = variable_types
         self.constraint_types = constraint_types
 

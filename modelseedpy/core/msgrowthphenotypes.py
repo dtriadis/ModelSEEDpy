@@ -158,7 +158,14 @@ class MSGrowthPhenotype:
                 output["class"] = "FN"
             elif self.growth == 0:
                 output["class"] = "CN"
-        print(self.id,output["GROWING"],output["class"],output["growth"],output["baseline_growth"],growth_multiplier)
+        print(
+            self.id,
+            output["GROWING"],
+            output["class"],
+            output["growth"],
+            output["baseline_growth"],
+            growth_multiplier,
+        )
         return output
 
     def gapfill_model_for_phenotype(
@@ -420,7 +427,7 @@ class MSGrowthPhenotypes:
         gapfill_negatives=False,
         msgapfill=None,
         test_conditions=None,
-        ignore_growth_data=False
+        ignore_growth_data=False,
     ):
         """Simulates all the specified phenotype conditions and saves results
         Parameters
@@ -526,47 +533,54 @@ class MSGrowthPhenotypes:
             summary["Count"][0] = summary["Count"][0] / totalcount
         sdf = pd.DataFrame(summary)
         df = pd.DataFrame(data)
-        self.adjust_phenotype_calls(df,baseline_growth)
+        self.adjust_phenotype_calls(df, baseline_growth)
         return {"details": df, "summary": sdf}
 
-    def adjust_phenotype_calls(self,data,basline_growth):
+    def adjust_phenotype_calls(self, data, basline_growth):
         lowest = data["Simulated growth"].min()
         if basline_growth < lowest:
             lowest = basline_growth
         highest = data["Simulated growth"].max()
-        threshold = (highest-lowest)/2+lowest
-        if highest/(lowest+0.000001) < 1.5:
+        threshold = (highest - lowest) / 2 + lowest
+        if highest / (lowest + 0.000001) < 1.5:
             threshold = highest
-        print("Adjusting:",basline_growth,lowest,highest,threshold)
+        print("Adjusting:", basline_growth, lowest, highest, threshold)
         grow = 0
         nogrow = 0
         change = 0
-        for (i,item) in data.iterrows():
+        for i, item in data.iterrows():
             oldclass = item["Class"]
             if item["Simulated growth"] >= threshold:
                 grow += 1
                 if item["Class"] == "NOGROWTH":
-                    data.loc[i, 'Class'] = "GROWTH"
+                    data.loc[i, "Class"] = "GROWTH"
                     change += 1
                 elif item["Class"] == "FN":
-                    data.loc[i, 'Class'] = "CP"
+                    data.loc[i, "Class"] = "CP"
                     change += 1
                 elif item["Class"] == "CN":
-                    data.loc[i, 'Class'] = "FP"
-                    change += 1   
+                    data.loc[i, "Class"] = "FP"
+                    change += 1
             else:
                 nogrow += 1
                 if item["Class"] == "GROWTH":
-                    data.loc[i, 'Class'] = "NOGROWTH"
+                    data.loc[i, "Class"] = "NOGROWTH"
                     change += 1
                 elif item["Class"] == "CP":
-                    data.loc[i, 'Class'] = "FN"
+                    data.loc[i, "Class"] = "FN"
                     change += 1
                 elif item["Class"] == "FP":
-                    data.loc[i, 'Class'] = "CN"
+                    data.loc[i, "Class"] = "CN"
                     change += 1
             if oldclass != item["Class"]:
-                print("Adjusting",item["Phenotype"],"from",oldclass,"to",item["Class"]) 
+                print(
+                    "Adjusting",
+                    item["Phenotype"],
+                    "from",
+                    oldclass,
+                    "to",
+                    item["Class"],
+                )
 
     def fit_model_to_phenotypes(
         self,
@@ -579,7 +593,6 @@ class MSGrowthPhenotypes:
         integrate_results=True,
         global_gapfilling=True,
     ):
-
         """Simulates all the specified phenotype conditions and saves results
         Parameters
         ----------

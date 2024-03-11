@@ -7,6 +7,7 @@ from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from optlang import Variable
 import logging
 
+
 # Base class for FBA packages
 class ProblemReplicationPkg(BaseFBAPkg):
     def __init__(self, model):
@@ -22,9 +23,9 @@ class ProblemReplicationPkg(BaseFBAPkg):
             for obj_type in self.parameters["shared_variable_packages"][pkg]:
                 if obj_type in pkg.variables:
                     for objid in pkg.variables[obj_type]:
-                        shared_var_hash[
-                            pkg.variables[obj_type][objid].name
-                        ] = pkg.variables[obj_type][objid]
+                        shared_var_hash[pkg.variables[obj_type][objid].name] = (
+                            pkg.variables[obj_type][objid]
+                        )
         # Now copying over variables and constraints from other models and replacing shared variables
         count = 0
         for othermdl in self.parameters["models"]:

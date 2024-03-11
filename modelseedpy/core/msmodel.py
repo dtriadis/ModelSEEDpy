@@ -2,6 +2,7 @@
 import logging
 import re
 from cobra.core import Model
+
 # from pyeda.inter import (expr)  # wheels must be specially downloaded and installed for Windows https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyeda
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,11 @@ def get_reaction_constraints_from_direction(direction: str) -> (float, float):
 
 def get_direction_from_constraints(lower_bound, upper_bound):
     if lower_bound < 0 < upper_bound:
-        return '='
+        return "="
     elif upper_bound > 0:
-        return '>'
+        return ">"
     elif lower_bound < 0:
-        return '<'
+        return "<"
     logger.error(
         f"The [{lower_bound}, {upper_bound}] bounds are not amenable with a direction string."
     )

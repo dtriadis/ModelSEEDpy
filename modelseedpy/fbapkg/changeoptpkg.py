@@ -60,4 +60,6 @@ class ChangeOptPkg(BaseFBAPkg):
                 lb += -1 * abs(goal["flux"])
             else:
                 lb += abs(goal["flux"])
-            return BaseFBAPkg.build_constraint(self, obj_type, lb, None, coef, cobra_obj)
+            return BaseFBAPkg.build_constraint(
+                self, obj_type, lb, None, coef, cobra_obj
+            )

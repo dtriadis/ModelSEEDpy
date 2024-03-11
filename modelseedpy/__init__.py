@@ -17,24 +17,24 @@ __email__ = "chenry@anl.gov"
 __version__ = "0.3.3"
 
 logging_hash = {
-    "debug":logging.DEBUG,
-    "critical":logging.CRITICAL,
-    "error":logging.ERROR,
-    "warning":logging.WARNING,
-    "info":logging.INFO
+    "debug": logging.DEBUG,
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
 }
 
-#Configuing modelseedpy logger
+# Configuing modelseedpy logger
 logger = logging.getLogger(__name__)
 c_handler = logging.StreamHandler()
-c_handler.setLevel(logging_hash[config.get("logging","console_level")])
-c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+c_handler.setLevel(logging_hash[config.get("logging", "console_level")])
+c_format = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
-if config.get("logging","log_file") == "yes":
-    f_handler = logging.FileHandler(config.get("logging","filename"),mode="w")
-    f_handler.setLevel(logging_hash[config.get("logging","file_level")])
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+if config.get("logging", "log_file") == "yes":
+    f_handler = logging.FileHandler(config.get("logging", "filename"), mode="w")
+    f_handler.setLevel(logging_hash[config.get("logging", "file_level")])
+    f_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     f_handler.setFormatter(f_format)
     logger.addHandler(f_handler)
 
@@ -53,22 +53,58 @@ if "e0" not in cobra.medium.annotations.compartment_shortlist["e"]:
 
 import modelseedpy
 from modelseedpy.core import (
-    RastClient, MSGenome, MSBuilder, MSMedia, MSGrowthPhenotypes, MSGrowthPhenotype, MSModelUtil,
-    FBAHelper, MSEditorAPI, MSATPCorrection, MSGapfill, MSEquation, OptlangHelper,
-    commscores_report, steadycom_report, MSModelReport, AnnotationOntology,
+    RastClient,
+    MSGenome,
+    MSBuilder,
+    MSMedia,
+    MSGrowthPhenotypes,
+    MSGrowthPhenotype,
+    MSModelUtil,
+    FBAHelper,
+    MSEditorAPI,
+    MSATPCorrection,
+    MSGapfill,
+    MSEquation,
+    OptlangHelper,
+    commscores_report,
+    steadycom_report,
+    MSModelReport,
+    AnnotationOntology,
 )
 from modelseedpy.core.exceptions import *
 
 from modelseedpy.community import (
-    MSCommunity, CommunityMember, MSKineticsFBA, CommPhitting,
-    MSSteadyCom, build_from_species_models, phenotypes)
+    MSCommunity,
+    CommunityMember,
+    MSKineticsFBA,
+    CommPhitting,
+    MSSteadyCom,
+    build_from_species_models,
+    phenotypes,
+)
 
 from modelseedpy.biochem import ModelSEEDBiochem
 
 from modelseedpy.fbapkg import (
-    BaseFBAPkg, RevBinPkg, ReactionUsePkg, SimpleThermoPkg, TotalFluxPkg, BilevelPkg, CommKineticPkg,
-    KBaseMediaPkg, FluxFittingPkg, ProteomeFittingPkg, GapfillingPkg, MetaboFBAPkg, FlexibleBiomassPkg,
-    ProblemReplicationPkg, FullThermoPkg, MSPackageManager, ObjConstPkg, ChangeOptPkg, ElementUptakePkg
+    BaseFBAPkg,
+    RevBinPkg,
+    ReactionUsePkg,
+    SimpleThermoPkg,
+    TotalFluxPkg,
+    BilevelPkg,
+    CommKineticPkg,
+    KBaseMediaPkg,
+    FluxFittingPkg,
+    ProteomeFittingPkg,
+    GapfillingPkg,
+    MetaboFBAPkg,
+    FlexibleBiomassPkg,
+    ProblemReplicationPkg,
+    FullThermoPkg,
+    MSPackageManager,
+    ObjConstPkg,
+    ChangeOptPkg,
+    ElementUptakePkg,
 )
 
 from modelseedpy.multiomics import MSExpression

@@ -363,18 +363,20 @@ class MSATPCorrection:
                 atp_att["core_atp_gapfilling"][media.id]["score"] = len(
                     self.media_gapfill_stats[media]["new"].keys()
                 ) + 0.5 * len(self.media_gapfill_stats[media]["reversed"].keys())
-                atp_att["core_atp_gapfilling"][media.id][
-                    "new"
-                ] = self.media_gapfill_stats[media]["new"]
-                atp_att["core_atp_gapfilling"][media.id][
-                    "reversed"
-                ] = self.media_gapfill_stats[media]["reversed"]
+                atp_att["core_atp_gapfilling"][media.id]["new"] = (
+                    self.media_gapfill_stats[media]["new"]
+                )
+                atp_att["core_atp_gapfilling"][media.id]["reversed"] = (
+                    self.media_gapfill_stats[media]["reversed"]
+                )
             else:
                 atp_att["core_atp_gapfilling"][media.id] = {
                     "score": 1000,
                     "failed": True,
                 }
-            best_score = min(best_score, atp_att["core_atp_gapfilling"][media.id]["score"])
+            best_score = min(
+                best_score, atp_att["core_atp_gapfilling"][media.id]["score"]
+            )
 
         if self.max_gapfilling is None:
             self.max_gapfilling = best_score
@@ -410,7 +412,7 @@ class MSATPCorrection:
                 and MSGapfill.gapfill_count(self.media_gapfill_stats[media]) > 0
             ):
                 self.msgapfill.integrate_gapfill_solution(
-                    stats, self.cumulative_core_gapfilling,check_for_growth=False
+                    stats, self.cumulative_core_gapfilling, check_for_growth=False
                 )
                 # Adding reactions to gapfilling sensitivity structure so we can track all gapfilled reactions
                 gf_sensitivity = self.modelutl.get_attributes("gf_sensitivity", {})

@@ -61,29 +61,31 @@ ALIAS_MODELS = {
     "TS_Athaliana",
 }
 
+
 def convert_to_searchname(name):
     OriginalName = name
-    ending = "";
+    ending = ""
     if name[-1] == "-":
         ending = "-"
     name = name.lower()
-    name.replace(" ","")
-    name.replace(",","")
-    name.replace("-","")
-    name.replace("_","")
-    name.replace("(","")
-    name.replace(")","")
-    name.replace("}","")
-    name.replace("{","")
-    name.replace("[","")
-    name.replace("]","")
-    name.replace(":","")
-    name.replace("�","")
-    name.replace("'","")
-    name.replace("_","")
+    name.replace(" ", "")
+    name.replace(",", "")
+    name.replace("-", "")
+    name.replace("_", "")
+    name.replace("(", "")
+    name.replace(")", "")
+    name.replace("}", "")
+    name.replace("{", "")
+    name.replace("[", "")
+    name.replace("]", "")
+    name.replace(":", "")
+    name.replace("�", "")
+    name.replace("'", "")
+    name.replace("_", "")
     name += ending
-    name.replace("icacid","ate")
-    return name;
+    name.replace("icacid", "ate")
+    return name
+
 
 def get_low(ids):
     low = None
@@ -314,9 +316,9 @@ def _load_reactions(
                                 cpd_token.base_id = cpd.id
                                 cpd_token.compartment = cmp_token
                                 metabolites_indexed[cpd_index_id] = cpd_token
-                            reaction_metabolites[
-                                metabolites_indexed[cpd_index_id]
-                            ] = value
+                            reaction_metabolites[metabolites_indexed[cpd_index_id]] = (
+                                value
+                            )
                         rxn = ModelSEEDReaction2(
                             o["id"],
                             o.get("name"),

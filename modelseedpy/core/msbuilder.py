@@ -261,29 +261,32 @@ def build_gpr2(cpx_sets):
         return " or ".join(list_of_ors)
     return list_of_ors[0]
 
-def _reaction_sinks(self,model):
+
+def _reaction_sinks(self, model):
     reactions_sinks = []
-    for cpd_id in ['cpd02701_c0', 'cpd11416_c0', 'cpd15302_c0']:
+    for cpd_id in ["cpd02701_c0", "cpd11416_c0", "cpd15302_c0"]:
         if cpd_id in model.metabolites:
             met = model.metabolites.get_by_id(cpd_id)
-            rxn_exchange = Reaction('SK_'+met.id, 'Sink for '+met.name, 'exchanges', 0, 1000)
+            rxn_exchange = Reaction(
+                "SK_" + met.id, "Sink for " + met.name, "exchanges", 0, 1000
+            )
             rxn_exchange.add_metabolites({met: -1})
             rxn_exchange.annotation[SBO_ANNOTATION] = "SBO:0000627"
             reactions_sinks.append(rxn_exchange)
-    return reactions_sinks   
+    return reactions_sinks
 
 
-def build_gpr(cpx_gene_role):   #!!! Unused and redundant function
+def build_gpr(cpx_gene_role):  #!!! Unused and redundant function
     """
-#     example input:
-#      {'sdh': [{'b0721': 'sdhC', 'b0722': 'sdhD', 'b0723': 'sdhA', 'b0724': 'sdhB'}]}
+    #     example input:
+    #      {'sdh': [{'b0721': 'sdhC', 'b0722': 'sdhD', 'b0723': 'sdhA', 'b0724': 'sdhB'}]}
 
-#      (b0721 and b0722 and b0724 and b0723)
+    #      (b0721 and b0722 and b0724 and b0723)
 
-#      {'cpx1': [{'g1': 'role1', 'g3': 'role2'}, {'g2': 'role1', 'g3': 'role2'}]}
+    #      {'cpx1': [{'g1': 'role1', 'g3': 'role2'}, {'g2': 'role1', 'g3': 'role2'}]}
 
-    :param cpx_gene_role:
-    :return:
+        :param cpx_gene_role:
+        :return:
     """
     # save cpx_id and role_id in reaction annotation for KBase object
     gpr_or_ll = []
@@ -445,9 +448,11 @@ class MSBuilder:
                     sn,
                     triggering,
                     optional,
-                    set()
-                    if sn not in self.search_name_to_genes
-                    else set(self.search_name_to_genes[sn]),
+                    (
+                        set()
+                        if sn not in self.search_name_to_genes
+                        else set(self.search_name_to_genes[sn])
+                    ),
                 ]
         return template_reaction_complexes
 
@@ -711,9 +716,9 @@ class MSBuilder:
             template_reaction = self.template.reactions.get_by_id(rxn_id)
             for m in template_reaction.metabolites:
                 if m.compartment not in self.compartments:
-                    self.compartments[
-                        m.compartment
-                    ] = self.template.compartments.get_by_id(m.compartment)
+                    self.compartments[m.compartment] = (
+                        self.template.compartments.get_by_id(m.compartment)
+                    )
                 if m.id not in self.template_species_to_model_species:
                     model_metabolite = m.to_metabolite(self.index)
                     self.template_species_to_model_species[m.id] = model_metabolite
@@ -809,14 +814,14 @@ class MSBuilder:
                 if template_reaction:
                     for m in template_reaction.metabolites:
                         if m.compartment not in self.compartments:
-                            self.compartments[
-                                m.compartment
-                            ] = self.template.compartments.get_by_id(m.compartment)
+                            self.compartments[m.compartment] = (
+                                self.template.compartments.get_by_id(m.compartment)
+                            )
                         if m.id not in self.template_species_to_model_species:
                             model_metabolite = m.to_metabolite(self.index)
-                            self.template_species_to_model_species[
-                                m.id
-                            ] = model_metabolite
+                            self.template_species_to_model_species[m.id] = (
+                                model_metabolite
+                            )
                             self.base_model.add_metabolites([model_metabolite])
                     reaction = template_reaction.to_reaction(
                         self.base_model, self.index
@@ -879,14 +884,14 @@ class MSBuilder:
                 ):
                     for m in template_reaction.metabolites:
                         if m.compartment not in self.compartments:
-                            self.compartments[
-                                m.compartment
-                            ] = self.template.compartments.get_by_id(m.compartment)
+                            self.compartments[m.compartment] = (
+                                self.template.compartments.get_by_id(m.compartment)
+                            )
                         if m.id not in self.template_species_to_model_species:
                             model_metabolite = m.to_metabolite(self.index)
-                            self.template_species_to_model_species[
-                                m.id
-                            ] = model_metabolite
+                            self.template_species_to_model_species[m.id] = (
+                                model_metabolite
+                            )
                             self.base_model.add_metabolites([model_metabolite])
 
                     reaction = template_reaction.to_reaction(

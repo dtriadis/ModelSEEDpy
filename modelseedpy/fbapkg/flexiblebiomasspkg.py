@@ -39,6 +39,7 @@ classes = {
     "energy": {"cpd00008": 1},
 }
 
+
 # Base class for FBA packages
 class FlexibleBiomassPkg(BaseFBAPkg):
     def __init__(self, model):
@@ -160,11 +161,11 @@ class FlexibleBiomassPkg(BaseFBAPkg):
                             ]
                         )
                     else:
-                        object_stoichiometry[
-                            class_coef[met_class][msid]
-                        ] = self.parameters["bio_rxn"].metabolites[
-                            class_coef[met_class][msid]
-                        ]
+                        object_stoichiometry[class_coef[met_class][msid]] = (
+                            self.parameters["bio_rxn"].metabolites[
+                                class_coef[met_class][msid]
+                            ]
+                        )
                     total_coef += abs(object_stoichiometry[class_coef[met_class][msid]])
                 if (
                     (met_class == "rna" or met_class == "dna")

@@ -8,6 +8,7 @@ from optlang.symbolics import Zero, add  # !!! add is never used
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 
+
 # Base class for FBA packages
 class ReactionUsePkg(BaseFBAPkg):
     def __init__(self, model):

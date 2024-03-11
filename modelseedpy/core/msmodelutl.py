@@ -104,7 +104,7 @@ class MSModelUtil:
     def build_from_kbase_json_file(filename, kbaseapi):
         """
         Builds an MSModelUtil object from a KBase JSON file.
-        
+
         Args:
             filename (str): The path to the KBase JSON file.
             kbaseapi (KBaseAPI): An instance of the KBase API.
@@ -118,16 +118,23 @@ class MSModelUtil:
 
     def __init__(self, model):
         self.model = model
-        if environment is not None:  self.add_medium(environment)
+        if environment is not None:
+            self.add_medium(environment)
         self.id = model.id
         if copy:
             org_obj_val = model.slim_optimize()
-            self.model = model.copy()  ;  self.model.objective = model.objective
+            self.model = model.copy()
+            self.model.objective = model.objective
             new_obj_val = self.model.slim_optimize()
-            if not isclose(org_obj_val, new_obj_val, rel_tol=1e-2) and org_obj_val > 1e-2:
-                raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
-                                 f" where the original objective value is {org_obj_val}"
-                                 f" and the new objective value is {new_obj_val}.")
+            if (
+                not isclose(org_obj_val, new_obj_val, rel_tol=1e-2)
+                and org_obj_val > 1e-2
+            ):
+                raise ModelError(
+                    f"The {model.id} objective value is corrupted by being copied,"
+                    f" where the original objective value is {org_obj_val}"
+                    f" and the new objective value is {new_obj_val}."
+                )
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.model)
         self.wsid = None
         self.atputl = None
@@ -158,6 +165,7 @@ class MSModelUtil:
 
     def add_timeout(self, timeout_s=10):
         from optlang.interface import Configuration
+
         Configuration(self.model.problem, timeout=timeout_s)
 
     def printlp(self, lpfilename="debug.lp"):
@@ -190,17 +198,21 @@ class MSModelUtil:
         if self.metabolite_hash == None:
             self.build_metabolite_hash()
         if name in self.metabolite_hash:
-            if not compartment:  return self.metabolite_hash[name]
+            if not compartment:
+                return self.metabolite_hash[name]
             for met in self.metabolite_hash[name]:
                 array = met.id.split("_")
-                if array[1] == compartment or met.compartment == compartment:  return [met]
+                if array[1] == compartment or met.compartment == compartment:
+                    return [met]
             return None
         sname = MSModelUtil.search_name(name)
         if sname in self.search_metabolite_hash:
-            if not compartment:  return self.search_metabolite_hash[sname]
+            if not compartment:
+                return self.search_metabolite_hash[sname]
             for met in self.search_metabolite_hash[sname]:
                 array = met.id.split("_")
-                if array[1] == compartment or met.compartment == compartment:  return [met]
+                if array[1] == compartment or met.compartment == compartment:
+                    return [met]
             return None
         logger.info(name + " not found in model!")
         return []
@@ -226,35 +238,54 @@ class MSModelUtil:
         for cpd in self.model.metabolites:
             msid = MSModelUtil.metabolite_msid(cpd)
             if msid != None:
-                if msid not in output:  output[msid] = []
+                if msid not in output:
+                    output[msid] = []
                 output[msid].append(cpd)
         return output
 
     def exchange_list(self):
-        return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
-    
+        return [rxn for rxn in self.model.reactions if "EX_" in rxn.id]
+
     def internal_list(self):
         exchanges, transports = self.exchange_list(), self.transport_list()
-        return [rxn for rxn in self.model.reactions if rxn not in exchanges and rxn not in transports]
+        return [
+            rxn
+            for rxn in self.model.reactions
+            if rxn not in exchanges and rxn not in transports
+        ]
 
     def transport_list(self):
-        all_transports = [rxn for rxn in self.model.reactions if len(set([
-            met.id.split("_")[0] for met in rxn.reactants]).intersection(set([
-            met.id.split("_")[0] for met in rxn.products]))) > 0]
+        all_transports = [
+            rxn
+            for rxn in self.model.reactions
+            if len(
+                set([met.id.split("_")[0] for met in rxn.reactants]).intersection(
+                    set([met.id.split("_")[0] for met in rxn.products])
+                )
+            )
+            > 0
+        ]
         # TODO look for compounds that have compounds in different compartments
         # TODO PTS transporters would fail this logic
         # remove biomass reactions
         for rxn in all_transports:
-            if "cpd11416" in [met.id.split("_")[0] for met in rxn.metabolites]:  all_transports.remove(rxn)
+            if "cpd11416" in [met.id.split("_")[0] for met in rxn.metabolites]:
+                all_transports.remove(rxn)
         return all_transports
 
     def carbon_mets(self):
-        return [met for met in self.model.metabolites if 'C' in met.elements]
+        return [met for met in self.model.metabolites if "C" in met.elements]
 
     def carbon_exchange_list(self, include_unknown=True):
         if not include_unknown:
-            return [ex for ex in self.exchange_list() if "C" in ex.reactants[0].elements]
-        return [ex for ex in self.exchange_list() if not ex.reactants[0].elements or "C" in ex.reactants[0].elements]
+            return [
+                ex for ex in self.exchange_list() if "C" in ex.reactants[0].elements
+            ]
+        return [
+            ex
+            for ex in self.exchange_list()
+            if not ex.reactants[0].elements or "C" in ex.reactants[0].elements
+        ]
 
     def carbon_exchange_mets_list(self, include_unknown=True):
         return self.metabolites_set(self.carbon_exchange_list(include_unknown))
@@ -263,11 +294,14 @@ class MSModelUtil:
         return self.metabolites_set(self.exchange_list())
 
     def media_exchanges_list(self):
-        return [exRXN for exRXN in self.exchange_list() if exRXN.id in self.model.medium]
+        return [
+            exRXN for exRXN in self.exchange_list() if exRXN.id in self.model.medium
+        ]
 
     def metabolites_set(self, reactions_set=None, ids=False):
         rxns = reactions_set or self.model.reactions
-        if ids:  return {met.id for rxn in rxns for met in rxn.metabolites}
+        if ids:
+            return {met.id for rxn in rxns for met in rxn.metabolites}
         return {met for rxn in rxns for met in rxn.metabolites}
 
     def bio_rxns_list(self):
@@ -275,16 +309,20 @@ class MSModelUtil:
 
     def compatibilize(self, conflicts_file_name="orig_conflicts.json", printing=False):
         from commscores import GEMCompatibility
+
         self.model = GEMCompatibility.standardize(
-            [self.model], conflicts_file_name=conflicts_file_name, printing=printing)[0]
+            [self.model], conflicts_file_name=conflicts_file_name, printing=printing
+        )[0]
         return self.model
 
     def standard_exchanges(self):
         for ex in self.exchange_list():
             if len(ex.reactants) != 1 and len(ex.products) != 0:
-                raise ModelError(f"The ex {ex.id} possesses {len(ex.reactants)} reactants and "
-                                 f"{len(ex.products)} products, which are non-standard and are incompatible"
-                                 f" with various ModelSEED operations.")
+                raise ModelError(
+                    f"The ex {ex.id} possesses {len(ex.reactants)} reactants and "
+                    f"{len(ex.products)} products, which are non-standard and are incompatible"
+                    f" with various ModelSEED operations."
+                )
 
     def nonexchange_reaction_count(self):
         count = 0
@@ -332,7 +370,7 @@ class MSModelUtil:
                     # No cytosol compound exists so choosing the first version we found that does exist
                     cpd = mets[0]
                 if found:
-                    #No transporter currently exists - adding exchange reaction for the compound that does exist
+                    # No transporter currently exists - adding exchange reaction for the compound that does exist
                     output.append(cpd.id)
                     exchange_list.append(cpd)
         if len(exchange_list) > 0:
@@ -381,11 +419,15 @@ class MSModelUtil:
             self.attributes["gene_count"] = len(self.model.genes)
             self.model.computed_attributes = self.attributes
 
-    def add_ms_reaction(self, rxn_dict, msdb_path=None, msdb_object=None, comp_trans=["c0", "e0"]):
-        if msdb_object:  modelseed = msdb_object
+    def add_ms_reaction(
+        self, rxn_dict, msdb_path=None, msdb_object=None, comp_trans=["c0", "e0"]
+    ):
+        if msdb_object:
+            modelseed = msdb_object
         else:
             # from modelseedpy.biochem.modelseed_biochem import ModelSEEDBiochem
             from modelseedpy.biochem import from_local
+
             # modelseed = ModelSEEDBiochem.get()
             modelseed = from_local(msdb_path)
         output = []
@@ -401,31 +443,43 @@ class MSModelUtil:
                     logger.critical(f"The compartment index {comp_num} is out of range")
                 comp_str = comp_trans[comp_num]
                 met_output = self.find_met(met.id, comp_str)
-                new_met = Metabolite(f"{met.id}_{comp_str}", name=f"{met.name}_{comp_str}",
-                                     compartment=comp_str) if not met_output else met_output[0]
+                new_met = (
+                    Metabolite(
+                        f"{met.id}_{comp_str}",
+                        name=f"{met.name}_{comp_str}",
+                        compartment=comp_str,
+                    )
+                    if not met_output
+                    else met_output[0]
+                )
                 metabolites_to_add[new_met] = stoich
-                if new_met.id not in model_mets:  self.model.add_metabolites([new_met])
+                if new_met.id not in model_mets:
+                    self.model.add_metabolites([new_met])
             new_reaction.add_metabolites(metabolites_to_add)
             output.append(new_reaction)
             print(f"The {new_reaction.id} reaction is defined.")
         self.model.add_reactions(output)
-        print(f"{len(output)} reactions and {len(self.model.metabolites)-len(model_mets)} metabolites"
-              f" were added to the model.")
+        print(
+            f"{len(output)} reactions and {len(self.model.metabolites)-len(model_mets)} metabolites"
+            f" were added to the model."
+        )
         return output
 
     def create_constraint(self, constraint, coef=None, sloppy=False, printing=False):
-        if printing:   print(coef)
+        if printing:
+            print(coef)
         self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
-        if coef:   constraint.set_linear_coefficients(coef)
+        if coef:
+            constraint.set_linear_coefficients(coef)
         self.model.solver.update()
 
-            # self.model.solver.update()
-            # for cons in self.model.constraints:
-            #     if cons.name == constraint.name:
-            #         cons.set_linear_coefficients(coef)
-            #         self.model.solver.update()
-        
+        # self.model.solver.update()
+        # for cons in self.model.constraints:
+        #     if cons.name == constraint.name:
+        #         cons.set_linear_coefficients(coef)
+        #         self.model.solver.update()
+
         # self.model.add_cons_vars(constraint, sloppy=sloppy)
         # self.model.solver.update()
 
@@ -461,17 +515,26 @@ class MSModelUtil:
     def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None):
         if "min_value" not in self.model.constraints:
             objective_expr = objective_expr or self.model.objective.expression
-            self.create_constraint(Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+            self.create_constraint(
+                Constraint(objective_expr, lb=min_value, ub=None, name="min_value")
+            )
             # print(self.model.constraints["min_value"])
         else:
-            print(f"The min_value constraint already exists in {self.model.id}, "
-                  f"hence the lb is simply updated from"
-                  f" {self.model.constraints['min_value'].lb} to {min_value}.\n")
+            print(
+                f"The min_value constraint already exists in {self.model.id}, "
+                f"hence the lb is simply updated from"
+                f" {self.model.constraints['min_value'].lb} to {min_value}.\n"
+            )
             self.model.constraints["min_value"].lb = min_value
 
     def add_exchange_to_model(self, cpd, rxnID):
-        self.model.add_boundary(metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
-                                reaction_id=rxnID, type="exchange", lb=cpd.minFlux, ub=cpd.maxFlux)
+        self.model.add_boundary(
+            metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
+            reaction_id=rxnID,
+            type="exchange",
+            lb=cpd.minFlux,
+            ub=cpd.maxFlux,
+        )
 
     def update_model_media(self, media):
         medium = self.model.medium
@@ -600,7 +663,7 @@ class MSModelUtil:
     ):
         rxnref = "~/template/reactions/id/rxn00000_c"
         if re.search("rxn\d+_[a-z]+", rxn.id):
-            rxnref = re.sub("\d+$","",f"~/template/reactions/id/{rxn.id}")
+            rxnref = re.sub("\d+$", "", f"~/template/reactions/id/{rxn.id}")
         rxn_data = {
             "id": rxn.id,
             "aliases": [],
@@ -662,13 +725,21 @@ class MSModelUtil:
     #################################################################################
     # Functions related to gapfilling of models
     #################################################################################
-    def test_solution(self,solution,targets,medias,thresholds=[0.1],remove_unneeded_reactions=False,do_not_remove_list=[]):
+    def test_solution(
+        self,
+        solution,
+        targets,
+        medias,
+        thresholds=[0.1],
+        remove_unneeded_reactions=False,
+        do_not_remove_list=[],
+    ):
         """Tests if every reaction in a given gapfilling solution is actually needed for growth. Note, this code assumes the gapfilling solution is already integrated.
 
         Parameters
         ----------
         solution : {"new":{string reaction_id: string direction},"reversed":{string reaction_id: string direction}}
-                    or 
+                    or
                     list<tuple<string - reaction id, string direction>>
             Data for gapfilling solution to be tested
         target : string,
@@ -683,80 +754,88 @@ class MSModelUtil:
         Raises
         ------
         """
-        #Saving the current objective
+        # Saving the current objective
         current_objective = self.model.objective
-        #Saving the current media
+        # Saving the current media
         current_media = self.pkgmgr.getpkg("KBaseMediaPkg").current_media
-        #Computing the initial objective values
+        # Computing the initial objective values
         initial_objectives = []
-        for (i,target) in enumerate(targets):
-            #Setting the media
+        for i, target in enumerate(targets):
+            # Setting the media
             self.pkgmgr.getpkg("KBaseMediaPkg").build_package(medias[i])
-            #Setting the objective
+            # Setting the objective
             self.model.objective = target
-            #Computing the objective value
+            # Computing the objective value
             objective = self.model.slim_optimize()
             initial_objectives.append(objective)
-            logger.debug("Starting objective for " + medias[i].id + "/"+target+" = " + str(objective))
-        #Iterating through solution reactions and flagging them if they are unneeded to achieve the specified minimum objective
+            logger.debug(
+                "Starting objective for "
+                + medias[i].id
+                + "/"
+                + target
+                + " = "
+                + str(objective)
+            )
+        # Iterating through solution reactions and flagging them if they are unneeded to achieve the specified minimum objective
         unneeded = []
-        #If object is a dictionary, convert to a list
-        if isinstance(solution,dict):
+        # If object is a dictionary, convert to a list
+        if isinstance(solution, dict):
             converted_solution = []
             types = ["new", "reversed"]
             for key in types:
                 for rxn_id in solution[key]:
                     converted_solution.append([rxn_id, solution[key][rxn_id], key])
             solution = converted_solution
-        #Processing solution in standardized format
+        # Processing solution in standardized format
         for item in solution:
-            rxn_id = item[0]    
+            rxn_id = item[0]
             rxnobj = self.model.reactions.get_by_id(rxn_id)
-            #Knocking out the reaction to test for the impact on the objective
+            # Knocking out the reaction to test for the impact on the objective
             if item[1] == ">":
                 original_bound = rxnobj.upper_bound
                 rxnobj.upper_bound = 0
             else:
                 original_bound = rxnobj.lower_bound
                 rxnobj.lower_bound = 0
-            #Testing all media and target and threshold combinations to see if the reaction is needed
+            # Testing all media and target and threshold combinations to see if the reaction is needed
             needed = False
-            for (i,target) in enumerate(targets):
-                if len(targets) > 1:#If there's only one target, then these steps were done earlier already
-                    #Setting the media
+            for i, target in enumerate(targets):
+                if (
+                    len(targets) > 1
+                ):  # If there's only one target, then these steps were done earlier already
+                    # Setting the media
                     self.pkgmgr.getpkg("KBaseMediaPkg").build_package(medias[i])
-                    #Setting the objective
+                    # Setting the objective
                     self.model.objective = target
-                #Computing the objective value
+                # Computing the objective value
                 objective = self.model.slim_optimize()
                 if objective < thresholds[i]:
                     needed = True
                     logger.info(
-                        medias[i].id + "/" + target + ":" +rxn_id
+                        medias[i].id
+                        + "/"
+                        + target
+                        + ":"
+                        + rxn_id
                         + item[1]
                         + " needed:"
                         + str(objective)
                         + " with min obj:"
                         + str(thresholds[i])
                     )
-            #If the reaction isn't needed for any media and target combinations, add it to the unneeded list
+            # If the reaction isn't needed for any media and target combinations, add it to the unneeded list
             if not needed:
-                unneeded.append([rxn_id, item[1], item[2],original_bound])
-                logger.info(
-                    rxn_id
-                    + item[1]
-                    + " not needed:"
-                    + str(objective)
-                )
-                #VERY IMPORTANT: Leave the reaction knocked out for now so we screen for combinatorial effects
+                unneeded.append([rxn_id, item[1], item[2], original_bound])
+                logger.info(rxn_id + item[1] + " not needed:" + str(objective))
+                # VERY IMPORTANT: Leave the reaction knocked out for now so we screen for combinatorial effects
             else:
-                #Restore the reaction if it is needed
+                # Restore the reaction if it is needed
                 if item[1] == ">":
                     rxnobj.upper_bound = original_bound
                 else:
                     rxnobj.lower_bound = original_bound
         if not remove_unneeded_reactions:
-            #Restoring the bounds on the unneeded reactions
+            # Restoring the bounds on the unneeded reactions
             for item in unneeded:
                 rxnobj = self.model.reactions.get_by_id(item[0])
                 if item[1] == ">":
@@ -764,13 +843,13 @@ class MSModelUtil:
                 else:
                     rxnobj.lower_bound = item[3]
         else:
-            #Do not restore bounds on unneeded reactions and remove reactions from model if their bounds are zero
+            # Do not restore bounds on unneeded reactions and remove reactions from model if their bounds are zero
             removed_rxns = []
             for item in unneeded:
                 dnr = False
                 for dnr_item in do_not_remove_list:
                     if item[0] == dnr_item[0] and item[1] == dnr_item[1]:
-                        #Restoring bounds on reactions that should not be removed
+                        # Restoring bounds on reactions that should not be removed
                         dnr = True
                         rxnobj = self.model.reactions.get_by_id(item[0])
                         if item[1] == ">":
@@ -783,12 +862,12 @@ class MSModelUtil:
                         removed_rxns.append(rxnobj)
             if len(removed_rxns) > 0:
                 self.model.remove_reactions(removed_rxns)
-        #Restoring the original objective
+        # Restoring the original objective
         self.model.objective = current_objective
-        #Restoring the original media
+        # Restoring the original media
         if current_media:
             self.pkgmgr.getpkg("KBaseMediaPkg").build_package(current_media)
-        #Returning the unneeded list
+        # Returning the unneeded list
         return unneeded
 
     def add_gapfilling(self, solution):
@@ -853,12 +932,15 @@ class MSModelUtil:
     #################################################################################
     def run_fba(self, media=None, pfba=False, fva_reactions=None):
         from cobra import flux_analysis
+
         if media:
             self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
         if pfba:
             return flux_analysis.pfba(self.model)
         if fva_reactions is not None:
-            return flux_analysis.variability.flux_variability_analysis(self.model, fva_reactions)
+            return flux_analysis.variability.flux_variability_analysis(
+                self.model, fva_reactions
+            )
         return self.model.optimize()
 
     def resource_balance_constraint(self, flux_limit=140):
@@ -866,7 +948,10 @@ class MSModelUtil:
         for rxn in self.model.reactions:
             if "EX_" not in rxn.id:
                 vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
-        self.create_constraint(Constraint(Zero, lb=0, ub=flux_limit, name="resource_balance_limit"), coef=vars_coef)
+        self.create_constraint(
+            Constraint(Zero, lb=0, ub=flux_limit, name="resource_balance_limit"),
+            coef=vars_coef,
+        )
 
     def apply_test_condition(self, condition, model=None):
         """Applies constraints and objective of specified condition to model
@@ -1278,7 +1363,11 @@ class MSModelUtil:
                         )
                         rxnobj.lower_bound = original_bound
                 else:
-                    logger.info("Reaction "+item[0]+" not in model during sensitivity analysis!")
+                    logger.info(
+                        "Reaction "
+                        + item[0]
+                        + " not in model during sensitivity analysis!"
+                    )
                     output[item[0]][item[1]] = []
             return output
 
@@ -1345,39 +1434,63 @@ class MSModelUtil:
     def costless_excreta(self, pfba=False):
         # the double optimization is intended to truly find the maximal biomass growth
         original_objective = self.model.objective
-        minObj_cons = Constraint(self.model.objective.expression, lb=self.model.slim_optimize(), name="minObj")
+        minObj_cons = Constraint(
+            self.model.objective.expression,
+            lb=self.model.slim_optimize(),
+            name="minObj",
+        )
         self.add_cons_vars([minObj_cons])
         if pfba:
             self.model.problem.constraints.minObj_cons.lb = self.model.slim_optimize()
-            reaction_variables = ((rxn.forward_variable, rxn.reverse_variable) for rxn in self.model.reactions)
-            self.model.problem.Objective(sum(chain(*reaction_variables)), direction="min")
+            reaction_variables = (
+                (rxn.forward_variable, rxn.reverse_variable)
+                for rxn in self.model.reactions
+            )
+            self.model.problem.Objective(
+                sum(chain(*reaction_variables)), direction="min"
+            )
         sol = self.model.optimize()
         # revert conditions to before the simulation
         self.model.objective = original_objective
         self.remove_cons_vars([minObj_cons])
-        return [rxnID.replace("EX_", "").replace("_e0", "") for rxnID, flux in sol.fluxes.items()
-                if "EX_" in rxnID and flux > 0]
+        return [
+            rxnID.replace("EX_", "").replace("_e0", "")
+            for rxnID, flux in sol.fluxes.items()
+            if "EX_" in rxnID and flux > 0
+        ]
 
     @staticmethod
     def parse_id(cobra_obj):
         MSID = re.search("(.+)_([a-z])(\d+)$", cobra_obj.id)
-        if MSID is not None:  return (MSID[1], MSID[2], int(MSID[3]))
+        if MSID is not None:
+            return (MSID[1], MSID[2], int(MSID[3]))
         nonMSID = re.search("(.+)\[([a-z])\]$", cobra_obj.id)
-        if nonMSID is not None:  return (nonMSID[1], nonMSID[2])
+        if nonMSID is not None:
+            return (nonMSID[1], nonMSID[2])
         return None
 
     def add_kbase_media(self, kbase_media):
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
-        self.model.medium = {"EX_"+exID: -bound[0] for exID, bound in kbase_media.get_media_constraints().items()
-                             if "EX_"+exID in exIDs}
+        self.model.medium = {
+            "EX_" + exID: -bound[0]
+            for exID, bound in kbase_media.get_media_constraints().items()
+            if "EX_" + exID in exIDs
+        }
         return self.model.medium
 
     def add_medium(self, media, uniform_uptake=None):
         # add the new media and its flux constraints
-        if media is None:  return self.model.medium
+        if media is None:
+            return self.model.medium
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
-        if not hasattr(media, "items"):  media = FBAHelper.convert_kbase_media(media)
+        if not hasattr(media, "items"):
+            media = FBAHelper.convert_kbase_media(media)
         self.model.medium = {ex: uptake for ex, uptake in media.items() if ex in exIDs}
-        if uniform_uptake is not None:  self.model.medium = dict(zip(
-            list(self.model.medium.keys()), [uniform_uptake]*len(self.model.medium)))
+        if uniform_uptake is not None:
+            self.model.medium = dict(
+                zip(
+                    list(self.model.medium.keys()),
+                    [uniform_uptake] * len(self.model.medium),
+                )
+            )
         return self.model.medium

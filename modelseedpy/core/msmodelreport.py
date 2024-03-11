@@ -129,22 +129,24 @@ class MSModelReport:
                                 metabolites = str(metabolites)
                             entry = {
                                 "reaction_id": reaction_id,
-                                "reaction_name": self.model.reactions.get_by_id(
-                                    reaction_id
-                                ).name
-                                if reaction_id in self.model.reactions
-                                else reaction_id,
+                                "reaction_name": (
+                                    self.model.reactions.get_by_id(reaction_id).name
+                                    if reaction_id in self.model.reactions
+                                    else reaction_id
+                                ),
                                 "media": media,
                                 "direction": direction,
                                 "target": target,
-                                "gapfilling_sensitivity_id": "; ".join(sensitivity_ids)
-                                if sensitivity_ids
-                                else metabolites,
-                                "gapfilling_sensitivity_name": "; ".join(
-                                    sensitivity_names
-                                )
-                                if sensitivity_names
-                                else metabolites,
+                                "gapfilling_sensitivity_id": (
+                                    "; ".join(sensitivity_ids)
+                                    if sensitivity_ids
+                                    else metabolites
+                                ),
+                                "gapfilling_sensitivity_name": (
+                                    "; ".join(sensitivity_names)
+                                    if sensitivity_names
+                                    else metabolites
+                                ),
                             }
 
                             # Update the summary dictionary
