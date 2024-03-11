@@ -91,7 +91,7 @@ class MSCommunity:
         # defining the models
         if member_models is not None and model is None:
             model = build_from_species_models(member_models, abundances=abundances)
-        if ids is None:  ids = [mem.id for mem in member_models]
+        if ids is None and member_models is not None:  ids = [mem.id for mem in member_models]
         self.id = model.id
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
