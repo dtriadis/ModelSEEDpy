@@ -7,6 +7,7 @@ from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from modelseedpy.core.fbahelper import FBAHelper
 
 # Base class for FBA packages
+# TODO This code may need to refactored to not require an MSCommunity object, which is circular logic
 class CommKineticPkg(BaseFBAPkg):
     def __init__(self, model):
         BaseFBAPkg.__init__(self, model, "community kinetics", {}, {"commkin": "string"})
@@ -20,6 +21,5 @@ class CommKineticPkg(BaseFBAPkg):
         bioRXN = member.primary_biomass
         coef = {bioRXN.forward_variable: -self.parameters["kinetic_coef"], bioRXN.reverse_variable: self.parameters["kinetic_coef"]}
         for reaction in member.reactions:
-            if int(FBAHelper.rxn_compartment(reaction)[1:]) == member.index and reaction != bioRXN:
-                coef[reaction.forward_variable] = coef[reaction.reverse_variable] = 1
+            if reaction != bioRXN:   coef[reaction.forward_variable] = coef[reaction.reverse_variable] = 1
         return BaseFBAPkg.build_constraint(self, "commkin", None, 0, coef, "Species" + str(member.index))
