@@ -139,6 +139,7 @@ class MSProbability:
         # weight internal reactions based on their probabilities
         ## minimize:   sum_r^R ((1-probabilities^prob_exp_r)*flux_r + min_prob) + sum_ex^EX(ex_weight*EX)
         coef = {}
+        # TODO experiment with reducing or eliminating the exchange limitation
         for rxn in mdlUtil.model.reactions:
             if "rxn" == rxn.id[0:3]:
                 coef.update({rxn.forward_variable: max(min_prob, (1-float(rxn.notes["probability"])**prob_exp))})

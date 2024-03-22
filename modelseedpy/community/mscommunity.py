@@ -90,7 +90,7 @@ class MSCommunity:
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
         # defining the models
         if member_models is not None and model is None:
-            model = build_from_species_models(member_models, abundances=abundances)
+            model = build_from_species_models(member_models, abundances=abundances, printing=printing)
         if ids is None and member_models is not None:  ids = [mem.id for mem in member_models]
         self.id = model.id
         self.util = MSModelUtil(model, True)

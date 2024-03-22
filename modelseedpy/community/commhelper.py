@@ -72,7 +72,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         for met in model_util.model.metabolites:
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
-            if printing:  print(met, output)
+            # if printing:  print(met, output)
             if output is None:
                 if printing:  print(f"The {met.id} ({output}; {hasattr(met, 'compartment')}) is unpredictable.")
                 met.id = correct_nonMSID(met, (met.id, "c"), model_index)
@@ -115,10 +115,15 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if printing:  print(f"The {rxn.id} ({output}; {hasattr(rxn, 'compartment')}) is unpredictable.")
-                        try:   rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
-                        except ValueError: pass
-                    elif len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
-                    elif len(output) == 3:
+                        try:
+                            rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                            output = MSModelUtil.parse_id(rxn)
+                        except ValueError:  pass
+                    elif len(output) == 2:
+                        rxn.id = correct_nonMSID(rxn, output, model_index)
+                        if printing:  print(f"{output} from {rxn.id}")
+                        output = MSModelUtil.parse_id(rxn)
+                    if len(output) == 3:
                         name, compartment, index = output
                         if compartment != "e":
                             rxn.name = f"{name}_{compartment}{model_index}"
@@ -129,6 +134,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     string_diff = ""
                     for index, let in enumerate(finalID):
                         if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
+                    # if "compartment" not in locals():  print(f"the {rxn.id} with a {output} output is not defined with a compartment.")
                     if string_diff != f"_{compartment}{model_index}" and printing:  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
         # else:
@@ -144,20 +150,21 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
     ## constrain the community abundances
-    if abundances:
-        abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
-    else:
-        abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
+    if abundances:  abundances = {met: -abundances[memberID] for memberID, met in member_biomasses.items() if memberID in abundances}
+    else:   abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
     ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
+    print(comm_biorxn)
     newmodel.add_reactions([comm_biorxn])
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
     newutl.model.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
+    print(newutl.model.problem._variables.keys())
     ## proportionally limit the fluxes to their abundances 
+    # print(abundances)
     if commkinetics:  add_commkinetics(newutl, models, member_biomasses, abundances)
     # add the metadata of community composition
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
@@ -169,6 +176,7 @@ def add_commkinetics(util, models, member_biomasses, abundances):
     # TODO this creates an error with the member biomass reactions not being identified in the model
     coef = {}
     for model in models:
+        if member_biomasses[model.id] not in abundances:  continue
         coef[member_biomasses[model.id]] = -abundances[member_biomasses[model.id]]
         for rxn in model.reactions:
             if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1

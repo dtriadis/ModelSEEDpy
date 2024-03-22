@@ -1304,7 +1304,7 @@ class MSModelUtil:
         if MSID is not None:  return (MSID[1], MSID[2], int(MSID[3]))
         nonMSID = re.search("(.+)\[([a-z])\]$", cobra_obj.id)
         if nonMSID is not None:  return (nonMSID[1], nonMSID[2])
-        return None
+        return (cobra_obj.id.replace("EX_", ""), "c" if "EX_" not in cobra_obj.id else "e")
 
     def add_kbase_media(self, kbase_media):
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
