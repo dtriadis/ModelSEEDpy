@@ -398,7 +398,7 @@ class MSGapfill:
         binary_check=False,
         prefilter=True,
         check_for_growth=True,
-        gapfilling_mode="Cumulative",
+        gapfilling_mode="Sequential",
         run_sensitivity_analysis=True,
         integrate_solutions=True
     ):
@@ -468,7 +468,7 @@ class MSGapfill:
                 minimum_obj = minimum_objectives[item]
             thresholds.append(minimum_obj)
             #Implementing specified gapfilling mode
-            if gapfilling_mode == "Independent" or gapfilling_mode == "Cumulative":           
+            if gapfilling_mode == "Independent" or gapfilling_mode == "Sequential":           
                 self.lp_filename = item.id+"-gf.lp"
                 solution = self.run_gapfilling(
                     item,
@@ -487,7 +487,7 @@ class MSGapfill:
                         gapfilling_mode=gapfilling_mode
                     )
                     #If we are doing cumulative gapfilling, then we need adjust the gapfilling objective so it no longer penalizes using the current solution reactions
-                    if gapfilling_mode == "Cumulative":
+                    if gapfilling_mode == "Sequential":
                         self.gfpkgmgr.getpkg("GapfillingPkg").compute_gapfilling_penalties(exclusion_solution=cumulative_solution,reaction_scores=self.reaction_scores)
                         self.gfpkgmgr.getpkg("GapfillingPkg").build_gapfilling_objective_function()
         if gapfilling_mode == "Global":
@@ -523,7 +523,7 @@ class MSGapfill:
                 remove_unneeded_reactions=True,
                 do_not_remove_list=[]
             )#Returns reactions in cumulative solution that are not needed for growth
-        elif gapfilling_mode == "Cumulative":
+        elif gapfilling_mode == "Sequential":
             #Restoring the gapfilling objective function
             self.gfpkgmgr.getpkg("GapfillingPkg").compute_gapfilling_penalties(reaction_scores=self.reaction_scores)
             self.gfpkgmgr.getpkg("GapfillingPkg").build_gapfilling_objective_function()
@@ -559,7 +559,7 @@ class MSGapfill:
         return solution_dictionary
 
     def integrate_gapfill_solution(
-        self,solution,cumulative_solution=[],remove_unneeded_reactions=False,check_for_growth=True,gapfilling_mode="Cumulative"
+        self,solution,cumulative_solution=[],remove_unneeded_reactions=False,check_for_growth=True,gapfilling_mode="Sequential"
     ):
         """Integrating gapfilling solution into model
         Parameters
@@ -668,7 +668,7 @@ class MSGapfill:
         # Adding the gapfilling solution data to the model, which is needed for saving the model in KBase
         self.mdlutl.add_gapfilling(solution)
         # Testing which gapfilled reactions are needed to produce each reactant in the objective function
-        if link_gaps_to_objective:
+        """ if link_gaps_to_objective:
             logger.info(
                 "Gapfilling sensitivity analysis running on succesful run in "
                 + solution["media"].id
@@ -685,8 +685,9 @@ class MSGapfill:
             ] = self.mdlutl.find_unproducible_biomass_compounds(
                 solution["target"], cumulative_solution
             )
-            self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity")
+            self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity") """
         self.cumulative_gapfilling.extend(cumulative_solution)
+        return current_media_target_solution
 
     def compute_reaction_weights_from_expression_data(self, omics_data, annoont):
         """Computing reaction weights based on input gene-level omics data
@@ -718,7 +719,7 @@ class MSGapfill:
         restructured_anoot = pd.DataFrame(rows_list)
 
         ### Integrate Omics, set weights, find indexes for features
-        feature_ids_set = set(omics_data["feature_ids"])
+        feature_ids_set = set(omics_data.index)
 
         # Find indices where 'Gene' values are in 'feature_ids'
         # isin method returns a boolean series that is True where tbl_supAno['Gene'] is in feature_ids_set

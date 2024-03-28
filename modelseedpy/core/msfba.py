@@ -10,7 +10,7 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 logger = logging.getLogger(__name__)
 
 class MSFBA:
-    def __init__(self,model_or_mdlutl,media,objective_reactions,maximize,gene_ko=[],reaction_ko=[],pfba=True,fva=True,clone=True):
+    def __init__(self,model_or_mdlutl,media,objective_reactions={"bio1":1},maximize=True,gene_ko=[],reaction_ko=[],pfba=True,fva=True,clone=True,primary_solution=None,suffix=".fba"):
         if isinstance(model_or_mdlutl, MSModelUtil):
             model_or_mdlutl = model_or_mdlutl.model
         if clone:
@@ -24,12 +24,13 @@ class MSFBA:
         self.reaction_ko = reaction_ko
         self.pkgmgr = self.mdlutl.pkgmgr
         self.apply_parameters()
-        self.primary_solution = None
+        self.primary_solution = primary_solution
         self.secondary_solutions = None
         self.fva = fva
         self.pfba = pfba
         self.fva_results = None
         self.secondary_fva = None
+        self.wsid = self.mdlutl.wsid+suffix
 
     def build_objective(self):
         sense = "max"
@@ -37,11 +38,11 @@ class MSFBA:
             sense = "min"
         obj = self.model.problem.Objective(0, direction=sense)
         objcoef = {}
-        for rxnid in self.objective:
+        for rxnid in self.objective_reactions:
             if rxnid in self.model.reactions:
                 rxn = self.model.reactions.get_by_id(rxnid)
-                objcoef[rxn.forward_variable] = self.objective[rxnid]
-                objcoef[rxn.reverse_variable] = -1*self.objective[rxnid]
+                objcoef[rxn.forward_variable] = self.objective_reactions[rxnid]
+                objcoef[rxn.reverse_variable] = -1*self.objective_reactions[rxnid]
             else:
                 logger.warning(f"KO reaction {rxnid} not found in model")
         obj.set_linear_coefficients(objcoef)
