@@ -716,8 +716,6 @@ class GapfillingPkg(BaseFBAPkg):
     def test_gapfill_database(self):
         self.reset_objective_minimum(0,False)
         self.model.objective = self.original_objective
-        with open("test_gapfill_database.lp", "w") as out:
-            out.write(str(self.model.solver))
         solution = self.model.optimize()
         logger.info(
             "Objective with gapfill database:"

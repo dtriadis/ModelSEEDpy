@@ -10,7 +10,7 @@ from modelseedpy.core.msmodelutl import MSModelUtil
 logger = logging.getLogger(__name__)
 
 class MSFBA:
-    def __init__(self,model_or_mdlutl,media,objective_reactions={"bio1":1},maximize=True,gene_ko=[],reaction_ko=[],pfba=True,fva=True,clone=True,primary_solution=None,suffix=".fba"):
+    def __init__(self,model_or_mdlutl,media,objective_reactions={"bio1":1},maximize=True,gene_ko=[],reaction_ko=[],pfba=True,fva=True,clone=True,primary_solution=None,id=None):
         if isinstance(model_or_mdlutl, MSModelUtil):
             model_or_mdlutl = model_or_mdlutl.model
         if clone:
@@ -30,7 +30,9 @@ class MSFBA:
         self.pfba = pfba
         self.fva_results = None
         self.secondary_fva = None
-        self.wsid = self.mdlutl.wsid+suffix
+        if id == None:
+            id = self.mdlutl.model.id+".fba"
+        self.id = id
 
     def build_objective(self):
         sense = "max"
@@ -77,7 +79,7 @@ class MSFBA:
                 self.secondary_fva = []
             self.secondary_fva.append(fva)
 
-    def get_variable_class(variable_min, variable_max):
+    def get_variable_class(self,variable_min, variable_max):
         variable_class = "Unknown"
         if variable_min is None or variable_max is None:
             return variable_class
@@ -95,7 +97,7 @@ class MSFBA:
             variable_class = "Variable"
         return variable_class
     
-    def generate_kbase_data(self):
+    def generate_kbase_data(self,fbamodel_ref,media_ref):
         output = {
             "FBABiomassVariables": [],
             "FBACompoundBounds": [],
@@ -126,7 +128,7 @@ class MSFBA:
             "defaultMaxFlux": 1000,
             "defaultMinDrainFlux": -1000,
             "drainfluxUseVariables": 0,
-            "fbamodel_ref": self.fbamodel_ref,
+            "fbamodel_ref": fbamodel_ref,
             "findMinimalMedia": 0,
             "fluxMinimization": 1,
             "fluxUseVariables": 0,
@@ -138,14 +140,14 @@ class MSFBA:
             "maximizeActiveReactions": 0,
             "maximizeObjective": 1,
             "media_list_refs": [],
-            "media_ref": self.media_ref,
+            "media_ref": media_ref,
             "minimizeErrorThermodynamicConstraints": 0,
             "minimize_reaction_costs": {},
             "minimize_reactions": 0,
             "noErrorThermodynamicConstraints": 0,
             "numberOfSolutions": 1,
             "objectiveConstraintFraction": 0.1,
-            "objectiveValue": self.objective_value,
+            "objectiveValue": self.primary_solution.objective_value,
             "other_objectives": [],
             "outputfiles": {},
             "parameters": {
@@ -211,20 +213,14 @@ class MSFBA:
                 variable_data["max"] = -1 * lower
                 variable_data["value"] = -1 * variable_data["value"]
                 variable_data["variableType"] = "drainflux"
-                variable_data["modelcompound_ref"] = (
-                    "~/fbamodel/modelcompounds/id/" + rxn.id[3:],
-                )
+                variable_data["modelcompound_ref"] = "~/fbamodel/modelcompounds/id/" + rxn.id[3:]
                 variable_key = "FBACompoundVariables"
             elif rxn.id.startswith("bio"):
                 variable_data["variableType"] = "biomassflux"
-                variable_data["biomass_ref"] = (
-                    "~/fbamodel/biomasses/id/" + rxn.id,
-                )
+                variable_data["biomass_ref"] = "~/fbamodel/biomasses/id/" + rxn.id
                 variable_key = "FBABiomassVariables"
             else:
-                variable_data["modelreaction_ref"] = (
-                    "~/fbamodel/modelreactions/id/" + rxn.id
-                )
+                variable_data["modelreaction_ref"] = "~/fbamodel/modelreactions/id/" + rxn.id
                 variable_data["exp_state"] = "unknown"
                 variable_data["biomass_dependencies"] = []
                 variable_data["coupled_reactions"] = []

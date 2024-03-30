@@ -220,8 +220,9 @@ class MSGapfill:
 
         # Printing the gapfilling LP file
         if self.lp_filename:
-            with open(self.lp_filename, "w") as out:
-                out.write(str(self.gfmodel.solver))
+            pass
+            #with open(self.lp_filename, "w") as out:
+            #    out.write(str(self.gfmodel.solver))
 
         # Running gapfil/ling and checking solution
         sol = self.gfmodel.optimize()
@@ -366,8 +367,9 @@ class MSGapfill:
         
         # Printing the gapfilling LP file
         if self.lp_filename:
-            with open(self.lp_filename, "w") as out:
-                out.write(str(merged_model.solver))
+            pass
+            #with open(self.lp_filename, "w") as out:
+            #    out.write(str(merged_model.solver))
 
         # Running gapfilling and checking solution
         sol = merged_model.optimize()
@@ -469,7 +471,6 @@ class MSGapfill:
             thresholds.append(minimum_obj)
             #Implementing specified gapfilling mode
             if gapfilling_mode == "Independent" or gapfilling_mode == "Sequential":           
-                self.lp_filename = item.id+"-gf.lp"
                 solution = self.run_gapfilling(
                     item,
                     target,
@@ -528,30 +529,57 @@ class MSGapfill:
             self.gfpkgmgr.getpkg("GapfillingPkg").compute_gapfilling_penalties(reaction_scores=self.reaction_scores)
             self.gfpkgmgr.getpkg("GapfillingPkg").build_gapfilling_objective_function()
         #Running sensitivity analysis once on the cumulative solution for all media
-        """ 
-        if run_sensitivity_analysis:#TODO - need to redesign this run operate on multiple solutions at once...
+        if run_sensitivity_analysis:
             logger.info(
-                "Gapfilling sensitivity analysis running on succesful run in "
-                + solution["media"].id
-                + " for target "
-                + solution["target"]
+                "Gapfilling sensitivity analysis running"
             )
-            test_solution = []
-            for rxn_id in solution["reversed"]:
-                test_solution.append([rxn_id, solution["reversed"][rxn_id]])
-            for rxn_id in solution["new"]:
-                test_solution.append([rxn_id, solution["new"][rxn_id]])
+            #First aggregating all unique reactions with a media for each
+            reaction_media_hash = {}
+            solution_rxn_types = ["new","reversed"]
+            media_reaction_hash = {}
+            for media in solution_dictionary:
+                if solution_dictionary[media]["growth"] > 0:
+                    for rxn_type in solution_rxn_types:
+                        for rxn_id in solution_dictionary[media][rxn_type]:
+                            if rxn_id not in reaction_media_hash:
+                                reaction_media_hash[rxn_id] = {}
+                            if solution_dictionary[media][rxn_type][rxn_id] not in reaction_media_hash[rxn_id]:
+                                reaction_media_hash[rxn_id][solution_dictionary[media][rxn_type][rxn_id]] = media
+                                if media not in media_reaction_hash:
+                                    media_reaction_hash[media] = {}
+                                media_reaction_hash[media][rxn_id] = solution_dictionary[media][rxn_type][rxn_id]
+            #Running sensitivity analysis on minimal reactions in each media
+            rxn_sensitivity_hash = {}
+            for media in media_reaction_hash:
+                test_solution = []
+                for rxn in media_reaction_hash[media]:
+                    test_solution.append([rxn, media_reaction_hash[media][rxn]])
+                self.mdlutl.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
+                sensitivity_results = self.mdlutl.find_unproducible_biomass_compounds(
+                    target, test_solution
+                )
+                for rxn in sensitivity_results:
+                    if rxn not in rxn_sensitivity_hash:
+                        rxn_sensitivity_hash[rxn] = {}
+                    for dir in sensitivity_results[rxn]:
+                        rxn_sensitivity_hash[rxn][dir] = sensitivity_results[rxn][dir]
+            #Building gapfilling sensitivity output
             gf_sensitivity = self.mdlutl.get_attributes("gf_sensitivity", {})
-            if solution["media"].id not in gf_sensitivity:
-                gf_sensitivity[solution["media"].id] = {}
-            if solution["target"] not in gf_sensitivity[solution["media"].id]:
-                gf_sensitivity[solution["media"].id][solution["target"]] = {}
-            gf_sensitivity[solution["media"].id][solution["target"]][
-                "success"
-            ] = self.mdlutl.find_unproducible_biomass_compounds(
-                solution["target"], test_solution
-            )
-            self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity") """
+            for media in solution_dictionary:
+                if media.id not in gf_sensitivity:
+                    gf_sensitivity[media.id] = {}
+                if target not in gf_sensitivity[media.id]:
+                    gf_sensitivity[media.id][target] = {}
+                if solution_dictionary[media]["growth"] > 0:
+                    gf_sensitivity[media.id][target]["success"] = {}
+                    for rxn_type in solution_rxn_types:
+                        for rxn_id in solution_dictionary[media][rxn_type]:
+                            if rxn_id not in gf_sensitivity[media.id][target]["success"]:
+                                gf_sensitivity[media.id][target]["success"][rxn_id] = {}
+                            gf_sensitivity[media.id][target]["success"][rxn_id][solution_dictionary[media][rxn_type][rxn_id]] = rxn_sensitivity_hash[rxn_id][solution_dictionary[media][rxn_type][rxn_id]]
+                else:
+                    gf_sensitivity[media.id][target]["failure"] = {}
+            self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity") 
         #Restoring backedup model
         self.mdlutl = oldmdlutl
         self.model = oldmdlutl.model
@@ -626,6 +654,7 @@ class MSGapfill:
                     rxn = self.model.reactions.get_by_id(item[0])
                     logger.debug(f"Assigning gene to reaction: {item[0]} {bestgene}")
                     rxn.gene_reaction_rule = bestgene
+                    rxn.notes["new_genes"] = bestgene
             #Setting bounds according to the direction the reaction was gapfilled in
             if item[1] == ">":
                 rxn.upper_bound = 100
@@ -668,24 +697,6 @@ class MSGapfill:
         # Adding the gapfilling solution data to the model, which is needed for saving the model in KBase
         self.mdlutl.add_gapfilling(solution)
         # Testing which gapfilled reactions are needed to produce each reactant in the objective function
-        """ if link_gaps_to_objective:
-            logger.info(
-                "Gapfilling sensitivity analysis running on succesful run in "
-                + solution["media"].id
-                + " for target "
-                + solution["target"]
-            )
-            gf_sensitivity = self.mdlutl.get_attributes("gf_sensitivity", {})
-            if solution["media"].id not in gf_sensitivity:
-                gf_sensitivity[solution["media"].id] = {}
-            if solution["target"] not in gf_sensitivity[solution["media"].id]:
-                gf_sensitivity[solution["media"].id][solution["target"]] = {}
-            gf_sensitivity[solution["media"].id][solution["target"]][
-                "success"
-            ] = self.mdlutl.find_unproducible_biomass_compounds(
-                solution["target"], cumulative_solution
-            )
-            self.mdlutl.save_attributes(gf_sensitivity, "gf_sensitivity") """
         self.cumulative_gapfilling.extend(cumulative_solution)
         return current_media_target_solution
 
@@ -703,7 +714,7 @@ class MSGapfill:
 
         ### Restructure annoont into Dataframe
         rows_list = []
-        for reaction, genes in annoont.get_reaction_gene_hash().items():
+        for reaction, genes in annoont.get_reaction_gene_hash(feature_type="gene").items():
             for gene, gene_info in genes.items():
                 # Initialize the row with 'Gene' and 'Reactions'
                 row = {"Gene": gene, "Reactions": reaction}

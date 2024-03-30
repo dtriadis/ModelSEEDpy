@@ -158,6 +158,7 @@ class MSCommunity:
                 self.biomass_cpd = biomass_cpd
                 for reaction in model.reactions:
                     if self.biomass_cpd in reaction.metabolites:
+                        print(reaction.id, reaction.metabolites)
                         if (
                             reaction.metabolites[self.biomass_cpd] == 1
                             and len(reaction.metabolites) > 1
@@ -172,6 +173,7 @@ class MSCommunity:
                 other_biomass_cpds.append(biomass_cpd)
         for biomass_cpd in other_biomass_cpds:
             species_obj = CommunityModelSpecies(self, biomass_cpd, names)
+            print(species_obj.index,species_obj.id)
             self.species.append(species_obj)
         if abundances:
             self.set_abundance(abundances)
