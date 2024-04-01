@@ -655,6 +655,7 @@ class MSGapfill:
                     logger.debug(f"Assigning gene to reaction: {item[0]} {bestgene}")
                     rxn.gene_reaction_rule = bestgene
                     rxn.notes["new_genes"] = bestgene
+                    print("Assigning gene to reaction: "+item[0]+" "+bestgene)
             #Setting bounds according to the direction the reaction was gapfilled in
             if item[1] == ">":
                 rxn.upper_bound = 100
