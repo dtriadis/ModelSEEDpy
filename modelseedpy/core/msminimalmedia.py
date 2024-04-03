@@ -19,10 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def _exchange_solution(sol_dict):
-    if isinstance(list(sol_dict.keys())[0], str):
-        return {rxn:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn and flux < 0}
-    elif hasattr(list(sol_dict.keys())[0], "id"):
-        return {rxn.id:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.id and flux < 0}
+    if isinstance(list(sol_dict.keys())[0], str):   return {rxn:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn and flux < 0}
+    elif hasattr(list(sol_dict.keys())[0], "id"):   return {rxn.id:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.id and flux < 0}
     return {rxn.name:abs(flux) for rxn, flux in sol_dict.items() if "EX_" in rxn.name and flux < 0}
 
 
@@ -38,8 +36,8 @@ def _var_to_ID(var):
 
 
 def _compatibilize(org_models, printing=False):
-    from modelseedpy.community.mscompatibility import MSCompatibility
-    return MSCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
+    from commscores import GEMCompatibility
+    return GEMCompatibility.standardize(org_models, conflicts_file_name="standardization_corrections.json", printing=printing)
 
 
 def verify(org_model, min_media):
@@ -49,7 +47,8 @@ def verify(org_model, min_media):
 
 def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
     sol_dict = sol_dict or FBAHelper.solution_to_variables_dict(sol, model)
-    simulated_growth = sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)])
+    # print({k:v for k,v in sol_dict.items() if v > 1E-8})
+    simulated_growth = max(sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)]), sol.objective_value)
     if simulated_growth < min_growth*0.9999:
         raise ObjectiveError(f"The assigned minimal_growth of {min_growth} was not maintained during the simulation,"
                              f" where the observed growth value was {simulated_growth}.")
@@ -60,8 +59,11 @@ def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
 def minimizeFlux_withGrowth(model_util, min_growth, obj):
     model_util.add_minimal_objective_cons(min_growth)
     model_util.add_objective(obj, "min")
-    sol = model_util.model.optimize()
-    sol_dict = bioFlux_check(model_util.model, sol)
+    # print(model_util.model.objective)
+    # print([(cons.lb, cons.expression) for cons in model_util.model.constraints if "min" in cons.name])
+    sol = model_util.model.optimize()   
+    # print(sol.objective_value)
+    sol_dict = bioFlux_check(model_util.model, sol, min_growth=min_growth)
     return sol, sol_dict
 
 
@@ -88,7 +90,7 @@ class MSMinimalMedia:
         model_util = MSModelUtil(org_model, True)
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
-        min_growth = min_growth or model_util.model.slim_optimize()
+        min_growth =  model_util.model.slim_optimize() if min_growth is None else min(min_growth, model_util.model.slim_optimize())
         # min_flux = MSMinimalMedia._min_consumption_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media
@@ -99,7 +101,7 @@ class MSMinimalMedia:
         if simulated_sol.status != "optimal":
             raise FeasibilityError(f"The simulation was not optimal, with a status of {simulated_sol.status}")
         if printing:
-            print(f"The minimal flux media consists of {len(min_media)} compounds and a {total_flux} total influx,"
+            print(f"The minimal flux media for {org_model.id} consists of {len(min_media)} compounds and a {total_flux} total influx,"
                   f" with a growth value of {simulated_sol.objective_value}")
         return min_media, sol
 
@@ -257,7 +259,6 @@ class MSMinimalMedia:
     @staticmethod
     def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
                             interacting=True, solution_limit=5, printing=True):
-        min_growth = min_growth or 0.1
         if minimization_method == "minFlux":
             return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
         if minimization_method == "minComponents":
@@ -283,9 +284,10 @@ class MSMinimalMedia:
             # if duplicate_reactions:
             #     logger.critical(f'CodeError: The model {model.id} contains {duplicate_reactions}'
             #                     f' that compromise the model.')
-            media["members"][model_util.model.id] = {"media": MSMinimalMedia.determine_min_media(
-                model_util.model, minimization_method, min_growth, environment, interacting, n_solutions, printing)}
-            media["members"][model_util.model.id]["solution"] = FBAHelper.solution_to_dict(model_util.model.optimize())
+            media["members"][model_util.model.id] = {
+                "media": MSMinimalMedia.determine_min_media(model_util.model, minimization_method, min_growth,
+                                                            environment, interacting, n_solutions, printing),
+                "solution": FBAHelper.solution_to_dict(model_util.model.optimize())}
             if minimization_method == "jenga":
                 media["community_media"] = FBAHelper.sum_dict(
                     media["members"][model_util.model.id]["media"], media["community_media"])

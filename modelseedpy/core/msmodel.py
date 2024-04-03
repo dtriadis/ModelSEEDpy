@@ -2,9 +2,7 @@
 import logging
 import re
 from cobra.core import Model
-from pyeda.inter import (
-    expr,
-)  # wheels must be specially downloaded and installed for Windows https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyeda
+# from pyeda.inter import (expr)  # wheels must be specially downloaded and installed for Windows https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyeda
 
 logger = logging.getLogger(__name__)
 

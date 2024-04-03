@@ -1,10 +1,11 @@
 from modelseedpy.core.msminimalmedia import minimizeFlux_withGrowth, bioFlux_check
 from modelseedpy.core.exceptions import NoFluxError, ObjectiveError
-from modelseedpy.community.mscompatibility import MSCompatibility
+from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
 from cobra.medium import minimal_medium
+# from commscores import GEMCompatibility
 from cobra.flux_analysis import pfba
 from collections import OrderedDict
 from optlang.symbolics import Zero
@@ -28,13 +29,14 @@ def correct_nonMSID(nonMSobject, output, model_index):
     name, compartment = output
     index = 0 if compartment == "e" else model_index
     nonMSobject.compartment = compartment + str(index)
-    comp = re.search(r"(_\w\d+$)", nonMSobject.id)
-    if comp is None:  return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    comp = re.search(r"(_[a-z]\d+$)", nonMSobject.id)
+    if comp is None and rf"[{compartment}]" in nonMSobject.id:  return nonMSobject.id.replace(rf"[{compartment}]", f"_{nonMSobject.compartment}")
+    elif comp is None:  return nonMSobject.id + f"_{nonMSobject.compartment}"
     return "_".join([nonMSobject.id.replace(comp.group(), ""), nonMSobject.compartment])
 
 
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
-                              standardize=False, copy_models=True, printing=False):
+                              standardize=False, MSmodel = True, commkinetics=True, copy_models=True, printing=False):
     """Merges the input list of single species metabolic models into a community metabolic model
 
     Parameters
@@ -55,8 +57,8 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     ------
     """
     # construct the new model
-    models = org_models if not standardize else MSCompatibility.standardize(
-        org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
+    models = org_models #if not standardize else GEMCompatibility.standardize(
+        #org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
     biomass_indices = []
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
@@ -65,11 +67,12 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
         model_index += 1
+        # if MSmodel:
         # Rename metabolites
         for met in model_util.model.metabolites:
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
-            if printing:  print(met, output)
+            # if printing:  print(met, output)
             if output is None:
                 if printing:  print(f"The {met.id} ({output}; {hasattr(met, 'compartment')}) is unpredictable.")
                 met.id = correct_nonMSID(met, (met.id, "c"), model_index)
@@ -112,9 +115,15 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     output = MSModelUtil.parse_id(rxn)
                     if output is None:
                         if printing:  print(f"The {rxn.id} ({output}; {hasattr(rxn, 'compartment')}) is unpredictable.")
-                        rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
-                    elif len(output) == 2:  rxn.id = correct_nonMSID(rxn, output, model_index)
-                    elif len(output) == 3:
+                        try:
+                            rxn.id = correct_nonMSID(rxn, (rxn.id, "c"), model_index)
+                            output = MSModelUtil.parse_id(rxn)
+                        except ValueError:  pass
+                    elif len(output) == 2:
+                        rxn.id = correct_nonMSID(rxn, output, model_index)
+                        if printing:  print(f"{output} from {rxn.id}")
+                        output = MSModelUtil.parse_id(rxn)
+                    if len(output) == 3:
                         name, compartment, index = output
                         if compartment != "e":
                             rxn.name = f"{name}_{compartment}{model_index}"
@@ -122,10 +131,15 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                             if index == "":  rxn.id += str(model_index)
                             else:  rxn.id = rxn_id + str(model_index)
                     finalID = str(rxn.id)
-                    string_diff = set(initialID).symmetric_difference(set(finalID))
-                    if string_diff and not all(FBAHelper.isnumber(x) for x in string_diff):
-                        print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
+                    string_diff = ""
+                    for index, let in enumerate(finalID):
+                        if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
+                    # if "compartment" not in locals():  print(f"the {rxn.id} with a {output} output is not defined with a compartment.")
+                    if string_diff != f"_{compartment}{model_index}" and printing:  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
+        # else:
+        #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
+        #     pass
     # adds only unique reactions and metabolites to the community model
     newmodel = Model(model_id or "+".join([model.id for model in models]),
                      name or "+".join([model.name for model in models]))
@@ -135,19 +149,37 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     # Create community biomass
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
-    if abundances:  abundances = {met: abundances[memberID] for memberID, met in member_biomasses.items()}
-    else:  abundances = {cpd: -1 / len(member_biomasses) for cpd in member_biomasses.values()}
+    ## constrain the community abundances
+    if abundances:  abundances = {met: -abundances[memberID] for memberID, met in member_biomasses.items() if memberID in abundances}
+    else:   abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
+    ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
+    print(comm_biorxn)
     newmodel.add_reactions([comm_biorxn])
     # update model components
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
-    newmodel.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
+    newutl.model.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
+    ## proportionally limit the fluxes to their abundances 
+    # print(abundances)
+    if commkinetics:  add_commkinetics(newutl, models, member_biomasses, abundances)
+    # add the metadata of community composition
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
+    # print([cons.name for cons in newutl.model.constraints])
     return newutl.model
+
+def add_commkinetics(util, models, member_biomasses, abundances):
+    # TODO this creates an error with the member biomass reactions not being identified in the model
+    coef = {}
+    for model in models:
+        if member_biomasses[model.id] not in abundances:  continue
+        coef[member_biomasses[model.id]] = -abundances[member_biomasses[model.id]]
+        for rxn in model.reactions:
+            if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
+    util.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
 
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):

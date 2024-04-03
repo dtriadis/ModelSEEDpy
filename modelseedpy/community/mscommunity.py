@@ -8,19 +8,19 @@ from modelseedpy.core.msgapfill import MSGapfill
 from modelseedpy.core.fbahelper import FBAHelper
 #from modelseedpy.fbapkg.gapfillingpkg import default_blacklist
 from modelseedpy.core.msatpcorrection import MSATPCorrection
-from cobra import Reaction
+from cobra.io import save_matlab_model, write_sbml_model
 from cobra.core.dictlist import DictList
-from cobra.io import save_matlab_model
 from optlang.symbolics import Zero
 from optlang import Constraint
 from pandas import DataFrame
 from pprint import pprint
+from cobra import Reaction
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class CommunityMembers:
+class CommunityMember:
     def __init__(self, community, biomass_cpd, name=None, index=None, abundance=0):
         self.community, self.biomass_cpd = community, biomass_cpd
         self.index = index or int(self.biomass_cpd.compartment[1:])
@@ -90,34 +90,36 @@ class MSCommunity:
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
         # defining the models
         if member_models is not None and model is None:
-            model = build_from_species_models(member_models, abundances=abundances)
-        if ids is None:  ids = [mem.id for mem in member_models]
+            model = build_from_species_models(member_models, abundances=abundances, printing=printing)
+        if ids is None and member_models is not None:  ids = [mem.id for mem in member_models]
         self.id = model.id
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
         msid_cobraid_hash = self.util.msid_hash()
-        print(msid_cobraid_hash)
+        # print(msid_cobraid_hash)
+        write_sbml_model(model, "test_comm.xml")
+
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
-            if self.biomass_cpd.compartment == "c0":
+            if "c0" in self.biomass_cpd.id:
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
                     print(self.biomass_cpd, rxn, end=";\t")
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
-                        if self.primary_biomass:
-                            raise ObjectAlreadyDefinedError(
-                                f"The primary biomass {self.primary_biomass} is already defined,"
-                                f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
+                        if self.primary_biomass:  raise ObjectAlreadyDefinedError(
+                            f"The primary biomass {self.primary_biomass} is already defined,"
+                            f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
-            elif 'c' in self.biomass_cpd.compartment:  # else does not seem to capture built model members
+            elif 'c' in self.biomass_cpd.compartment:
                 other_biomass_cpds.append(self.biomass_cpd)
         # assign community members and their abundances
+        print()   # this returns the carriage after the tab-ends in the biomass compound printing 
         abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)
         self.members = DictList(
-            CommunityMembers(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances)
+            CommunityMember(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances[memIndex])
             for memIndex, biomass_cpd in enumerate(other_biomass_cpds))
         # assign the MSCommunity constraints and objective
         self.abundances_set = False
@@ -128,6 +130,7 @@ class MSCommunity:
             for rxn in self.util.model.reactions:
                 if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
                     vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
+            print(member.id, flux_limit, member.abundance)
             self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
                                                    name=f"{member.id}_resource_balance"), coef=vars_coef)
 
@@ -237,3 +240,9 @@ class MSCommunity:
     def parse_member_growths(self):
         # f"cpd11416_c{member.index}"
         return {member.name: self.solution.fluxes[member.primary_biomass.id] for member in self.members}
+
+    def return_member_models(self):
+        # TODO return a list of member models that is parsed from the .members attribute
+        ## which will have applicability in disaggregating community models that do not have member models
+        ## such as Filipe's Nitrate reducing community model for the SBI ENIGMA team.
+        return

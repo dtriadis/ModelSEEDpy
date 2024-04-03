@@ -235,7 +235,8 @@ class MSSteadyCom:
         metabolites_df = concat(cross_feeding_rows, axis=1).T
         metabolites_df.index.name = "Metabolite ID"
         display(metabolites_df)
-        metabolites = [msdb.compounds.get_by_id(metID.replace("_e0", "")) for metID in metabolites_df.index.tolist()]
+        metabolites = [msdb.compounds.get_by_id(metID.replace("_e0", "")) for metID in metabolites_df.index.tolist()
+                       if metID not in ["cpdETCM", "cpdETCMe"]]
         # define the community members that participate in cross-feeding
         members = metabolites_df.loc[:, (metabolites_df != 0).any(axis=0)].columns.tolist()
         members.remove("Environment")
@@ -268,12 +269,13 @@ class MSSteadyCom:
         # define the edges by parsing the interaction DataFrame
         for met in metabolites:
             row = metabolites_df.loc[met.id]
+            maxVal = max(list(row.to_numpy()))
             for col, val in row.items():
                 if col == "Environment":  continue
                 index = members.index(col)
                 # TODO color carbon sources red
-                if val > 0:  dot.edge(f"S{index}", met.abbr[:3], arrowsize=f"{val / 500}", edgetooltip=str(val))
-                if val < 0:  dot.edge(met.abbr[:3], f"S{index}", arrowsize=f"{abs(val / 500)}", edgetooltip=str(val))
+                if val > 0:  dot.edge(f"S{index}", met.abbr[:3], arrowsize=f"{val / maxVal}", edgetooltip=str(val))
+                if val < 0:  dot.edge(met.abbr[:3], f"S{index}", arrowsize=f"{abs(val / maxVal)}", edgetooltip=str(val))
 
         # render and export the source
         dot.render(filename, view=view_figure)
