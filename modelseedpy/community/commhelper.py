@@ -16,6 +16,10 @@ from pprint import pprint
 from numpy import mean
 import re
 
+import logging
+logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.ERROR)
+logger = logging.getLogger(__name__)
+
 
 def strip_comp(ID):
     ID = ID.replace("-", "~")
@@ -88,12 +92,14 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
             new_metabolites.add(met)
-            if "cpd11416_c" in met.id or "biomass" in met.id:  member_biomasses[org_model.id] = met
+            if "cpd11416_c" in met.id or "biomass" in met.id:
+                met.name = f"{met.id}_{model_util.model.id}"
+                member_biomasses[org_model.id] = met
         # Rename reactions
         for rxn in model_util.model.reactions:  # !!! all reactions should have a non-zero compartment index
             if rxn.id[0:3] != "EX_":
                 ## biomass reactions
-                if re.search('^(bio)(\d+)$', rxn.id):
+                if re.search('^(bio)(\d+)$', rxn.id) or "biomass" in rxn.id:
                     index = int(re.sub(r"(^bio)", "", rxn.id))
                     if biomass_index == 2:
                         while f"bio{biomass_index}" in model_reaction_ids:  biomass_index += 1
@@ -135,7 +141,8 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     for index, let in enumerate(finalID):
                         if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
                     # if "compartment" not in locals():  print(f"the {rxn.id} with a {output} output is not defined with a compartment.")
-                    if string_diff != f"_{compartment}{model_index}" and printing:  print(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
+                    if string_diff != f"_{compartment}{model_index}" and printing:
+                        logger.debug(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
         # else:
         #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
@@ -150,8 +157,14 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
     metabolites = {comm_biomass: 1}
     ## constrain the community abundances
-    if abundances:  abundances = {met: -abundances[memberID] for memberID, met in member_biomasses.items() if memberID in abundances}
-    else:   abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
+    if abundances:
+        if isinstance(abundances[list(abundances.keys())[0]], dict):
+            abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items() if memberID in abundances}
+        else:   abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items() if memberID in abundances}
+    else:  abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
+
+    # TODO - add the biomass reactions instead of thje biomass metabolites for the commKinetics
+
     ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
@@ -162,25 +175,13 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     newutl = MSModelUtil(newmodel)
     newutl.add_objective(comm_biorxn.flux_expression)
     newutl.model.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
-    print(newutl.model.problem._variables.keys())
     ## proportionally limit the fluxes to their abundances 
     # print(abundances)
-    if commkinetics:  add_commkinetics(newutl, models, member_biomasses, abundances)
     # add the metadata of community composition
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     # print([cons.name for cons in newutl.model.constraints])
     return newutl.model
-
-def add_commkinetics(util, models, member_biomasses, abundances):
-    # TODO this creates an error with the member biomass reactions not being identified in the model
-    coef = {}
-    for model in models:
-        if member_biomasses[model.id] not in abundances:  continue
-        coef[member_biomasses[model.id]] = -abundances[member_biomasses[model.id]]
-        for rxn in model.reactions:
-            if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
-    util.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
 
 
 def phenotypes(community_members, phenotype_flux_threshold=.1, solver:str="glpk"):

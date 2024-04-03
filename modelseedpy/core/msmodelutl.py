@@ -433,13 +433,11 @@ class MSModelUtil:
             self.model.objective.set_linear_coefficients(coef)
             self.model.solver.update()
 
-    def set_objective_from_target_reaction(self, target_reaction, minimize=False):
-        target_reaction = self.model.reactions.get_by_id(target_reaction)
+    def set_objective_from_target_reaction(self, target_rxn, minimize=False):
+        target_rxn = target_rxn if not isinstance(target_rxn, str) else self.model.reactions.get_by_id(target_rxn)
         sense = "max" if not minimize else "min"
-        self.model.objective = self.model.problem.Objective(
-            target_reaction.flux_expression, direction=sense
-        )
-        return target_reaction
+        self.model.objective = self.model.problem.Objective(target_rxn.flux_expression, direction=sense)
+        return target_rxn
 
     def biomass_expression(self):
         for met in self.model.metabolites:
