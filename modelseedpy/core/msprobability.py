@@ -17,7 +17,7 @@ def add_biomass_objective(megaModel, captured_rxnIDs):
     else:
         # select the most conserved biomass composition
         for rxn in megaModel.reactions:
-            if "biomass" and not "EX_" in rxn.id:
+            if "biomass" and not "EX_" in rxn.id:   # randomly the first biomass reaction is pulled from the ASV set
                 megaModel.objective = Objective(rxn.flux_expression, direction="max")
                 break
     megaModel.solver.update()
