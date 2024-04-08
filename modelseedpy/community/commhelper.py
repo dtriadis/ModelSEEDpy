@@ -141,7 +141,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     for index, let in enumerate(finalID):
                         if index >= len(initialID) or index < len(initialID) and let != initialID[index]: string_diff += let
                     # if "compartment" not in locals():  print(f"the {rxn.id} with a {output} output is not defined with a compartment.")
-                    if string_diff != f"_{compartment}{model_index}" and printing:
+                    if string_diff != f"_{compartment}{model_index}" or not FBAHelper.isnumber(string_diff) and printing:
                         logger.debug(f"The ID {initialID} is changed with {string_diff} to create the final ID {finalID}")
             new_reactions.add(rxn)
         # else:
