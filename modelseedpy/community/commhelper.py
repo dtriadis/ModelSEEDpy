@@ -17,7 +17,7 @@ from numpy import mean
 import re
 
 import logging
-logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.ERROR)
+logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -40,26 +40,8 @@ def correct_nonMSID(nonMSobject, output, model_index):
 
 
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
-                              standardize=False, MSmodel = True, commkinetics=True, copy_models=True, printing=False):
-    """Merges the input list of single species metabolic models into a community metabolic model
-
-    Parameters
-    ----------
-    org_models : list<Cobra.Model> to be merged into a community model
-    model_id : string specifying community model ID
-    name : string specifying community model name
-    names : list<string>  human-readable names for models being merged
-    abundances : dict<string,float> relative abundances for input models in community model
-    cobra_model : bool for whether the raw COBRA model is returned
-    standardize: bool for whether the exchanges of each member model will be standardized (True) or just aligned.
-
-    Returns
-    -------
-    Cobra.Model for the desired Community
-
-    Raises
-    ------
-    """
+                              standardize=False, MSmodel = True, commkinetics=True,
+                              copy_models=True, printing=False):
     # construct the new model
     models = org_models #if not standardize else GEMCompatibility.standardize(
         #org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
@@ -67,6 +49,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     biomass_index = minimal_biomass_index = 2
     new_metabolites, new_reactions = set(), set()
     member_biomasses = {}
+    models = models if not abundances else [mdl for mdl in models if mdl.id in abundances]
     for model_index, org_model in enumerate(models):
         model_util = MSModelUtil(org_model, copy=copy_models)
         model_reaction_ids = [rxn.id for rxn in model_util.model.reactions]
@@ -77,6 +60,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
             # if printing:  print(met, output)
+            print(met.id, output)
             if output is None:
                 if printing:  print(f"The {met.id} ({output}; {hasattr(met, 'compartment')}) is unpredictable.")
                 met.id = correct_nonMSID(met, (met.id, "c"), model_index)
@@ -91,8 +75,9 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
+            print(met.id)
             new_metabolites.add(met)
-            if "cpd11416_c" in met.id or "biomass" in met.id:
+            if "cpd11416_c" in met.id or "biomass" in met.name:
                 met.name = f"{met.id}_{model_util.model.id}"
                 member_biomasses[org_model.id] = met
         # Rename reactions
@@ -100,21 +85,23 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
             if rxn.id[0:3] != "EX_":
                 ## biomass reactions
                 if re.search('^(bio)(\d+)$', rxn.id) or "biomass" in rxn.id:
-                    index = int(re.sub(r"(^bio)", "", rxn.id))
+                    print(rxn.id)
+                    index = int(re.sub(r"(^biomass)", "", rxn.id)) if "biomass" in rxn.id else int(re.sub(r"(^bio)", "", rxn.id))
                     if biomass_index == 2:
                         while f"bio{biomass_index}" in model_reaction_ids:  biomass_index += 1
-                    if index not in biomass_indices and index >= minimal_biomass_index:  biomass_indices.append(index)
-                    else:  # biomass indices can be decoupled from the respective reaction indices of the same model
-                        rxn.id = "bio" + str(biomass_index)
-                        if rxn.id not in model_reaction_ids:  biomass_indices.append(biomass_index)
-                        else:
-                            index = minimal_biomass_index
-                            rxn.id = "bio" + str(index)
-                            while rxn.id not in model_reaction_ids and index not in biomass_indices:
-                                index += 1
-                                rxn.id = "bio" + str(index)
-                            biomass_indices.append(index)
+                    if index not in biomass_indices and index >= minimal_biomass_index: biomass_indices.append(index)
+                    elif f"bio{biomass_index}" not in model_reaction_ids:  biomass_indices.append(biomass_index)
+                    elif f"bio{minimal_biomass_index}" not in model_reaction_ids:  biomass_indices.append(minimal_biomass_index)
+                    else:
+                        logger.error("The biomass reaction is not properly defined.")
+                        index = minimal_biomass_index
+                        while f"bio{index}" not in model_reaction_ids and index not in biomass_indices:
+                            index += 1
+                        biomass_indices.append(index)
+                    rxn.id = f"bio{biomass_indices[-1]}"
+                    model_reaction_ids.append(rxn.id)
                     biomass_index += 1
+                    print(rxn.id)
                 ## non-biomass reactions
                 else:
                     initialID = str(rxn.id)
@@ -159,11 +146,12 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     ## constrain the community abundances
     if abundances:
         if isinstance(abundances[list(abundances.keys())[0]], dict):
-            abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items() if memberID in abundances}
-        else:   abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items() if memberID in abundances}
+            abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items()}
+        else:   abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items()}
     else:  abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
 
     # TODO - add the biomass reactions instead of thje biomass metabolites for the commKinetics
+    print(abundances)
 
     ## define community biomass components
     metabolites.update(abundances)
@@ -178,6 +166,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     ## proportionally limit the fluxes to their abundances 
     # print(abundances)
     # add the metadata of community composition
+    print(newutl.model.reactions.bio1.reaction)
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     # print([cons.name for cons in newutl.model.constraints])

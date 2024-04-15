@@ -76,7 +76,7 @@ class MSSteadyCom:
         # verify that the model has a solution and parallelize where the solver is permissible
         solver = str(type(mscommodel.util.model.solver))
         print(f"{solver} model loaded")
-        if "gurobi" in solver:  mscommodel.util.model.problem.Params.Threads = os.cpu_count()/2
+        # if "gurobi" in solver:  model.configuration._solver_model.setParam("Threads", os.cpu_count() // 2)
         solution = solution or mscommodel.run_fba(media)
         if not solution:  raise ParameterError("A solution must be provided, from which interactions are computed.")
         if all(array(list(solution.fluxes.values)) == 0):
