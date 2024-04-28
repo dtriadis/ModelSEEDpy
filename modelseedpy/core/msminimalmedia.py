@@ -8,7 +8,7 @@ from optlang import Variable, Constraint
 from cobra.medium import minimal_medium
 from optlang.symbolics import Zero
 from math import isclose, inf, factorial
-from deepdiff import DeepDiff
+#from deepdiff import DeepDiff
 from time import process_time
 from pprint import pprint
 import logging
