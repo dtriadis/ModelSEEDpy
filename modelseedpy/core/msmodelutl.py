@@ -268,7 +268,7 @@ class MSModelUtil:
                 array = met.id.split("_")
                 if array[1] == compartment or met.compartment == compartment:
                     return [met]
-            return None
+            return []
         sname = MSModelUtil.search_name(name)
         if sname in self.search_metabolite_hash:
             if not compartment:
@@ -277,7 +277,7 @@ class MSModelUtil:
                 array = met.id.split("_")
                 if array[1] == compartment or met.compartment == compartment:
                     return [met]
-            return None
+            return []
         logger.info(name + " not found in model!")
         return []
 
@@ -327,6 +327,104 @@ class MSModelUtil:
                     count += 1
         return count
 
+    def reaction_scores(self):
+        return {}
+
+    #################################################################################
+    # Functions related to phenotype simultion
+    #   Design philosophy: the phenotype types should be aware of phenotype data and 
+    #   agnostic to the model, so this code handles how to simulate a phenotype in a
+    #   model. This code sets the model objective based on the phenotype type and adds
+    #   the appropriate exchange reactions.
+    #################################################################################
+    def set_objective_from_phenotype(self,phenotype,missing_transporters=[],create_missing_compounds=False):
+        if phenotype.type == "growth":
+            if "bio1" in self.model.reactions:
+                self.model.objective = "bio1"
+            else:
+                logger.critical(phenotype.id+": growth phenotype but could not find biomass reaction!")
+                return None
+        if phenotype.type == "uptake" or phenotype.type == "excretion":
+            uptake = excretion = 0
+            if phenotype.type == "uptake":
+                uptake = 1000
+            else:
+                excretion = 1000
+            if len(phenotype.additional_compounds) == 0:
+                logger.critical(phenotype.id+": can't set uptake or excretion objective without additional compounds specified!")
+                return None
+            first = True
+            for cpd in phenotype.additional_compounds:
+                exid = "EX_"+cpd+"_e0"
+                if exid not in self.model.reactions:
+                    exid = "EX_"+cpd+"_c0"
+                    if exid not in self.model.reactions:
+                        exmets = self.find_met(cpd,"c0")
+                        if len(exmets) == 0:
+                            if create_missing_compounds:
+                                exmets = [Metabolite(cpd+"_c0",name=cpd+"_c0",compartment="c0")]
+                                self.model.add_metabolites(exmets)
+                            else:
+                                logger.warning(phenotype.id+": could not find metabolite for "+cpd)
+                                return None
+                        self.add_exchanges_for_metabolites(exmets,uptake=uptake,excretion=excretion)
+                        missing_transporters.append(cpd)
+                if first:
+                    self.model.objective = exid
+                    first = False
+                else:
+                    self.model.objective += exid
+            if phenotype.type == "excretion":
+                for reaction in self.model.reactions:
+                    if reaction.objective_coefficient != 0:
+                        reaction.objective_coefficient = -1*reaction.objective_coefficient
+        return str(self.model.objective)
+
+    #################################################################################
+    # Functions related to exchanges and transport reactions
+    #################################################################################
+    def add_transport_and_exchange_for_metabolite(self, met,direction="=",prefix="trans",override=False):
+        #Breaking down the ID to see the compartment and index - ID must take form <base id>_<compartment><index>
+        output = MSModelUtil.parse_id(met)
+        if not output:
+            logger.critical("Transport metabolite ID " + met.id + " not in proper format")
+            return None
+        (baseid,compartment,index) = output
+        #Checking if exchange already exists
+        if baseid+"_e0" in self.model.metabolites and not override:
+            logger.critical("Transport reaction appears to already exist for " + met.id+". Override if transport still desired.")
+            return None
+        elif baseid+"_e0" not in self.model.metabolites:
+            exmet = Metabolite(baseid+"_e0",name=met.name+"_e0",compartment="e0",charge=met.charge,formula=met.formula)
+            self.model.add_metabolites([exmet])
+        else:
+            exmet = self.model.metabolites.get_by_id(baseid+"_e0")
+        #Checking charge so transport will be charge balanced
+        hmet = None
+        exhmet = None
+        if met.charge != 0:
+            #Finding H+ compound in model:
+            output = self.find_met("cpd00067",compartment+str(index))
+            if len(output) > 0:
+                hmet = output[0]
+            output = self.find_met("cpd00067","e0")
+            if len(output) > 0:
+                exhmet = output[0]
+            if not hmet or not exhmet:
+                logger.warning("No H+ metabolite found in model")
+        stoich = {met:-1,exmet:1}
+        if met.charge != 0 and hmet and exhmet:
+            stoich[hmet] = met.charge
+            stoich[exhmet] = -1*met.charge
+        transport = Reaction(prefix + met.id + "_"+compartment+str(index))
+        transport.name = "Charge nuetral transport for " + met.name
+        transport.add_metabolites(stoich)
+        self.model.add_reactions([exchange])
+        transport.annotation["sbo"] = "SBO:0000185"
+        self.model.add_reactions([transport])
+        self.add_exchanges_for_metabolites([exmet],0,1000)
+        return transport
+    
     def exchange_hash(self):
         exchange_reactions = {}
         exlist = self.exchange_list()
@@ -337,7 +435,7 @@ class MSModelUtil:
                 else:
                     logger.warn("Nonstandard exchange reaction ignored:" + reaction.id)
         return exchange_reactions
-
+    
     def add_missing_exchanges(self, media):
         output = []
         exchange_hash = self.exchange_hash()
@@ -382,9 +480,6 @@ class MSModelUtil:
                 drains.append(drain_reaction)
         self.model.add_reactions(drains)
         return drains
-
-    def reaction_scores(self):
-        return {}
 
     #################################################################################
     # Functions related to editing the model
