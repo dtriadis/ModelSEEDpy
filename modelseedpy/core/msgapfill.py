@@ -150,7 +150,7 @@ class MSGapfill:
         )
         return False
 
-    def prefilter(self,test_conditions=None,growth_conditions=[]):
+    def prefilter(self,test_conditions=None,growth_conditions=[],use_prior_filtering=True):
         """Prefilters the database by removing any reactions that break specified ATP tests
         Parameters
         ----------
@@ -161,9 +161,13 @@ class MSGapfill:
             test_conditions = self.test_conditions
         if self.test_conditions:
             logger.debug(f"PREFILTERING WITH {str(len(growth_conditions))} GROWTH CONDITIONS")
+            base_filter = None
+            if use_prior_filtering:
+                base_filter = self.mdlutl.get_attributes("gf_filter", {})
             self.gfpkgmgr.getpkg("GapfillingPkg").filter_database_based_on_tests(
                 self.test_conditions,
-                growth_conditions
+                growth_conditions=growth_conditions,
+                base_filter=base_filter
             )
             gf_filter = self.gfpkgmgr.getpkg("GapfillingPkg").modelutl.get_attributes(
                 "gf_filter", {}
@@ -395,6 +399,7 @@ class MSGapfill:
         self,
         media_list,
         target=None,
+        target_hash={},
         minimum_objectives={},
         default_minimum_objective=None,
         binary_check=False,
@@ -436,7 +441,10 @@ class MSGapfill:
             default_minimum_objective = self.default_minimum_objective
         #Checking that each media to ensure gapfilling works before filtering
         for media in media_list:
-            if not self.test_gapfill_database(media,target,before_filtering=True):
+            currtarget = target
+            if media in target_hash:
+                currtarget = target_hash[media]
+            if not self.test_gapfill_database(media,currtarget,before_filtering=True):
                 #Remove media that fail initial test
                 print("Removing ungapfillable media "+media.id)
                 media_list.remove(media)
@@ -450,11 +458,14 @@ class MSGapfill:
                 minimum_obj = default_minimum_objective
                 if media in minimum_objectives:
                     minimum_obj = minimum_objectives[media]
+                currtarget = target
+                if media in target_hash:
+                    currtarget = target_hash[media]
                 growth_conditions.append({
                     "media": media,
                     "is_max_threshold": False,
                     "threshold": minimum_obj,
-                    "objective": target,
+                    "objective": currtarget,
                 })
             self.prefilter(growth_conditions=growth_conditions)
         #Iterating over all media and running gapfilling
@@ -463,7 +474,11 @@ class MSGapfill:
         targets = []
         thresholds = []
         for item in media_list:
-            targets.append(target)
+            currtarget=target
+            if media in target_hash:
+                targets.append(target_hash[media])
+            else:
+                targets.append(target)
             #Determining the minimum objective for the current media
             minimum_obj = default_minimum_objective
             if item in minimum_objectives:
@@ -473,7 +488,7 @@ class MSGapfill:
             if gapfilling_mode == "Independent" or gapfilling_mode == "Sequential":           
                 solution = self.run_gapfilling(
                     item,
-                    target,
+                    currtarget,
                     minimum_obj,
                     binary_check,
                     False,

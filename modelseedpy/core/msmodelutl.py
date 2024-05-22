@@ -384,6 +384,13 @@ class MSModelUtil:
     # Functions related to exchanges and transport reactions
     #################################################################################
     def add_transport_and_exchange_for_metabolite(self, met,direction="=",prefix="trans",override=False):
+        #If met is a string, attempt to find the associated metabolite
+        if isinstance(met,str):
+            mets = self.find_met(met)
+            if len(mets) == 0:
+                logger.critical("Metabolite "+met+" not found in model")
+                return None
+            met = mets[0]
         #Breaking down the ID to see the compartment and index - ID must take form <base id>_<compartment><index>
         output = MSModelUtil.parse_id(met)
         if not output:
@@ -417,9 +424,8 @@ class MSModelUtil:
             stoich[hmet] = met.charge
             stoich[exhmet] = -1*met.charge
         transport = Reaction(prefix + met.id + "_"+compartment+str(index))
-        transport.name = "Charge nuetral transport for " + met.name
+        transport.name = "Charge-nuetral transport for " + met.name
         transport.add_metabolites(stoich)
-        self.model.add_reactions([exchange])
         transport.annotation["sbo"] = "SBO:0000185"
         self.model.add_reactions([transport])
         self.add_exchanges_for_metabolites([exmet],0,1000)

@@ -745,13 +745,28 @@ class GapfillingPkg(BaseFBAPkg):
             if min_objective < 0:
                 self.pkgmgr.getpkg("ObjConstPkg").constraints["objc"]["1"].ub = min_objective
 
-    def filter_database_based_on_tests(self, test_conditions,growth_conditions=[]):
+    def filter_database_based_on_tests(self,test_conditions,growth_conditions=[],base_filter=None,base_target="rxn00062_c0"):
         #Saving the current media
         current_media = self.current_media()
         #Clearing element uptake constraints
         self.pkgmgr.getpkg("ElementUptakePkg").clear()
         # Setting the minimal growth constraint to zero
-        self.reset_objective_minimum(0,False)
+        self.reset_objective_minimum(0,False)    
+        # Applying base filter
+        base_filter_list = []
+        if base_filter != None:
+            for media_id in base_filter:
+                if base_target in base_filter[media_id]:
+                    for threshold in base_filter[media_id][base_target]:
+                        for rxn_id in base_filter[media_id][base_target][threshold]:
+                            for direction in base_filter[media_id][base_target][threshold][rxn_id]:
+                                if rxn_id in self.model.reactions:
+                                    rxnobj = self.model.reactions.get_by_id(rxn_id)
+                                    base_filter_list.append([rxnobj,direction])
+                                    if direction == ">":
+                                        rxnobj.upper_bound = 0
+                                    else:
+                                        rxnobj.lower_bound = 0
         # Filtering the database of any reactions that violate the specified tests
         filetered_list = []
         with self.model:
@@ -762,10 +777,28 @@ class GapfillingPkg(BaseFBAPkg):
                         rxnlist.append([reaction, "<"])
                     if "forward" in self.gapfilling_penalties[reaction.id]:
                         rxnlist.append([reaction, ">"])
-
             filtered_list = self.modelutl.reaction_expansion_test(
                 rxnlist, test_conditions
             )
+        #Adding base filter reactions to model
+        if base_filter != None:
+            gf_filter_att = self.modelutl.get_attributes("gf_filter", {})
+            for media_id in base_filter:
+                if media_id not in gf_filter_att:
+                    gf_filter_att[media_id] = {}
+                if base_target in base_filter[media_id]:
+                    if base_target not in gf_filter_att[media_id]:
+                        gf_filter_att[media_id][base_target] = {}
+                    for threshold in base_filter[media_id][base_target]:
+                        if threshold not in gf_filter_att[media_id][base_target]:
+                            gf_filter_att[media_id][base_target][threshold] = {}
+                        for rxn_id in base_filter[media_id][base_target][threshold]:
+                            if rxn_id not in gf_filter_att[media_id][base_target][threshold]:
+                                gf_filter_att[media_id][base_target][threshold][rxn_id] = {}
+                            for direction in base_filter[media_id][base_target][threshold][rxn_id]:
+                                if direction not in gf_filter_att[media_id][base_target][threshold][rxn_id]:
+                                    gf_filter_att[media_id][base_target][threshold][rxn_id][direction] = {}
+                                gf_filter_att[media_id][base_target][threshold][rxn_id][direction][direction] = base_filter[media_id][base_target][threshold][rxn_id][direction]            
         # Now constraining filtered reactions to zero
         for item in filtered_list:
             logger.debug("Filtering:" + item[0].id + item[1])
