@@ -156,7 +156,7 @@ class MSGrowthPhenotype:
                         constraint = modelutl.model.constraints['1_objc']
                         modelutl.model.remove_cons_vars([constraint])
                     modelutl.pkgmgr.getpkg("ObjConstPkg").build_package(
-                        0.2*output["objective_value"], None
+                        0.1, None
                     )
                     coefobj = modelutl.model.problem.Objective(0, direction="min")
                     modelutl.model.objective = coefobj
