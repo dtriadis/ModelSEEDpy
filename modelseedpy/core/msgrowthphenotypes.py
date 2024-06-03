@@ -575,7 +575,7 @@ class MSGrowthPhenotypes:
             summary["Count"][0] = summary["Count"][0] / totalcount
         sdf = pd.DataFrame(summary)
         df = pd.DataFrame(data)
-        self.adjust_phenotype_calls(df)
+        #self.adjust_phenotype_calls(df)
         return {"details": df, "summary": sdf,"data":datahash}
 
     def adjust_phenotype_calls(self,data,baseline_objective=0.01):
