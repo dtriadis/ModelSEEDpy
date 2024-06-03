@@ -378,6 +378,7 @@ class MSModelUtil:
                 for reaction in self.model.reactions:
                     if reaction.objective_coefficient != 0:
                         reaction.objective_coefficient = -1*reaction.objective_coefficient
+        self.model.objective.direction = 'max'
         return str(self.model.objective)
 
     #################################################################################
@@ -427,6 +428,12 @@ class MSModelUtil:
         transport.name = "Charge-nuetral transport for " + met.name
         transport.add_metabolites(stoich)
         transport.annotation["sbo"] = "SBO:0000185"
+        transport.upper_bound = 0
+        transport.lower_bound = 0
+        if direction == ">" or direction == "=":
+            transport.upper_bound = 1000
+        if direction == "<" or direction == "=":
+            transport.lower_bound = -1000
         self.model.add_reactions([transport])
         self.add_exchanges_for_metabolites([exmet],0,1000)
         return transport
@@ -786,7 +793,8 @@ class MSModelUtil:
             solution = self.convert_solution_to_list(solution)
         #Processing solution in standardized format
         for item in solution:
-            rxn_id = item[0]    
+            rxn_id = item[0]
+            other_original_bound = None
             rxnobj = self.model.reactions.get_by_id(rxn_id)
             #Testing all media and target and threshold combinations to see if the reaction is needed
             needed = False
@@ -800,9 +808,15 @@ class MSModelUtil:
                 #This has to happen after media is applied in case the reaction is an exchange
                 if item[1] == ">":
                     original_bound = rxnobj.upper_bound
+                    if rxnobj.lower_bound > 0:
+                        other_original_bound = rxnobj.lower_bound
+                        rxnobj.lower_bound = 0
                     rxnobj.upper_bound = 0
                 else:
                     original_bound = rxnobj.lower_bound
+                    if rxnobj.upper_bound < 0:
+                        other_original_bound = rxnobj.upper_bound
+                        rxnobj.upper_bound = 0
                     rxnobj.lower_bound = 0
                 #Computing the objective value
                 objective = self.model.slim_optimize()
@@ -818,7 +832,7 @@ class MSModelUtil:
                     )
             #If the reaction isn't needed for any media and target combinations, add it to the unneeded list
             if not needed:
-                unneeded.append([rxn_id, item[1], item[2],original_bound])
+                unneeded.append([rxn_id, item[1], item[2],original_bound,other_original_bound])
                 logger.info(
                     rxn_id
                     + item[1]
@@ -830,16 +844,24 @@ class MSModelUtil:
                 #Restore the reaction if it is needed
                 if item[1] == ">":
                     rxnobj.upper_bound = original_bound
+                    if other_original_bound != None:
+                        rxnobj.lower_bound = other_original_bound
                 else:
                     rxnobj.lower_bound = original_bound
+                    if other_original_bound != None:
+                        rxnobj.upper_bound = other_original_bound
         if not remove_unneeded_reactions:
             #Restoring the bounds on the unneeded reactions
             for item in unneeded:
                 rxnobj = self.model.reactions.get_by_id(item[0])
                 if item[1] == ">":
                     rxnobj.upper_bound = item[3]
+                    if item[4] != None:
+                        rxnobj.lower_bound = item[4]
                 else:
                     rxnobj.lower_bound = item[3]
+                    if item[4] != None:
+                        rxnobj.upper_bound = item[4]
         else:
             #Do not restore bounds on unneeded reactions and remove reactions from model if their bounds are zero
             removed_rxns = []
@@ -848,8 +870,12 @@ class MSModelUtil:
                 if self.find_item_in_solution(do_not_remove_list,item):
                     if item[1] == ">":
                         rxnobj.upper_bound = item[3]
+                        if item[4] != None:
+                            rxnobj.lower_bound = item[4]
                     else:
                         rxnobj.lower_bound = item[3]
+                        if item[4] != None:
+                            rxnobj.upper_bound = item[4]
                 elif rxnobj.lower_bound == 0 and rxnobj.upper_bound == 0 and not self.find_item_in_solution(do_not_remove_list,item,ignore_dir=True):
                     removed_rxns.append(rxnobj)
             if len(removed_rxns) > 0:

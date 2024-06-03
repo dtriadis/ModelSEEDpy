@@ -50,8 +50,12 @@ class KBaseMediaPkg(BaseFBAPkg):
         # First initializing all exchanges to default uptake and excretion
         exchange_list = self.modelutl.exchange_list()
         for reaction in exchange_list:
-            reaction.lower_bound = -1 * self.parameters["default_uptake"]
-            reaction.upper_bound = self.parameters["default_excretion"]
+            if -1 * self.parameters["default_uptake"] > reaction.upper_bound:
+                reaction.upper_bound = self.parameters["default_excretion"]
+                reaction.lower_bound = -1 * self.parameters["default_uptake"]
+            else:
+                reaction.lower_bound = -1 * self.parameters["default_uptake"]
+                reaction.upper_bound = self.parameters["default_excretion"]
 
         # Now constraining exchanges for specific compounds specified in the media
         if self.parameters["media"]:

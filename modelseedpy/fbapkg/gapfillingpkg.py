@@ -716,16 +716,16 @@ class GapfillingPkg(BaseFBAPkg):
     def test_gapfill_database(self):
         self.reset_objective_minimum(0,False)
         self.model.objective = self.original_objective
-        solution = self.model.optimize()
+        self.test_solution = self.model.optimize()
         logger.info(
             "Objective with gapfill database:"
-            + str(solution.objective_value)
+            + str(self.test_solution.objective_value)
             + "; min objective:"
             + str(self.parameters["minimum_obj"])
         )
         self.reset_objective_minimum(self.parameters["minimum_obj"])
         self.model.objective = self.parameters["gfobj"]
-        if solution.objective_value < self.parameters["minimum_obj"]:
+        if self.test_solution.objective_value < self.parameters["minimum_obj"] or self.test_solution.status == 'infeasible':
             return False
         return True
 
@@ -745,7 +745,7 @@ class GapfillingPkg(BaseFBAPkg):
             if min_objective < 0:
                 self.pkgmgr.getpkg("ObjConstPkg").constraints["objc"]["1"].ub = min_objective
 
-    def filter_database_based_on_tests(self,test_conditions,growth_conditions=[],base_filter=None,base_target="rxn00062_c0"):
+    def filter_database_based_on_tests(self,test_conditions,growth_conditions=[],base_filter=None,base_target="rxn00062_c0",base_filter_only=False):
         #Saving the current media
         current_media = self.current_media()
         #Clearing element uptake constraints
@@ -768,18 +768,19 @@ class GapfillingPkg(BaseFBAPkg):
                                     else:
                                         rxnobj.lower_bound = 0
         # Filtering the database of any reactions that violate the specified tests
-        filetered_list = []
-        with self.model:
-            rxnlist = []
-            for reaction in self.model.reactions:
-                if reaction.id in self.gapfilling_penalties:
-                    if "reverse" in self.gapfilling_penalties[reaction.id]:
-                        rxnlist.append([reaction, "<"])
-                    if "forward" in self.gapfilling_penalties[reaction.id]:
-                        rxnlist.append([reaction, ">"])
-            filtered_list = self.modelutl.reaction_expansion_test(
-                rxnlist, test_conditions
-            )
+        filtered_list = []
+        if not base_filter_only:
+            with self.model:
+                rxnlist = []
+                for reaction in self.model.reactions:
+                    if reaction.id in self.gapfilling_penalties:
+                        if "reverse" in self.gapfilling_penalties[reaction.id]:
+                            rxnlist.append([reaction, "<"])
+                        if "forward" in self.gapfilling_penalties[reaction.id]:
+                            rxnlist.append([reaction, ">"])
+                filtered_list = self.modelutl.reaction_expansion_test(
+                    rxnlist, test_conditions
+                )
         #Adding base filter reactions to model
         if base_filter != None:
             gf_filter_att = self.modelutl.get_attributes("gf_filter", {})

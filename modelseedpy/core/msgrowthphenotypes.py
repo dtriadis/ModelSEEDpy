@@ -13,6 +13,7 @@ logger.setLevel(
     logging.INFO
 )  # When debugging - set this to INFO then change needed messages below from DEBUG to INFO
 
+zero_threshold = 0.0000001
 
 class MSGrowthPhenotype:
     def __init__(
@@ -62,9 +63,10 @@ class MSGrowthPhenotype:
         multiplier=3,
         add_missing_exchanges=False,
         save_fluxes=False,
-        pfba=False,
+        save_reaction_list=False,
         ignore_experimental_data=False,
-        baseline_objective=0.01
+        baseline_objective=0.01,
+        flux_coefficients=None,
     ):
         """Simulates a single phenotype
         Parameters
@@ -145,10 +147,52 @@ class MSGrowthPhenotype:
             # Optimizing model
             solution = modelutl.model.optimize()
             output["objective_value"] = solution.objective_value
-            if solution.objective_value > 0 and pfba:
-                solution = cobra.flux_analysis.pfba(modelutl.model)
-            if save_fluxes:
-                output["fluxes"] = solution.fluxes
+            if solution.objective_value > 0:
+                if flux_coefficients == None:
+                    solution = cobra.flux_analysis.pfba(modelutl.model)
+                else:
+                    #modelutl.printlp(lpfilename="lpfiles/gapfill.lp")
+                    if '1_objc' in modelutl.model.constraints:
+                        constraint = modelutl.model.constraints['1_objc']
+                        modelutl.model.remove_cons_vars([constraint])
+                    modelutl.pkgmgr.getpkg("ObjConstPkg").build_package(
+                        0.2*output["objective_value"], None
+                    )
+                    coefobj = modelutl.model.problem.Objective(0, direction="min")
+                    modelutl.model.objective = coefobj
+                    obj_coef = {}
+                    for rxn in flux_coefficients:
+                        rxnid = rxn
+                        direction = "="
+                        if rxn[0:1] == ">" or rxn[0:1] == "<":
+                            direction = rxn[0:1]
+                            rxnid = rxn[1:]
+                        if rxnid in modelutl.model.reactions:
+                            rxnobj = modelutl.model.reactions.get_by_id(rxnid)
+                            if direction == ">" or direction == "=":
+                                obj_coef[rxnobj.forward_variable] = flux_coefficients[rxn]
+                            if direction == "<" or direction == "=":
+                                obj_coef[rxnobj.reverse_variable] = flux_coefficients[rxn]
+                    coefobj.set_linear_coefficients(obj_coef)
+                    solution = modelutl.model.optimize()
+                    modelutl.pkgmgr.getpkg("ObjConstPkg").clear()
+                if save_reaction_list:
+                    output["reactions"] = []
+                if save_fluxes:
+                    output["fluxes"] = solution.fluxes
+                output["gapfill_count"] = 0
+                output["reaction_count"] = 0
+                for reaction in modelutl.model.reactions:
+                    if reaction.id in solution.fluxes:
+                        flux = solution.fluxes[reaction.id]
+                        if abs(flux) > zero_threshold:
+                            output["reaction_count"] += 1
+                            if reaction.id[0:3] != "bio" and reaction.id[0:3] != "EX_" and reaction.id[0:3] != "DM_" and len(reaction.genes) == 0:
+                                output["gapfill_count"] += 1
+                            if save_reaction_list and flux > zero_threshold:
+                                output["reactions"].append(">"+reaction.id)
+                            elif save_reaction_list:
+                                output["reactions"].append("<"+reaction.id)
 
         # Determining phenotype class
         if output["objective_value"] >= output["baseline_objective"] * multiplier:
@@ -424,10 +468,12 @@ class MSGrowthPhenotypes:
         multiplier=3,
         add_missing_exchanges=False,
         save_fluxes=False,
+        save_reaction_list=False,
         gapfill_negatives=False,
         msgapfill=None,
         test_conditions=None,
-        ignore_experimental_data=False
+        ignore_experimental_data=False,
+        flux_coefficients=None
     ):
         """Simulates all the specified phenotype conditions and saves results
         Parameters
@@ -471,7 +517,9 @@ class MSGrowthPhenotypes:
                 multiplier,
                 add_missing_exchanges,
                 save_fluxes,
+                save_reaction_list=save_reaction_list,
                 ignore_experimental_data=ignore_experimental_data,
+                flux_coefficients=flux_coefficients
             )
             datahash[pheno.id] = result
             data["Class"].append(result["class"])
