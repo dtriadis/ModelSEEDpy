@@ -147,7 +147,7 @@ class MSGrowthPhenotype:
             # Optimizing model
             solution = modelutl.model.optimize()
             output["objective_value"] = solution.objective_value
-            if solution.objective_value > 0:
+            if solution.objective_value != None and solution.objective_value > 0:
                 if flux_coefficients == None:
                     solution = cobra.flux_analysis.pfba(modelutl.model)
                 else:
@@ -195,7 +195,7 @@ class MSGrowthPhenotype:
                                 output["reactions"].append("<"+reaction.id)
 
         # Determining phenotype class
-        if output["objective_value"] >= output["baseline_objective"] * multiplier:
+        if output["objective_value"] != None and output["objective_value"] >= output["baseline_objective"] * multiplier:
             output["postive"] = True
             if not self.experimental_value or ignore_experimental_data:
                 output["class"] = "P"
