@@ -145,6 +145,9 @@ class MSGrowthPhenotype:
                     geneobj.knock_out()
 
             # Optimizing model
+            if '1_objc' in modelutl.model.constraints:
+                constraint = modelutl.model.constraints['1_objc']
+                modelutl.model.remove_cons_vars([constraint])
             solution = modelutl.model.optimize()
             output["objective_value"] = solution.objective_value
             if solution.objective_value != None and solution.objective_value > 0:
@@ -152,9 +155,6 @@ class MSGrowthPhenotype:
                     solution = cobra.flux_analysis.pfba(modelutl.model)
                 else:
                     #modelutl.printlp(lpfilename="lpfiles/gapfill.lp")
-                    if '1_objc' in modelutl.model.constraints:
-                        constraint = modelutl.model.constraints['1_objc']
-                        modelutl.model.remove_cons_vars([constraint])
                     modelutl.pkgmgr.getpkg("ObjConstPkg").build_package(
                         0.1, None
                     )
