@@ -49,7 +49,7 @@ def bioFlux_check(model, sol=None, sol_dict=None, min_growth=0.1):
     sol_dict = sol_dict or FBAHelper.solution_to_variables_dict(sol, model)
     # print({k:v for k,v in sol_dict.items() if v > 1E-8})
     simulated_growth = max(sum([flux for var, flux in sol_dict.items() if re.search(r"(^bio\d+$)", var.name)]), sol.objective_value)
-    if simulated_growth < min_growth*0.9999:
+    if simulated_growth < min_growth*0.9999 and simulated_growth+min_growth > 1e-8:
         raise ObjectiveError(f"The assigned minimal_growth of {min_growth} was not maintained during the simulation,"
                              f" where the observed growth value was {simulated_growth}.")
     if sol.status != "optimal":

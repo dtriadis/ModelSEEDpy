@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class CommunityMember:
     def __init__(self, community, biomass_cpd, ID=None, index=None, abundance=0):
-        print(biomass_cpd)
+        print("biomass compound:", biomass_cpd)
         self.community, self.biomass_cpd = community, biomass_cpd
         try:     self.index = int(self.biomass_cpd.compartment[1:])
         except:  self.index = index
@@ -101,7 +101,7 @@ class MSCommunity:
             if "c0" in self.biomass_cpd.id:
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
-                    print(self.biomass_cpd, rxn, end=";\t")
+                    # print(self.biomass_cpd, rxn, end=";\t")
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
                         if self.primary_biomass:  raise ObjectAlreadyDefinedError(
                             f"The primary biomass {self.primary_biomass} is already defined,"
@@ -112,7 +112,7 @@ class MSCommunity:
             elif 'c' in self.biomass_cpd.compartment:   other_biomass_cpds.append(self.biomass_cpd)
         abundances = abundances or {f"Species{memIndex}": {"biomass_compound": bioCpd, "abundance": 1/len(other_biomass_cpds)}
                                     for memIndex, bioCpd in enumerate(other_biomass_cpds)}
-        print()   # this returns the carriage after the tab-ends in the biomass compound printing 
+        # print()   # this returns the carriage after the tab-ends in the biomass compound printing 
         self.members = DictList(CommunityMember(self, info["biomass_compound"], ID, index, info["abundance"])
                                 for index, (ID, info) in enumerate(abundances.items()))
         # assign the MSCommunity constraints and objective
