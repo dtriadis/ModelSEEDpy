@@ -44,7 +44,7 @@ class CommunityMember:
             # print(rxn.id, rxn.reaction, "\t\t\t", end="\r")
             rxnComp = FBAHelper.rxn_compartment(rxn)
             if rxnComp is None:  print(f"The reaction {rxn.id} compartment is undefined.")
-            if rxnComp[1:] == '': print(rxn, rxnComp)
+            if rxnComp[1:] == '': print("no compartment", rxn, rxnComp)
             elif int(rxnComp[1:]) == self.index and 'bio' not in rxn.name:  self.reactions.append(rxn)
             if self.biomass_cpd in rxn.metabolites:
                 # print(rxn.reaction)

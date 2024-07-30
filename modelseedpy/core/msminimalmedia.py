@@ -82,7 +82,7 @@ class MSMinimalMedia:
         return influxes
 
     @staticmethod
-    def minimize_flux(org_model, min_growth=None, environment=None, interacting=True, printing=True):
+    def minimize_flux(org_model, min_growth=None, environment=None, interacting=True, pfba=True, printing=True):
         """minimize the total in-flux of exchange reactions in the model"""
         if org_model.slim_optimize() == 0:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
@@ -90,7 +90,8 @@ class MSMinimalMedia:
         model_util = MSModelUtil(org_model, True)
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
-        min_growth =  model_util.model.slim_optimize() if min_growth is None else min(min_growth, model_util.model.slim_optimize())
+        sol_growth = model_util.run_fba(None, pfba).fluxes[model_util.biomass_objective]
+        min_growth = sol_growth if min_growth is None else min(min_growth, sol_growth)
         # min_flux = MSMinimalMedia._min_consumption_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media

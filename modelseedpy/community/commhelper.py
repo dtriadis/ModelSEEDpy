@@ -4,12 +4,12 @@ from modelseedpy.fbapkg.mspackagemanager import MSPackageManager
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.core.fbahelper import FBAHelper
 from cobra import Model, Reaction, Metabolite
+from optlang import Constraint, Objective
 from cobra.medium import minimal_medium
 # from commscores import GEMCompatibility
 from cobra.flux_analysis import pfba
 from collections import OrderedDict
 from optlang.symbolics import Zero
-from optlang import Constraint
 from math import inf, isclose
 from pandas import DataFrame
 from pprint import pprint
@@ -60,7 +60,6 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
             # Renaming compartments
             output = MSModelUtil.parse_id(met)
             # if printing:  print(met, output)
-            print(met.id, output)
             if output is None:
                 if printing:  print(f"The {met.id} ({output}; {hasattr(met, 'compartment')}) is unpredictable.")
                 met.id = correct_nonMSID(met, (met.id, "c"), model_index)
@@ -75,7 +74,6 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                 else:
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
-            print(met.id)
             new_metabolites.add(met)
             if "cpd11416_c" in met.id or "biomass" in met.name:
                 met.name = f"{met.id}_{model_util.model.id}"
@@ -85,7 +83,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
             if rxn.id[0:3] != "EX_":
                 ## biomass reactions
                 if re.search('^(bio)(\d+)$', rxn.id) or "biomass" in rxn.id:
-                    print(rxn.id)
+                    print(rxn.id, "from", model_util.id, "becomes", end=" ")
                     index = int(re.sub(r"(^biomass)", "", rxn.id)) if "biomass" in rxn.id else int(re.sub(r"(^bio)", "", rxn.id))
                     if biomass_index == 2:
                         while f"bio{biomass_index}" in model_reaction_ids:  biomass_index += 1
@@ -134,11 +132,6 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         # else:
         #     # TODO develop a method for compartmentalizing models without editing all reaction IDs or assuming their syntax
         #     pass
-    # adds only unique reactions and metabolites to the community model
-    newmodel = Model(model_id or "+".join([model.id for model in models]),
-                     name or "+".join([model.name for model in models]))
-    newmodel.add_reactions(FBAHelper.filter_cobra_set(new_reactions))
-    newmodel.add_metabolites(FBAHelper.filter_cobra_set(new_metabolites))
 
     # Create community biomass
     comm_biomass = Metabolite("cpd11416_c0", None, "Community biomass", 0, "c0")
@@ -150,23 +143,26 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
         else:   abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items()}
     else:  abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
 
-    # TODO - add the biomass reactions instead of thje biomass metabolites for the commKinetics
-    print(abundances)
+    ## TODO - add the biomass reactions instead of the biomass metabolites for the commKinetics
 
     ## define community biomass components
     metabolites.update(abundances)
     comm_biorxn = Reaction(id="bio1", name="bio1", lower_bound=0, upper_bound=1000)
     comm_biorxn.add_metabolites(metabolites)
-    print(comm_biorxn)
+
+    # adds only unique reactions and metabolites to the community model
+    newmodel = Model(model_id or "+".join([model.id for model in models]),
+                     name or "+".join([model.name for model in models]))
+    newmodel.add_reactions(FBAHelper.filter_cobra_set(new_reactions))
+    newmodel.add_metabolites(FBAHelper.filter_cobra_set(new_metabolites))
     newmodel.add_reactions([comm_biorxn])
-    # update model components
+    newmodel.objective = Objective(comm_biorxn.flux_expression)
     newutl = MSModelUtil(newmodel)
-    newutl.add_objective(comm_biorxn.flux_expression)
+    # newutl.add_objective(comm_biorxn.flux_expression)
     newutl.model.add_boundary(comm_biomass, "sink") # Is a sink reaction for reversible cpd11416_c0 consumption necessary?
     ## proportionally limit the fluxes to their abundances 
-    # print(abundances)
     # add the metadata of community composition
-    print(newutl.model.reactions.bio1.reaction)
+    print("Community objective", newutl.model.objective.expression)
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
     elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
     # print([cons.name for cons in newutl.model.constraints])

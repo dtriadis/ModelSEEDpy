@@ -124,6 +124,10 @@ class MSModelUtil:
         self.test_objective = None
         self.reaction_scores = None
         self.score = None
+        try:
+            self.biomass_objective = list(self.model.objective.variables)[0].name
+        except IndexError:
+            print(f"The {self.id} has an improperly defined objective function")
         self.integrated_gapfillings = []
         self.attributes = {}
         if hasattr(self.model, "computed_attributes"):
