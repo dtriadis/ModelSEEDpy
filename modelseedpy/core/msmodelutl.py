@@ -125,7 +125,10 @@ class MSModelUtil:
         self.reaction_scores = None
         self.score = None
         try:
-            self.biomass_objective = list(self.model.objective.variables)[0].name
+            objectiveVars = list(self.model.objective.variables)
+            for var in objectiveVars:
+                if "reverse" not in var.name:
+                    self.biomass_objective = var.name
         except IndexError:
             print(f"The {self.id} has an improperly defined objective function")
         self.integrated_gapfillings = []

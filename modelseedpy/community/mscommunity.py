@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class CommunityMember:
     def __init__(self, community, biomass_cpd, ID=None, index=None, abundance=0):
-        print("biomass compound:", biomass_cpd)
+        print(ID, "biomass compound:", biomass_cpd)
         self.community, self.biomass_cpd = community, biomass_cpd
         try:     self.index = int(self.biomass_cpd.compartment[1:])
         except:  self.index = index
@@ -46,10 +46,11 @@ class CommunityMember:
             if rxnComp is None:  print(f"The reaction {rxn.id} compartment is undefined.")
             if rxnComp[1:] == '': print("no compartment", rxn, rxnComp)
             elif int(rxnComp[1:]) == self.index and 'bio' not in rxn.name:  self.reactions.append(rxn)
-            if self.biomass_cpd in rxn.metabolites:
-                # print(rxn.reaction)
-                if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:  self.primary_biomass = rxn  ;  break
-                elif len(rxn.metabolites) == 1 and rxn.metabolites[self.biomass_cpd] < 0:  self.biomass_drain = rxn
+            if self.biomass_cpd.id not in [met.id for met in rxn.metabolites]:   continue
+            for met in rxn.metabolites:
+                if met.id != self.biomass_cpd.id:  continue
+                if rxn.metabolites[met] == 1 and len(rxn.metabolites) > 1:  self.primary_biomass = rxn  ;  break
+                elif len(rxn.metabolites) == 1 and rxn.metabolites[met] < 0:  self.biomass_drain = rxn
 
         if self.primary_biomass is None:  logger.critical("No biomass reaction found for species " + self.id)
         if not self.biomass_drain:
@@ -80,6 +81,7 @@ class CommunityMember:
 
 class MSCommunity:
     def __init__(self, model=None, member_models: list = None, abundances=None, kinetic_coeff=2000, lp_filename=None, printing=False):
+        assert model is not None or member_models is not None, "Either the community model and the member models must be defined."
         self.lp_filename = lp_filename
         self.gapfillings = {}
 
@@ -87,7 +89,7 @@ class MSCommunity:
         self.solution = self.biomass_cpd = self.primary_biomass = self.biomass_drain = None
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
         # defining the models
-        if member_models is not None and model is None:
+        if model is None and member_models is not None:
             model = build_from_species_models(member_models, abundances=abundances, printing=printing)
         self.id = model.id
         self.util = MSModelUtil(model, True)
@@ -110,8 +112,21 @@ class MSCommunity:
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
             elif 'c' in self.biomass_cpd.compartment:   other_biomass_cpds.append(self.biomass_cpd)
-        abundances = abundances or {f"Species{memIndex}": {"biomass_compound": bioCpd, "abundance": 1/len(other_biomass_cpds)}
-                                    for memIndex, bioCpd in enumerate(other_biomass_cpds)}
+        if not abundances:
+            if member_models is None:
+                abundances = {f"Species{memIndex}": {"biomass_compound": bioCpd, "abundance": 1/len(other_biomass_cpds)}
+                                for memIndex, bioCpd in enumerate(other_biomass_cpds)}
+            else:
+                abundances = {}
+                for memID, bioCPD in model.notes["member_biomass_cpds"].items():
+                    abundances[memID] = {"abundance": 1/len(other_biomass_cpds)}
+                    for met in model.metabolites:
+                        if bioCPD.id == met.id:
+                            if "biomass_compound" in abundances[memID]:   print("duplicate", bioCPD.id, met.id)
+                            abundances[memID].update({"biomass_compound": met})
+                            # print(bioCPD, met.id)
+                    if "biomass_compound" not in abundances[memID]:   print(f"The {memID} bioCPD was not captured")
+                    
         # print()   # this returns the carriage after the tab-ends in the biomass compound printing 
         self.members = DictList(CommunityMember(self, info["biomass_compound"], ID, index, info["abundance"])
                                 for index, (ID, info) in enumerate(abundances.items()))

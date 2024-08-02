@@ -164,7 +164,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     # add the metadata of community composition
     print("Community objective", newutl.model.objective.expression)
     if hasattr(newutl.model, "_context"):  newutl.model._contents.append(member_biomasses)
-    elif hasattr(newutl.model, "notes"):  newutl.model.notes.update(member_biomasses)
+    elif hasattr(newutl.model, "notes"):  newutl.model.notes.update({"member_biomass_cpds": member_biomasses})
     # print([cons.name for cons in newutl.model.constraints])
     return newutl.model
 
