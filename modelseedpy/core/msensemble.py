@@ -42,7 +42,7 @@ class MSEnsemble:
         ensemble = MSEnsemble(mdlutl)
         ensemble.build_ensemble(reaction_probability_hash, gpr_level_sampling, sample_count)
     
-    def __init__(self,model_or_mdlutl):
+    def __init__(self,model_or_mdlutl,reaction_probabilities=None):
         # Discerning input is model or mdlutl and setting internal links
         if isinstance(model_or_mdlutl, MSModelUtil):
             self.model = model_or_mdlutl.model
@@ -50,12 +50,12 @@ class MSEnsemble:
         else:
             self.model = model_or_mdlutl
             self.mdlutl = MSModelUtil.get(model_or_mdlutl)
-        self.data = {
-            "size": self.size,
-            "reactions": {}
-        }
         attributes = self.mdlutl.get_attributes()
         if "ensemble" not in attributes:
+            self.data = {
+                "size": 0,
+                "reactions": {}
+            }
             for rxn in self.model.reactions:
                 self.data["reactions"][rxn.id] = {
                     "presence": "",
@@ -66,10 +66,32 @@ class MSEnsemble:
                     self.data["reactions"][rxn.id]["genes"][gene.id] = {
                         "presence": ""
                     }
+            if reaction_probabilities:
+                self.reset_reaction_probabilities(reaction_probabilities)
             logger.warning("Input model is not an ensemble model. You will need to run build_ensemble() to create an ensemble model.")
         else:
             self.data = attributes["ensemble"]
 
+    def reset_reaction_probabilities(self,reaction_probability_hash,clear_existing=False):
+        #clear_existing: if true, clear existing probabilities before setting new ones
+        if clear_existing:
+            for rxnid in self.data["reactions"]:
+                self.data["reactions"][rxnid]["probability"] = 0
+                for geneid in self.data["reactions"][rxnid]["genes"]:
+                    self.data["reactions"][rxnid]["genes"][geneid]["probability"] = 0
+        #Overwriting reaction probabilities from input hash
+        for rxnid in reaction_probability_hash:
+            if rxnid in self.model.reactions:
+                rxnobj = self.model.reactions.get_by_id(rxnid)
+                if rxnid not in self.data["reactions"]:
+                    self.data["reactions"][rxnid] = {"presence":"","genes":{}}
+                if "probability" in reaction_probability_hash[rxnid]:
+                    self.data["reactions"][rxnid]["probability"] = reaction_probability_hash[rxnid]["probability"]
+                if "genes" in reaction_probability_hash[rxnid]:
+                    for geneid in reaction_probability_hash[rxnid]["genes"]:
+                        #if geneid in rxnobj.genes:
+                        self.data["reactions"][rxnid]["genes"][geneid] = {"presence":"","probability":reaction_probability_hash[rxnid]["genes"][geneid]}
+    
     def rebuild_from_models(self,models):#DONE
         #Clearing existing data
         self.data["ATP_analysis"] = {"core_atp_gapfilling":{},"selected_media":{},"tests":{}}
@@ -135,7 +157,11 @@ class MSEnsemble:
                 if "probabilty" not in self.ensemble_data["reactions"][rxnid]["genes"][geneid]:
                     self.ensemble_data["reactions"][rxnid]["genes"][geneid]["probabilty"] = self.ensemble_data["reactions"][rxnid]["genes"][geneid]["presence"].count('1')/len(self.ensemble_data["reactions"][rxnid]["genes"][geneid]["presence"])
 
-    def sample_from_probabilities(self,from_reaction_probabilities=False,sample_count=1000):
+    def sample_from_probabilities(self,reaction_probabilities=None,from_reaction_probabilities=False,sample_count=1000):
+        #Overwriting reaction probabilities if provided
+        if reaction_probabilities:
+            self.reset_reaction_probabilities(reaction_probabilities)
+        self.data["size"] = sample_count
         #Scrolling through ensemble data with probabilities
         for rxnid in self.data["reactions"]:
             if "probability" not in self.data["reactions"][rxnid]:
@@ -158,22 +184,18 @@ class MSEnsemble:
                 self.data["reactions"][rxnid]["genes"][gene.id]["presence"] = ""
         #Sampling from probabilities
         for i in range(sample_count):
-            if from_reaction_probabilities:
-                for rxnid in self.data["reactions"]:
-                    if random.uniform(0,1) < self.data["reactions"][rxnid]["probability"]:
-                        self.data["reactions"][rxnid]["presence"] += "1"
-                    else:
-                        self.data["reactions"][rxnid]["presence"] += "0"
-                for geneid in self.data["reactions"][rxnid]["genes"]:
-                    self.data["reactions"][rxnid]["genes"][geneid]["presence"] += "1"
-            else:
+            for rxnid in self.data["reactions"]:
                 present = False
-                for geneid in self.data["reactions"][rxnid]["genes"]:
-                    if random.uniform(0,1) < self.data["reactions"][rxnid]["genes"][geneid]["probability"]:
+                if from_reaction_probabilities or len(self.data["reactions"][rxnid]["genes"]) == 0:
+                    if random.uniform(0,1) < self.data["reactions"][rxnid]["probability"]:
                         present = True
-                        self.data["reactions"][rxnid]["genes"][geneid]["presence"] += "1"
-                    else:
-                        self.data["reactions"][rxnid]["genes"][geneid]["presence"] += "0"            
+                else:
+                    for geneid in self.data["reactions"][rxnid]["genes"]:
+                        if random.uniform(0,1) < self.data["reactions"][rxnid]["genes"][geneid]["probability"]:
+                            present = True
+                            self.data["reactions"][rxnid]["genes"][geneid]["presence"] += "1"
+                        else:
+                            self.data["reactions"][rxnid]["genes"][geneid]["presence"] += "0"
                 if present:
                     self.data["reactions"][rxnid]["presence"] += "1"
                 else:

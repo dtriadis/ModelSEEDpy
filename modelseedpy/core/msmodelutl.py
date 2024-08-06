@@ -99,6 +99,11 @@ class MSModelUtil:
             return None
 
     @staticmethod
+    def from_cobrapy_json(filename):
+        model = cobra.io.load_json_model(filename)
+        return MSModelUtil(model)
+    
+    @staticmethod
     def build_from_kbase_json_file(filename, kbaseapi):
         """
         Builds an MSModelUtil object from a KBase JSON file.

@@ -335,7 +335,7 @@ class MSGrowthPhenotypes:
             for added_cpd in pheno["additionalcompound_refs"]:
                 added_compounds.append(added_cpd.split("/").pop())
             newpheno = MSGrowthPhenotype(
-                media.info.id, media, pheno["NormalizedObjective"], geneko, added_compounds
+                media.info.id, media, pheno["normalizedGrowth"], geneko, added_compounds
             )
             new_phenos.append(newpheno)
         growthpheno.add_phenotypes(new_phenos)
@@ -473,7 +473,8 @@ class MSGrowthPhenotypes:
         msgapfill=None,
         test_conditions=None,
         ignore_experimental_data=False,
-        flux_coefficients=None
+        flux_coefficients=None,
+        recall_phenotypes=True
     ):
         """Simulates all the specified phenotype conditions and saves results
         Parameters
@@ -575,7 +576,7 @@ class MSGrowthPhenotypes:
             summary["Count"][0] = summary["Count"][0] / totalcount
         sdf = pd.DataFrame(summary)
         df = pd.DataFrame(data)
-        #self.adjust_phenotype_calls(df)
+        self.adjust_phenotype_calls(df)
         return {"details": df, "summary": sdf,"data":datahash}
 
     def adjust_phenotype_calls(self,data,baseline_objective=0.01):
