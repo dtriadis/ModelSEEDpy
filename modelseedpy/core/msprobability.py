@@ -1,6 +1,7 @@
 from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
 from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from cobra.io import write_sbml_model, read_sbml_model
+from collections import Counter
 from optlang import Objective
 from json import load, dump
 from os import path, mkdir
@@ -9,14 +10,18 @@ import re
 
 
 
-def add_biomass_objective(megaModel, captured_rxnIDs):
-    if "bio1" in captured_rxnIDs:
-        megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
-    else:
-        for rxn in megaModel.reactions:
-            if "biomass" and not "EX_" in rxn.id:
-                megaModel.objective = Objective(rxn.flux_expression, direction="max")
-                break
+def add_biomass_objective(megaModel):#, captured_rxnIDs):
+    # if "bio1" in captured_rxnIDs:
+    #     megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
+    # else:
+    biomasses = [rxn for rxn in megaModel.reactions if ("biomass" in rxn.name or "bio1" in rxn.id) and not "EX_" in rxn.id]
+    # print("\n", [rxn.reaction for rxn in biomasses])
+    biomass_name_reaction_dic = {rxn.reaction:rxn for rxn in biomasses}
+    biomass_rxn_counts = Counter([rxn.reaction for rxn in biomasses])
+    max_biomass_freq = max(biomass_rxn_counts.values())
+    most_frequent_biomass = dict(zip(list(biomass_rxn_counts.values()), list(biomass_rxn_counts.keys())))[max_biomass_freq]
+    # print("\n", most_frequent_biomass)
+    megaModel.objective = Objective(biomass_name_reaction_dic[most_frequent_biomass].flux_expression, direction="max")
     megaModel.solver.update()
     return megaModel
 
@@ -51,7 +56,7 @@ class MSProbability:
             else:
                 try:
                     with open(f"{reaction_counts_path}/{clade}.json", "r") as jsonIn:   reaction_counts = load(jsonIn)
-                except:  print(f"broken model: {clade}")  ;  continue
+                except Exception as e:  print(e)  ;  continue
 
             # constructing the probabilistic clade model
             megaModel = FBAModel({"id":clade, "name":f"MegaModel for {clade} from {reaction_counts[numTotal]} members"})
@@ -76,7 +81,7 @@ class MSProbability:
             for rxn in megaModel.reactions:
                 rxn.notes["probability"] = reaction_counts[rxn.id]
             ## add objective
-            megaModel = add_biomass_objective(megaModel, captured_rxnIDs)
+            megaModel = add_biomass_objective(megaModel)#, captured_rxnIDs)
             ## evaluate the model and export
             missingRxns = set([rxnID for rxnID in reaction_counts]) - set([rxn.id for rxn in megaModel.reactions]) - {numTotal}
             if missingRxns != set():  print("\nmissing reactions: ", missingRxns)
@@ -85,6 +90,14 @@ class MSProbability:
             megaModels.append(megaModel)
             print("\tfinished")
         return megaModels if len(clades_paths) > 1 else megaModels[0]
+    
+    @staticmethod
+    def megaModel_parallel():
+        from multiprocess import Pool
+        pool = Pool(24)
+        args = [(asv, [model_gcf_mapping[k] for k in set(set(gcfs) - broken_models)]) for asv, gcfs in unique_asv_mappings.items()]
+        print(args[0])
+        pool.map(rxnFreq, args)
 
     @staticmethod
     def apply_threshold(model, threshold=0.5):
@@ -105,7 +118,7 @@ class MSProbability:
         mdlUtil.add_minimal_objective_cons(maxBioSol*.95)
         # constrain carbon consumption
         elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
-        # evaluate the metabolomics data over time
+        #  the metabolomics data over time
         metabolomics_data
 
         return
