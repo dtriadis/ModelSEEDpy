@@ -12,6 +12,7 @@ from cobra.io import save_matlab_model, write_sbml_model
 from cobra.core.dictlist import DictList
 from optlang.symbolics import Zero
 from optlang import Constraint
+from os import makedirs, path
 from pandas import DataFrame
 from pprint import pprint
 from cobra import Reaction
@@ -21,13 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 class CommunityMember:
-    def __init__(self, community, biomass_cpd, name=None, index=None, abundance=0):
+    def __init__(self, community, biomass_cpd, ID=None, index=None, abundance=0):
+        print(ID, "biomass compound:", biomass_cpd)
         self.community, self.biomass_cpd = community, biomass_cpd
-        self.index = index or int(self.biomass_cpd.compartment[1:])
+        try:     self.index = int(self.biomass_cpd.compartment[1:])
+        except:  self.index = index
         self.abundance = abundance
         if self.biomass_cpd in self.community.primary_biomass.metabolites:
             self.abundance = abs(self.community.primary_biomass.metabolites[self.biomass_cpd])
-        if name:  self.id = name
+        if ID is not None:  self.id = ID
         elif "species_name" in self.biomass_cpd.annotation:
             self.id = self.biomass_cpd.annotation["species_name"]
         else:  self.id = "Species"+str(self.index)
@@ -35,24 +38,21 @@ class CommunityMember:
         logger.info("Making atp hydrolysis reaction for species: "+self.id)
         atp_rxn = self.community.util.add_atp_hydrolysis("c"+str(self.index))
         self.atp_hydrolysis = atp_rxn["reaction"]
-        self.biomass_drain = None
-        self.biomasses, self.reactions = [], []
-        self.primary_biomass = None
+        self.biomass_drain = self.primary_biomass = None
+        self.reactions = []
         for rxn in self.community.util.model.reactions:
+            # print(rxn.id, rxn.reaction, "\t\t\t", end="\r")
             rxnComp = FBAHelper.rxn_compartment(rxn)
-            if not rxnComp:
-                print(f"The reaction {rxn.id} strangely lacks a compartment.")
-            elif int(rxnComp[1:]) == self.index and 'bio' not in rxn.name:
-                self.reactions.append(rxn)
-            if self.biomass_cpd in rxn.metabolites:
-                if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
-                    self.biomasses.append(rxn)
-                    if len(self.biomasses) == 1:  # TODO make this condition more reflective of primary biomass
-                        self.primary_biomass = rxn
-                elif len(rxn.metabolites) == 1 and rxn.metabolites[self.biomass_cpd] < 0:
-                    self.biomass_drain = rxn
+            if rxnComp is None:  print(f"The reaction {rxn.id} compartment is undefined.")
+            if rxnComp[1:] == '': print("no compartment", rxn, rxnComp)
+            elif int(rxnComp[1:]) == self.index and 'bio' not in rxn.name:  self.reactions.append(rxn)
+            if self.biomass_cpd.id not in [met.id for met in rxn.metabolites]:   continue
+            for met in rxn.metabolites:
+                if met.id != self.biomass_cpd.id:  continue
+                if rxn.metabolites[met] == 1 and len(rxn.metabolites) > 1:  self.primary_biomass = rxn  ;  break
+                elif len(rxn.metabolites) == 1 and rxn.metabolites[met] < 0:  self.biomass_drain = rxn
 
-        if self.biomasses == []:  logger.critical("No biomass reaction found for species " + self.id)
+        if self.primary_biomass is None:  logger.critical("No biomass reaction found for species " + self.id)
         if not self.biomass_drain:
             logger.info("Making biomass drain reaction for species: "+self.id)
             self.biomass_drain = Reaction(
@@ -67,7 +67,7 @@ class CommunityMember:
             if int(reaction_index) == self.index:  reaction.upper_bound = reaction.lower_bound = 0
 
     def compute_max_biomass(self):
-        if len(self.biomasses) == 0:  logger.critical("No biomass reaction found for species "+self.id)
+        if self.primary_biomass is None:  logger.critical("No biomass reaction found for species "+self.id)
         self.community.util.add_objective(self.primary_biomass.flux_expression)
         if self.community.lp_filename:  self.community.print_lp(f"{self.community.lp_filename}_{self.id}_Biomass")
         return self.community.model.optimize()
@@ -80,8 +80,8 @@ class CommunityMember:
 
 
 class MSCommunity:
-    def __init__(self, model=None, member_models: list = None, ids=None, abundances=None, kinetic_coeff=2000,
-                 flux_limit=300, lp_filename=None, printing=False):
+    def __init__(self, model=None, member_models: list = None, abundances=None, kinetic_coeff=2000, lp_filename=None, flux_limit=300, printing=False):
+        assert model is not None or member_models is not None, "Either the community model and the member models must be defined."
         self.lp_filename = lp_filename
         self.gapfillings = {}
 
@@ -89,23 +89,21 @@ class MSCommunity:
         self.solution = self.biomass_cpd = self.primary_biomass = self.biomass_drain = None
         self.msgapfill = self.element_uptake_limit = self.kinetic_coeff = self.msdb_path = None
         # defining the models
-        if member_models is not None and model is None:
-            model = build_from_species_models(member_models, abundances=abundances)
-        if ids is None:  ids = [mem.id for mem in member_models]
+        if model is None and member_models is not None:
+            model = build_from_species_models(member_models, abundances=abundances, printing=printing)
         self.id = model.id
         self.util = MSModelUtil(model, True)
         self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
-        msid_cobraid_hash = self.util.msid_hash()
         # print(msid_cobraid_hash)
-        write_sbml_model(model, "test_comm.xml")
-
+        # write_sbml_model(model, "test_comm.xml")
+        msid_cobraid_hash = self.util.msid_hash()
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
             if "c0" in self.biomass_cpd.id:
                 for rxn in self.util.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
-                    print(self.biomass_cpd, rxn, end=";\t")
+                    # print(self.biomass_cpd, rxn, end=";\t")
                     if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
                         if self.primary_biomass:  raise ObjectAlreadyDefinedError(
                             f"The primary biomass {self.primary_biomass} is already defined,"
@@ -113,14 +111,25 @@ class MSCommunity:
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
                     elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
-            elif 'c' in self.biomass_cpd.compartment:
-                other_biomass_cpds.append(self.biomass_cpd)
-        # assign community members and their abundances
-        print()   # this returns the carriage after the tab-ends in the biomass compound printing 
-        abundances = abundances or [1/len(other_biomass_cpds)]*len(other_biomass_cpds)
-        self.members = DictList(
-            CommunityMember(community=self, biomass_cpd=biomass_cpd, name=ids[memIndex], abundance=abundances[memIndex])
-            for memIndex, biomass_cpd in enumerate(other_biomass_cpds))
+            elif 'c' in self.biomass_cpd.compartment:   other_biomass_cpds.append(self.biomass_cpd)
+        if not abundances:
+            if member_models is None:
+                abundances = {f"Species{memIndex}": {"biomass_compound": bioCpd, "abundance": 1/len(other_biomass_cpds)}
+                                for memIndex, bioCpd in enumerate(other_biomass_cpds)}
+            else:
+                abundances = {}
+                for memID, bioCPD in model.notes["member_biomass_cpds"].items():
+                    abundances[memID] = {"abundance": 1/len(other_biomass_cpds)}
+                    for met in model.metabolites:
+                        if bioCPD.id == met.id:
+                            if "biomass_compound" in abundances[memID]:   print("duplicate", bioCPD.id, met.id)
+                            abundances[memID].update({"biomass_compound": met})
+                            # print(bioCPD, met.id)
+                    if "biomass_compound" not in abundances[memID]:   print(f"The {memID} bioCPD was not captured")
+
+        # print()   # this returns the carriage after the tab-ends in the biomass compound printing
+        self.members = DictList(CommunityMember(self, info["biomass_compound"], ID, index, info["abundance"])
+                                for index, (ID, info) in enumerate(abundances.items()))
         # assign the MSCommunity constraints and objective
         self.abundances_set = False
         if isinstance(abundances, dict):  self.set_abundance(abundances)
@@ -137,14 +146,14 @@ class MSCommunity:
     #Manipulation functions
     def set_abundance(self, abundances):
         #calculate the normalized biomass
-        total_abundance = sum(list(abundances.values()))
+        total_abundance = sum(list([content["abundance"] for content in abundances.values()]))
         # map abundances to all species
-        for species, abundance in abundances.items():
-            if species in self.members:  self.members.get_by_id(species).abundance = abundance/total_abundance
+        for modelID, content in abundances.items():
+            if modelID in self.members:  self.members.get_by_id(modelID).abundance = content["abundance"]/total_abundance
         #remake the primary biomass reaction based on abundances
         if self.primary_biomass is None:  logger.critical("Primary biomass reaction not found in community model")
         all_metabolites = {self.primary_biomass.products[0]: 1}
-        all_metabolites.update({mem.biomass_cpd: -abundances[mem.id]/total_abundance for mem in self.members})
+        all_metabolites.update({mem.biomass_cpd: -abundances[mem.id]["abundance"]/total_abundance for mem in self.members})
         self.primary_biomass.add_metabolites(all_metabolites, combine=False)
         self.abundances_set = True
 
@@ -169,10 +178,35 @@ class MSCommunity:
         return MSSteadyCom.interactions(self, solution or self.solution, media, flux_threshold, msdb, msdb_path,
                                         visualize, filename, figure_format, node_metabolites, True, ignore_mets)
 
+    def add_commkinetics(self, member_biomasses, abundances):
+        # TODO this creates an error with the member biomass reactions not being identified in the model
+        coef = {}
+        for rxn in self.util.model.reactions:
+            if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
+        for member in self.members:
+            if member_biomasses[member.id] not in abundances:  continue
+            coef[member_biomasses[member.id]] = -abundances[member_biomasses[member.id]]
+        self.util.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
+
+    def add_resource_balance(self, flux_limit=300):
+        for member in self.members:
+            vars_coef = {}
+            for rxn in self.util.model.reactions:
+                if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
+                    vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
+            print(member.id, flux_limit, member.abundance)
+            self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
+                                                   name=f"{member.id}_resource_balance"), coef=vars_coef)
+
     #Utility functions
     def print_lp(self, filename=None):
         filename = filename or self.lp_filename
-        with open(filename+".lp", 'w') as out:  out.write(str(self.util.model.solver))  ;  out.close()
+        makedirs(path.dirname(filename), exist_ok=True)
+        with open(filename, 'w') as out:  out.write(str(self.util.model.solver))  ;  out.close()
+
+    def to_sbml(self, export_name):
+        makedirs(path.dirname(export_name), exist_ok=True)
+        write_sbml_model(self.util.model, export_name)
 
     #Analysis functions
     def gapfill(self, media = None, target = None, minimize = False, default_gapfill_templates=None, default_gapfill_models=None,

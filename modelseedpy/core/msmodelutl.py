@@ -124,6 +124,13 @@ class MSModelUtil:
         self.test_objective = None
         self.reaction_scores = None
         self.score = None
+        try:
+            objectiveVars = list(self.model.objective.variables)
+            for var in objectiveVars:
+                if "reverse" not in var.name:
+                    self.biomass_objective = var.name
+        except IndexError:
+            print(f"The {self.id} has an improperly defined objective function")
         self.integrated_gapfillings = []
         self.attributes = {}
         if hasattr(self.model, "computed_attributes"):
@@ -219,6 +226,7 @@ class MSModelUtil:
 
     def exchange_list(self):
         return [rxn for rxn in self.model.reactions if 'EX_' in rxn.id]
+
     def internal_list(self):
         exchanges, transports = self.exchange_list(), self.transport_list()
         return [rxn for rxn in self.model.reactions if rxn not in exchanges and rxn not in transports]
@@ -227,6 +235,8 @@ class MSModelUtil:
         all_transports = [rxn for rxn in self.model.reactions if len(set([
             met.id.split("_")[0] for met in rxn.reactants]).intersection(set([
             met.id.split("_")[0] for met in rxn.products]))) > 0]
+        # TODO look for compounds that have compounds in different compartments
+        # TODO PTS transporters would fail this logic
         # remove biomass reactions
         for rxn in all_transports:
             if "cpd11416" in [met.id.split("_")[0] for met in rxn.metabolites]:  all_transports.remove(rxn)
@@ -399,12 +409,21 @@ class MSModelUtil:
               f" were added to the model.")
         return output
 
-    def create_constraint(self, constraint, coef=None, sloppy=False):
+    def create_constraint(self, constraint, coef=None, sloppy=False, printing=False):
+        if printing:   print(coef)
         self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
-        if coef:
-            constraint.set_linear_coefficients(coef)
-            self.model.solver.update()
+        if coef:   constraint.set_linear_coefficients(coef)
+        self.model.solver.update()
+
+            # self.model.solver.update()
+            # for cons in self.model.constraints:
+            #     if cons.name == constraint.name:
+            #         cons.set_linear_coefficients(coef)
+            #         self.model.solver.update()
+
+        # self.model.add_cons_vars(constraint, sloppy=sloppy)
+        # self.model.solver.update()
 
     def add_cons_vars(self, vars_cons, sloppy=False):
         self.model.add_cons_vars(vars_cons, sloppy=sloppy)
@@ -421,13 +440,11 @@ class MSModelUtil:
             self.model.objective.set_linear_coefficients(coef)
             self.model.solver.update()
 
-    def set_objective_from_target_reaction(self, target_reaction, minimize=False):
-        target_reaction = self.model.reactions.get_by_id(target_reaction)
+    def set_objective_from_target_reaction(self, target_rxn, minimize=False):
+        target_rxn = target_rxn if not isinstance(target_rxn, str) else self.model.reactions.get_by_id(target_rxn)
         sense = "max" if not minimize else "min"
-        self.model.objective = self.model.problem.Objective(
-            target_reaction.flux_expression, direction=sense
-        )
-        return target_reaction
+        self.model.objective = self.model.problem.Objective(target_rxn.flux_expression, direction=sense)
+        return target_rxn
 
     def biomass_expression(self):
         for met in self.model.metabolites:
@@ -1292,7 +1309,7 @@ class MSModelUtil:
         if MSID is not None:  return (MSID[1], MSID[2], int(MSID[3]))
         nonMSID = re.search("(.+)\[([a-z])\]$", cobra_obj.id)
         if nonMSID is not None:  return (nonMSID[1], nonMSID[2])
-        return None
+        return (cobra_obj.id.replace("EX_", ""), "c" if "EX_" not in cobra_obj.id else "e")
 
     def add_kbase_media(self, kbase_media):
         exIDs = [exRXN.id for exRXN in self.exchange_list()]

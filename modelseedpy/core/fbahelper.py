@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
-import logging
-from chemicals import periodic_table
-import re
-from cobra.core import Gene, Metabolite, Model, Reaction   # !!! Gene and Model are never used
-from cobra.util import solver as sutil  # !!! sutil is never used
-from scipy.odr import Output  # !!! Output is never used
-from typing import Iterable
-import time
-from chemw import ChemMW
-from warnings import warn
 
-# from Carbon.Aliases import false
+
+from cobra.core import Gene, Metabolite, Model, Reaction
+from cobra.util import solver as sutil
+from chemicals import periodic_table
+from collections import Counter
+from scipy.odr import Output
+from typing import Iterable
+from warnings import warn
+from chemw import ChemMW
+import logging, time, re
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,13 @@ class FBAHelper:
     @staticmethod
     def rxn_compartment(reaction):
         compartments = list(reaction.compartments)
+        if len(compartments) == 0:
+            if re.search("(?<=\_)(\w\d+)", reaction.id):   return reaction.id.split("_")[-1]
+            agora_comp = re.compile("(?<=\[)(.+)(?=\])")
+            if agora_comp.search([met for met in reaction.metabolites][0].id) is not None:
+                compartments = [agora_comp.search(met.id).groups() for met in reaction.metabolites]
+                print(Counter(compartments))
+                return list(Counter(compartments).keys())[0]
         if len(compartments) == 1:  return compartments[0]
         for comp in compartments:
             if comp[0:1] != "e":  return comp
