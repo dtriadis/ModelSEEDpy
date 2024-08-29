@@ -83,11 +83,26 @@ class MSProbability:
                     print("broken", e, model_path)
                     broken_models.append(model_path)
                     continue
-                captured_reactions.extend([rxn for rxn in model.reactions if rxn.id not in captured_rxnIDs])
-                captured_rxnIDs.update([rxn.id for rxn in model.reactions])
-                remaining_rxnIDs -= captured_rxnIDs
-                if remaining_rxnIDs == set():   break
-            if captured_reactions == []:    print(f"\tNo models for {clade} are defined.")  ;  continue
+                # captured_reactions.extend([rxn for rxn in model.reactions if rxn.id not in captured_rxnIDs])
+                # captured_rxnIDs.update([rxn.id for rxn in model.reactions])
+                # remaining_rxnIDs -= captured_rxnIDs
+                # if remaining_rxnIDs == set():   break
+            # if captured_reactions == []:    print(f"\tNo models for {clade} are defined.")  ;  continue
+                for rxn in model.reactions:
+                    if rxn.id not in found_rxn_hash:
+                        found_rxn_hash[rxn.id] = {"genes":{},"rxn":rxn}
+                        captured_reactions.append(rxn)
+                    elif copy_genes:
+                        for gene in rxn.genes:
+                            if gene.id not in found_rxn_hash[rxn.id]:
+                                found_rxn_hash[rxn.id]["genes"][gene.id] = 1
+                                if len(found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule) > 0:
+                                    found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule += f" or {gene.id}"
+                                else:
+                                    found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule = gene.id
+            if captured_reactions == []:
+                print(f"\tNo models for {clade} are defined.")
+                continue
             ## add reactions
             megaModel.add_reactions(list(captured_reactions))
             for rxn in megaModel.reactions:
@@ -137,7 +152,7 @@ class MSProbability:
 
     @staticmethod
     def prFBA(model_s_, environment=None, abundances=None, min_prob=0.01, prob_exp=1, ex_weight=100,
-              commkinetics=None, kinetics_coef=1000, printLP=False):
+              commkinetics=None, kinetics_coef=1000, printLP=False, expression=None):
         from modelseedpy.community.commhelper import build_from_species_models
         from modelseedpy.core.msmodelutl import MSModelUtil
         from modelseedpy.fbapkg.elementuptakepkg import ElementUptakePkg
@@ -174,24 +189,18 @@ class MSProbability:
                 coef.update({rxn.reverse_variable: ex_weight})
         mdlUtil.add_objective(Zero, "min", coef)
 
-
         print([cons.name for cons in mdlUtil.model.constraints])
-
 
         if printLP:
             with open("prFBA.lp", "w") as out:
                 out.write(str(mdlUtil.model.solver))
 
-
         # simulate the probabilistic model with the respective probabilities
         return mdlUtil.model.optimize()
-
 
     @staticmethod
     def iterative_simulation(time_iterative_data):
         pass
-
-
 
     def expressionData(data):
         # iterate over the reactions, genes, and keep the highest expression score
