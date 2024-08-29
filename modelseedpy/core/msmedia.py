@@ -22,8 +22,8 @@ class MediaCompound:
     def minFlux(self):
         # TODO: will be removed later just for old methods
         return -self.upper_bound
-    
-    def get_mdl_exchange_hash(self,model_or_mdlutl):
+
+    def get_mdl_exchange_hash(self, model_or_mdlutl):
         modelutl = model_or_mdlutl
         if not isinstance(model_or_mdlutl, MSModelUtil):
             modelutl = MSModelUtil.get(model_or_mdlutl)
@@ -33,7 +33,8 @@ class MediaCompound:
         for met in mets:
             if met in exchange_hash:
                 output[met] = exchange_hash[met]
-        return output                            
+        return output
+
 
 class MSMedia:
     def __init__(self, media_id, name=""):
@@ -73,6 +74,12 @@ class MSMedia:
                 met_id += "_" + cmp
             media[met_id] = (compound.lower_bound, compound.upper_bound)
         return media
+
+    def find_mediacpd(self, cpd_id):
+        for cpd in self.mediacompounds:
+            if cpd.id == cpd_id:
+                return cpd
+        return None
 
     def merge(self, media, overwrite_overlap=False):
         new_cpds = []
