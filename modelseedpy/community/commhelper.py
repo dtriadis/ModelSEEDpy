@@ -140,7 +140,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
     if abundances:
         if isinstance(abundances[list(abundances.keys())[0]], dict):
             abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items()}
-        else:   abundances = {met: -abundances[memberID]["abundance"] for memberID, met in member_biomasses.items()}
+        else:   abundances = {met: -abundances[memberID] for memberID, met in member_biomasses.items()}
     else:  abundances = {met: -1 / len(member_biomasses) for met in member_biomasses.values()}
 
     ## TODO - add the biomass reactions instead of the biomass metabolites for the commKinetics

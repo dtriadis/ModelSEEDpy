@@ -16,6 +16,7 @@ from os import makedirs, path
 from pandas import DataFrame
 from pprint import pprint
 from cobra import Reaction
+from json import dump
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,11 +37,11 @@ class CommunityMember:
         else:  self.id = "Species"+str(self.index)
 
         logger.info("Making atp hydrolysis reaction for species: "+self.id)
-        atp_rxn = self.community.util.add_atp_hydrolysis("c"+str(self.index))
+        atp_rxn = self.community.mdlutl.add_atp_hydrolysis("c"+str(self.index))
         self.atp_hydrolysis = atp_rxn["reaction"]
         self.biomass_drain = self.primary_biomass = None
         self.reactions = []
-        for rxn in self.community.util.model.reactions:
+        for rxn in self.community.mdlutl.model.reactions:
             # print(rxn.id, rxn.reaction, "\t\t\t", end="\r")
             rxnComp = FBAHelper.rxn_compartment(rxn)
             if rxnComp is None:  print(f"The reaction {rxn.id} compartment is undefined.")
@@ -57,7 +58,7 @@ class CommunityMember:
             logger.info("Making biomass drain reaction for species: "+self.id)
             self.biomass_drain = Reaction(
                 id="DM_"+self.biomass_cpd.id, name="DM_" + self.biomass_cpd.name, lower_bound=0, upper_bound=100)
-            self.community.util.model.add_reactions([self.biomass_drain])
+            self.community.mdlutl.model.add_reactions([self.biomass_drain])
             self.biomass_drain.add_metabolites({self.biomass_cpd: -1})
             self.biomass_drain.annotation["sbo"] = 'SBO:0000627'
 
@@ -68,13 +69,13 @@ class CommunityMember:
 
     def compute_max_biomass(self):
         if self.primary_biomass is None:  logger.critical("No biomass reaction found for species "+self.id)
-        self.community.util.add_objective(self.primary_biomass.flux_expression)
+        self.community.mdlutl.add_objective(self.primary_biomass.flux_expression)
         if self.community.lp_filename:  self.community.print_lp(f"{self.community.lp_filename}_{self.id}_Biomass")
         return self.community.model.optimize()
 
     def compute_max_atp(self):
         if not self.atp_hydrolysis: logger.critical("No ATP hydrolysis found for species:" + self.id)
-        self.community.util.add_objective(Zero, coef={self.atp_hydrolysis.forward_variable: 1})
+        self.community.mdlutl.add_objective(Zero, coef={self.atp_hydrolysis.forward_variable: 1})
         if self.community.lp_filename:  self.community.print_lp(f"{self.community.lp_filename}_{self.id}_ATP")
         return self.community.model.optimize()
 
@@ -92,26 +93,35 @@ class MSCommunity:
         if model is None and member_models is not None:
             model = build_from_species_models(member_models, abundances=abundances, printing=printing)
         self.id = model.id
-        self.util = MSModelUtil(model, True)
-        self.pkgmgr = MSPackageManager.get_pkg_mgr(self.util.model)
+        self.mdlutl = MSModelUtil(model, True)
+        self.pkgmgr = MSPackageManager.get_pkg_mgr(self.mdlutl.model)
         # print(msid_cobraid_hash)
         # write_sbml_model(model, "test_comm.xml")
-        msid_cobraid_hash = self.util.msid_hash()
+        msid_cobraid_hash = self.mdlutl.msid_hash()
         if "cpd11416" not in msid_cobraid_hash:  raise KeyError("Could not find biomass compound for the model.")
         other_biomass_cpds = []
+        with open(path.dirname(__file__)+"/MSID_hash.json", 'w') as jsonOut:
+            dump([v.id for v in msid_cobraid_hash["cpd11416"]], jsonOut, indent=3)
+        print(msid_cobraid_hash["cpd11416"])
         for self.biomass_cpd in msid_cobraid_hash["cpd11416"]:
             if "c0" in self.biomass_cpd.id:
-                for rxn in self.util.model.reactions:
+                for rxn in self.mdlutl.model.reactions:
                     if self.biomass_cpd not in rxn.metabolites:  continue
                     # print(self.biomass_cpd, rxn, end=";\t")
-                    if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1:
+                    with open(path.dirname(__file__)+"/log", 'w') as jsonOut:
+                        dump(["here", rxn.metabolites[self.biomass_cpd], len(rxn.metabolites)], jsonOut, indent=3)
+                    if rxn.metabolites[self.biomass_cpd] == 1 and len(rxn.metabolites) > 1 or len(msid_cobraid_hash["cpd11416"]) == 1:
                         if self.primary_biomass:  raise ObjectAlreadyDefinedError(
                             f"The primary biomass {self.primary_biomass} is already defined,"
                             f"hence, the {rxn.id} cannot be defined as the model primary biomass.")
                         if printing:  print('primary biomass defined', rxn.id)
                         self.primary_biomass = rxn
-                    elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:  self.biomass_drain = rxn
+                        break
+                    elif rxn.metabolites[self.biomass_cpd] < 0 and len(rxn.metabolites) == 1:
+                        self.biomass_drain = rxn
+                        break
             elif 'c' in self.biomass_cpd.compartment:   other_biomass_cpds.append(self.biomass_cpd)
+            else:  print(f"The {model.id} has non-cytoplasm biomass reactions: {self.biomass_cpd}")
         if not abundances:
             if member_models is None:
                 abundances = {f"Species{memIndex}": {"biomass_compound": bioCpd, "abundance": 1/len(other_biomass_cpds)}
@@ -144,14 +154,14 @@ class MSCommunity:
             if modelID in self.members:  self.members.get_by_id(modelID).abundance = content["abundance"]/total_abundance
         #remake the primary biomass reaction based on abundances
         if self.primary_biomass is None:  logger.critical("Primary biomass reaction not found in community model")
-        all_metabolites = {self.primary_biomass.products[0]: 1}
+        all_metabolites = {met: 1 for met in self.primary_biomass.metabolites}
         all_metabolites.update({mem.biomass_cpd: -abundances[mem.id]["abundance"]/total_abundance for mem in self.members})
         self.primary_biomass.add_metabolites(all_metabolites, combine=False)
         self.abundances_set = True
 
     def set_objective(self, target=None, targets=None, minimize=False):
-        targets = targets or [self.util.model.reactions.get_by_id(target or self.primary_biomass.id).flux_expression]
-        self.util.model.objective = self.util.model.problem.Objective(
+        targets = targets or [self.mdlutl.model.reactions.get_by_id(target or self.primary_biomass.id).flux_expression]
+        self.mdlutl.model.objective = self.mdlutl.model.problem.Objective(
             sum(targets), direction="max" if not minimize else "min")
 
     def constrain(self, element_uptake_limit=None, thermo_params=None, msdb_path=None):
@@ -173,32 +183,32 @@ class MSCommunity:
     def add_commkinetics(self, member_biomasses, abundances):
         # TODO this creates an error with the member biomass reactions not being identified in the model
         coef = {}
-        for rxn in self.util.model.reactions:
+        for rxn in self.mdlutl.model.reactions:
             if rxn.id[:3] == "rxn":   coef[rxn.forward_variable] = coef[rxn.reverse_variable] = 1
         for member in self.members:
             if member_biomasses[member.id] not in abundances:  continue
             coef[member_biomasses[member.id]] = -abundances[member_biomasses[member.id]]
-        self.util.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
+        self.mdlutl.create_constraint(Constraint(Zero, name="member_flux_limit"), coef=coef, printing=True)
 
     def add_resource_balance(self, flux_limit=300):
         for member in self.members:
             vars_coef = {}
-            for rxn in self.util.model.reactions:
+            for rxn in self.mdlutl.model.reactions:
                 if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
                     vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
             print(member.id, flux_limit, member.abundance)
-            self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
+            self.mdlutl.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
                                                    name=f"{member.id}_resource_balance"), coef=vars_coef)
 
     #Utility functions
     def print_lp(self, filename=None):
         filename = filename or self.lp_filename
         makedirs(path.dirname(filename), exist_ok=True)
-        with open(filename, 'w') as out:  out.write(str(self.util.model.solver))  ;  out.close()
+        with open(filename, 'w') as out:  out.write(str(self.mdlutl.model.solver))  ;  out.close()
 
     def to_sbml(self, export_name):
         makedirs(path.dirname(export_name), exist_ok=True)
-        write_sbml_model(self.util.model, export_name)
+        write_sbml_model(self.mdlutl.model, export_name)
 
     #Analysis functions
     def gapfill(self, media = None, target = None, minimize = False, default_gapfill_templates=None, default_gapfill_models=None,
@@ -211,20 +221,20 @@ class MSCommunity:
         self.set_objective(target, minimize)
         gfname = FBAHelper.mediaName(media) + "-" + target
         if suffix:  gfname += f"-{suffix}"
-        self.gapfillings[gfname] = MSGapfill(self.util.model, default_gapfill_templates, default_gapfill_models,
+        self.gapfillings[gfname] = MSGapfill(self.mdlutl.model, default_gapfill_templates, default_gapfill_models,
                                              test_conditions, reaction_scores, blacklist, solver)
         gfresults = self.gapfillings[gfname].run_gapfilling(media, target)
-        assert gfresults, f"Gapfilling of {self.util.model.id} in {gfname} towards {target} failed."
+        assert gfresults, f"Gapfilling of {self.mdlutl.model.id} in {gfname} towards {target} failed."
         return self.gapfillings[gfname].integrate_gapfill_solution(gfresults)
 
     def test_individual_species(self, media=None, interacting=True, run_atp=True, run_biomass=True):
         assert run_atp or run_biomass, ValueError("Either the run_atp or run_biomass arguments must be True.")
         # self.pkgmgr.getpkg("KBaseMediaPkg").build_package(media)
-        if media is not None:  self.util.add_medium(media)
+        if media is not None:  self.mdlutl.add_medium(media)
         data = {"Species": [], "Biomass": [], "ATP": []}
         for individual in self.members:
             data["Species"].append(individual.id)
-            with self.util.model:
+            with self.mdlutl.model:
                 if not interacting:
                     for other in self.members:
                         if other != individual:  other.disable_species()
@@ -233,19 +243,19 @@ class MSCommunity:
         return DataFrame(data)
 
     def atp_correction(self, core_template, atp_medias, max_gapfilling=None, gapfilling_delta=0):
-        self.atp = MSATPCorrection(self.util.model, core_template, atp_medias, "c0", max_gapfilling, gapfilling_delta)
+        self.atp = MSATPCorrection(self.mdlutl.model, core_template, atp_medias, "c0", max_gapfilling, gapfilling_delta)
 
     # TODO evaluate the comparison of this method with MICOM
     def predict_abundances(self, media=None, pfba=True):
-        with self.util.model:
-            self.util.model.objective = self.util.model.problem.Objective(
+        with self.mdlutl.model:
+            self.mdlutl.model.objective = self.mdlutl.model.problem.Objective(
                 sum([species.primary_biomass.forward_variable for species in self.members]), direction="max")
             self.run_fba(media, pfba)
             return self._compute_relative_abundance_from_solution()
 
     def run_fba(self, media=None, pfba=False, fva_reactions=None):
-        if media is not None:  self.util.add_medium(media)
-        return self._set_solution(self.util.run_fba(None, pfba, fva_reactions))
+        if media is not None:  self.mdlutl.add_medium(media)
+        return self._set_solution(self.mdlutl.run_fba(None, pfba, fva_reactions))
 
     def _compute_relative_abundance_from_solution(self, solution=None):
         if not solution and not self.solution:  logger.warning("The simulation lacks any flux.")  ;  return None
@@ -258,9 +268,9 @@ class MSCommunity:
             FeasibilityError(f'The solution is sub-optimal, with a(n) {solution} status.')
             self.solution = None
             self.print_lp()
-            save_matlab_model(self.util.model, self.util.model.name + ".mat")
+            save_matlab_model(self.mdlutl.model, self.mdlutl.model.name + ".mat")
         self.solution = solution
-        logger.info(self.util.model.summary())
+        logger.info(self.mdlutl.model.summary())
         return self.solution
 
     def parse_member_growths(self):
