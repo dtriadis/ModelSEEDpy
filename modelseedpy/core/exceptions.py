@@ -16,17 +16,11 @@ class FeasibilityError(Exception):
 
 class PackageError(Exception):
     """Error in package manager"""
-
     pass
-
 
 class GapfillingError(Exception):
     """Error in model gapfilling"""
     pass
-
-class ObjectError(Exception):
-    """Error in the construction of a base KBase object"""
-    pass 
 
 class ParameterError(Exception):
     """Error in a parameterization"""
@@ -45,4 +39,9 @@ class ObjectiveError(Exception):
 
 class ModelError(Exception):
     """Errors in a model that corrupt the simulation"""
+    pass
+
+
+class ObjectError(Exception):
+    """Error in the construction of a base KBase object"""
     pass

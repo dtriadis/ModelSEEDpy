@@ -81,7 +81,7 @@ class CommunityMember:
 
 
 class MSCommunity:
-    def __init__(self, model=None, member_models: list = None, abundances=None, kinetic_coeff=2000, lp_filename=None, printing=False):
+    def __init__(self, model=None, member_models: list = None, abundances=None, kinetic_coeff=2000, lp_filename=None, flux_limit=300, printing=False):
         assert model is not None or member_models is not None, "Either the community model and the member models must be defined."
         self.lp_filename = lp_filename
         self.gapfillings = {}
@@ -136,14 +136,22 @@ class MSCommunity:
                             abundances[memID].update({"biomass_compound": met})
                             # print(bioCPD, met.id)
                     if "biomass_compound" not in abundances[memID]:   print(f"The {memID} bioCPD was not captured")
-                    
-        # print()   # this returns the carriage after the tab-ends in the biomass compound printing 
+
+        # print()   # this returns the carriage after the tab-ends in the biomass compound printing
         self.members = DictList(CommunityMember(self, info["biomass_compound"], ID, index, info["abundance"])
                                 for index, (ID, info) in enumerate(abundances.items()))
         # assign the MSCommunity constraints and objective
         self.abundances_set = False
         if isinstance(abundances, dict):  self.set_abundance(abundances)
-        # self.pkgmgr.getpkg("CommKineticPkg").build_package(kinetic_coeff, self)
+        self.pkgmgr.getpkg("CommKineticPkg").build_package(kinetic_coeff, self)
+        for member in self.members:
+            vars_coef = {}
+            for rxn in self.util.model.reactions:
+                if "EX_" not in rxn.id and member.index == FBAHelper.rxn_compartment(rxn)[1:]:
+                    vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
+            print(member.id, flux_limit, member.abundance)
+            self.util.create_constraint(Constraint(Zero, lb=0, ub=flux_limit*member.abundance,
+                                                   name=f"{member.id}_resource_balance"), coef=vars_coef)
 
     #Manipulation functions
     def set_abundance(self, abundances):

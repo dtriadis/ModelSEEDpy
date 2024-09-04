@@ -42,6 +42,25 @@ def correct_nonMSID(nonMSobject, output, model_index):
 def build_from_species_models(org_models, model_id=None, name=None, abundances=None,
                               standardize=False, MSmodel = True, commkinetics=True,
                               copy_models=True, printing=False):
+    """Merges the input list of single species metabolic models into a community metabolic model
+
+    Parameters
+    ----------
+    org_models : list<Cobra.Model> to be merged into a community model
+    model_id : string specifying community model ID
+    name : string specifying community model name
+    names : list<string>  human-readable names for models being merged
+    abundances : dict<string,float> relative abundances for input models in community model
+    cobra_model : bool for whether the raw COBRA model is returned
+    standardize: bool for whether the exchanges of each member model will be standardized (True) or just aligned.
+
+    Returns
+    -------
+    Cobra.Model for the desired Community
+
+    Raises
+    ------
+    """
     # construct the new model
     models = org_models #if not standardize else GEMCompatibility.standardize(
         #org_models, exchanges=True, conflicts_file_name='exchanges_conflicts.json')
@@ -75,7 +94,7 @@ def build_from_species_models(org_models, model_id=None, name=None, abundances=N
                     met.compartment = compartment + str(index)
                     met.id = name + "_" + met.compartment
             new_metabolites.add(met)
-            if "cpd11416_c" in met.id or "biomass" in met.name:
+            if "cpd11416_c" in met.id or "biomass" in met.name or "biomass" in met.id:
                 met.name = f"{met.id}_{model_util.model.id}"
                 member_biomasses[org_model.id] = met
         # Rename reactions

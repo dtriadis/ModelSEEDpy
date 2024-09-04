@@ -3,23 +3,37 @@ from cobrakbase.core.kbasefba.fbamodel_from_cobra import CobraModelConverter
 from modelseedpy.community.mscommunity import MSCommunity
 from cobrakbase.core.kbasefba.fbamodel import FBAModel
 from cobra.io import write_sbml_model, read_sbml_model
+from collections import Counter
 from optlang import Objective
 from json import load, dump
 from os import path, mkdir
 from cobra import Model
 import re
 
+# def add_biomass_objective(megaModel, captured_rxnIDs):
+#     if "bio1" in captured_rxnIDs:
+#         megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
+#     else:
+#         # select the most conserved biomass composition
+#         for rxn in megaModel.reactions:
+#             if "biomass" and not "EX_" in rxn.id:   # randomly the first biomass reaction is pulled from the ASV set
+#                 megaModel.objective = Objective(rxn.flux_expression, direction="max")
+#                 break
+#     megaModel.solver.update()
+#     return megaModel
 
-
-def add_biomass_objective(megaModel, captured_rxnIDs):
-    if "bio1" in captured_rxnIDs:
-        megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
-    else:
-        # select the most conserved biomass composition
-        for rxn in megaModel.reactions:
-            if "biomass" and not "EX_" in rxn.id:   # randomly the first biomass reaction is pulled from the ASV set
-                megaModel.objective = Objective(rxn.flux_expression, direction="max")
-                break
+def add_biomass_objective(megaModel):#, captured_rxnIDs):
+    # if "bio1" in captured_rxnIDs:
+    #     megaModel.objective = Objective(megaModel.reactions.bio1.flux_expression, direction="max")
+    # else:
+    biomasses = [rxn for rxn in megaModel.reactions if ("biomass" in rxn.name or "bio1" in rxn.id) and not "EX_" in rxn.id]
+    # print("\n", [rxn.reaction for rxn in biomasses])
+    biomass_name_reaction_dic = {rxn.reaction:rxn for rxn in biomasses}
+    biomass_rxn_counts = Counter([rxn.reaction for rxn in biomasses])
+    max_biomass_freq = max(biomass_rxn_counts.values())
+    most_frequent_biomass = dict(zip(list(biomass_rxn_counts.values()), list(biomass_rxn_counts.keys())))[max_biomass_freq]
+    # print("\n", most_frequent_biomass)
+    megaModel.objective = Objective(biomass_name_reaction_dic[most_frequent_biomass].flux_expression, direction="max")
     megaModel.solver.update()
     return megaModel
 
@@ -69,17 +83,32 @@ class MSProbability:
                     print("broken", e, model_path)
                     broken_models.append(model_path)
                     continue
-                captured_reactions.extend([rxn for rxn in model.reactions if rxn.id not in captured_rxnIDs])
-                captured_rxnIDs.update([rxn.id for rxn in model.reactions])
-                remaining_rxnIDs -= captured_rxnIDs
-                if remaining_rxnIDs == set():   break
-            if captured_reactions == []:    print(f"\tNo models for {clade} are defined.")  ;  continue
+                # captured_reactions.extend([rxn for rxn in model.reactions if rxn.id not in captured_rxnIDs])
+                # captured_rxnIDs.update([rxn.id for rxn in model.reactions])
+                # remaining_rxnIDs -= captured_rxnIDs
+                # if remaining_rxnIDs == set():   break
+            # if captured_reactions == []:    print(f"\tNo models for {clade} are defined.")  ;  continue
+                for rxn in model.reactions:
+                    if rxn.id not in found_rxn_hash:
+                        found_rxn_hash[rxn.id] = {"genes":{},"rxn":rxn}
+                        captured_reactions.append(rxn)
+                    elif copy_genes:
+                        for gene in rxn.genes:
+                            if gene.id not in found_rxn_hash[rxn.id]:
+                                found_rxn_hash[rxn.id]["genes"][gene.id] = 1
+                                if len(found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule) > 0:
+                                    found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule += f" or {gene.id}"
+                                else:
+                                    found_rxn_hash[rxn.id]["rxn"].gene_reaction_rule = gene.id
+            if captured_reactions == []:
+                print(f"\tNo models for {clade} are defined.")
+                continue
             ## add reactions
             megaModel.add_reactions(list(captured_reactions))
             for rxn in megaModel.reactions:
                 rxn.notes["probability"] = reaction_counts[rxn.id]
             ## add objective
-            megaModel = add_biomass_objective(megaModel, captured_rxnIDs)
+            megaModel = add_biomass_objective(megaModel)#, captured_rxnIDs)
             ## evaluate the model and export
             missingRxns = set([rxnID for rxnID in reaction_counts]) - set([rxn.id for rxn in megaModel.reactions]) - {numTotal}
             if missingRxns != set():  print("\nmissing reactions: ", missingRxns)
@@ -88,6 +117,14 @@ class MSProbability:
             megaModels.append(megaModel)
             print("\tfinished")
         return megaModels if len(clades_paths) > 1 else megaModels[0]
+
+    @staticmethod
+    def megaModel_parallel():
+        from multiprocess import Pool
+        pool = Pool(24)
+        args = [(asv, [model_gcf_mapping[k] for k in set(set(gcfs) - broken_models)]) for asv, gcfs in unique_asv_mappings.items()]
+        print(args[0])
+        pool.map(rxnFreq, args)
 
     @staticmethod
     def apply_threshold(model, threshold=0.5):
@@ -99,7 +136,7 @@ class MSProbability:
 
     # "MS2 - Probabilistic modeling" would create a probabilstic model and optionally an ensemble model from the probabilistic model
 
-    # TODO - develop a separate App from 
+    # TODO - develop a separate App from
 
     # TODO - Construct another code to aggregate functions from all genomes into a single model, where the genes themselves would be mapped with a probability
     ## only count genomes with SSOs
@@ -115,7 +152,7 @@ class MSProbability:
 
     @staticmethod
     def prFBA(model_s_, environment=None, abundances=None, min_prob=0.01, prob_exp=1, ex_weight=100,
-              commkinetics=None, kinetics_coef=1000, printLP=False):
+              commkinetics=None, kinetics_coef=1000, printLP=False, expression=None):
         from modelseedpy.community.commhelper import build_from_species_models
         from modelseedpy.core.msmodelutl import MSModelUtil
         from modelseedpy.fbapkg.elementuptakepkg import ElementUptakePkg
@@ -123,7 +160,7 @@ class MSProbability:
 
         # commkinetics = commkinetics if commkinetics is not None else len(model_s_) > 1
         mdlUtil = MSModelUtil(model_s_ if len(model_s_) == 1 else build_from_species_models(model_s_, abundances=abundances, commkinetics=commkinetics))
-        if environment is not None:  mdlUtil.add_medium(environment)
+        mdlUtil.add_medium(environment)
         # constrain carbon consumption and community composition
         elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
         ## the total flux through the members proportional to their relative abundances
@@ -131,6 +168,9 @@ class MSProbability:
             # pkgmgr = MSPackageManager.get_pkg_mgr(mdlUtil.model)
             MSCommObj = MSCommunity(mdlUtil.model, model_s_)
             # pkgmgr.getpkg("CommKineticPkg").build_package(kinetics_coef, MSCommObj)
+        # constrain carbon consumption
+        elepkg = ElementUptakePkg(mdlUtil.model)  ;  elepkg.build_package({"C": 100})
+        # evaluate the metabolomics data over time
 
         # constrain the model to 95% of the optimum growth
         maxBioSol = mdlUtil.model.slim_optimize()
@@ -149,25 +189,19 @@ class MSProbability:
                 coef.update({rxn.reverse_variable: ex_weight})
         mdlUtil.add_objective(Zero, "min", coef)
 
-
         print([cons.name for cons in mdlUtil.model.constraints])
-
 
         if printLP:
             with open("prFBA.lp", "w") as out:
                 out.write(str(mdlUtil.model.solver))
 
-
         # simulate the probabilistic model with the respective probabilities
         return mdlUtil.model.optimize()
-
 
     @staticmethod
     def iterative_simulation(time_iterative_data):
         pass
 
-    
-    
     def expressionData(data):
         # iterate over the reactions, genes, and keep the highest expression score
         # turn off reactions that are below a threshold, ensure that the growth is unchanged, otherwise restore the reaction.

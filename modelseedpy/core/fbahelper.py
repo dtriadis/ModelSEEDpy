@@ -170,7 +170,8 @@ class FBAHelper:
         if len(compartments) == 1:  return compartments[0]
         for comp in compartments:
             if comp[0:1] != "e":  return comp
-            elif comp[0:1] == "e":  extracellular = comp  ;  return extracellular
+            elif comp[0:1] == "e":  extracellular = comp
+        return extracellular
 
     @staticmethod
     def remove_compartment(objID):

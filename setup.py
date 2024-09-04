@@ -10,7 +10,7 @@ with open("LICENSE") as f:
 
 setup(
     name="ModelSEEDpy",
-    version="0.3.1",
+    version="0.3.3",
     description="Python package for building and analyzing models using ModelSEED",
     long_description_content_type="text/x-rst",
     long_description=readme,
@@ -36,7 +36,7 @@ setup(
     include_package_data =True,
     install_requires=[
         "networkx >= 2.4",
-        "cobra >= 0.17.1",
+        "cobra >= 0.28.0",
         "scikit-learn >= 1.2.0",  # version lock for pickle ML models
         "scipy >= 1.5.4",
         "chemicals >= 1.0.13",
