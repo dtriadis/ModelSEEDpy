@@ -121,7 +121,7 @@ class MSModelUtil:
         model = factory.build_object_from_file(filename, "KBaseFBA.FBAModel")
         return MSModelUtil(model)
 
-    def __init__(self, model):
+    def __init__(self, model, copy=False, environment=None):
         self.model = model
         if environment is not None:  self.add_medium(environment)
         self.id = model.id

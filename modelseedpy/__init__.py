@@ -40,6 +40,7 @@ from modelseedpy.core import (
     MSGrowthPhenotypes,
     MSGrowthPhenotype,
     MSModelUtil,
+    MSMinimalMedia,
     FBAHelper,
     MSEditorAPI,
     MSATPCorrection,
@@ -50,10 +51,6 @@ from modelseedpy.core import (
     OptlangHelper
 )
 from modelseedpy.core.exceptions import *
-
-from modelseedpy.community import (
-    MSCommunity, CommunityMember, MSKineticsFBA, CommPhitting,
-    MSSteadyCom, build_from_species_models, phenotypes)
 
 from modelseedpy.biochem import ModelSEEDBiochem
 
