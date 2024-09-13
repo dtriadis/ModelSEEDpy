@@ -259,7 +259,7 @@ class MSMinimalMedia:
 
     @staticmethod
     def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
-                            interacting=True, solution_limit=5, printing=True):
+                            interacting=True, printing=True):
         if minimization_method == "minFlux":
             return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
         if minimization_method == "minComponents":

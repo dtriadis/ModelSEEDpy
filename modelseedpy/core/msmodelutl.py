@@ -142,6 +142,7 @@ class MSModelUtil:
         self.test_objective = None
         self.reaction_scores = None
         self.score = None
+        # identify the forward biomass reaction
         try:
             objectiveVars = list(self.model.objective.variables)
             for var in objectiveVars:
@@ -1674,9 +1675,10 @@ class MSModelUtil:
 
     def add_medium(self, media, uniform_uptake=None):
         # add the new media and its flux constraints
-        if media is None:  return self.model.medium
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
         if not hasattr(media, "items"):  media = FBAHelper.convert_kbase_media(media)
+        elif not any(["EX_" in x for x in list(media.keys())]):
+            media = {"EX_"+k+"_e0":v for k,v in media.items()}
         self.model.medium = {ex: uptake for ex, uptake in media.items() if ex in exIDs}
         if uniform_uptake is not None:  self.model.medium = dict(zip(
             list(self.model.medium.keys()), [uniform_uptake]*len(self.model.medium)))
