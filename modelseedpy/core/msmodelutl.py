@@ -625,7 +625,7 @@ class MSModelUtil:
         return output
 
     def create_constraint(self, constraint, coef=None, sloppy=False, printing=False):
-        if printing:   print(coef)
+        # if printing:   print(coef)
         self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
         if coef:   constraint.set_linear_coefficients(coef)

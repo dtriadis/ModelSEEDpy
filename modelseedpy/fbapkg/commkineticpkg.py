@@ -11,7 +11,7 @@ class CommKineticPkg(BaseFBAPkg):
     def __init__(self, model):
         BaseFBAPkg.__init__(self, model, "community kinetics", {}, {"commKin": "string"})
 
-    def build_package(self, kinetic_coef, community_model, probs=None):
+    def build_package(self, kinetic_coef, community_model, probs={}):
         self.validate_parameters({}, [], {"kinetic_coef": kinetic_coef, "community": community_model})
         for species in self.parameters["community"].members:
             if species.id+"_commKin" in self.model.constraints:
@@ -25,6 +25,5 @@ class CommKineticPkg(BaseFBAPkg):
         for rxn in self.model.reactions:
             rxnIndex = int(FBAHelper.rxn_compartment(rxn)[1:])
             if (rxnIndex == species.index and rxn != species.primary_biomass):
-                val = 1 if not isinstance(probs, dict) else probs.get(rxn.id, 1)
-                coef[rxn.forward_variable] = coef[rxn.reverse_variable] = val
+                coef[rxn.forward_variable] = coef[rxn.reverse_variable] = probs.get(rxn.id, 1)
         return BaseFBAPkg.build_constraint(self, "commKin", None, 0, coef, species.id)
