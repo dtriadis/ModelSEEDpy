@@ -4,7 +4,6 @@ from modelseedpy.core.fbahelper import FBAHelper
 from modelseedpy.core.msmodelutl import MSModelUtil
 from modelseedpy.fbapkg.basefbapkg import BaseFBAPkg
 from itertools import combinations, permutations, chain
-from optlang import Variable, Constraint
 from cobra.medium import minimal_medium
 from optlang.symbolics import Zero
 from math import isclose, inf, factorial
@@ -123,10 +122,10 @@ class MSMinimalMedia:
                 print(f"The {var_name} variable already exists in "
                       f"{model_util.model.id} and thus is skipped.\n")
                 continue
-            vars[rxn.id] = Variable(var_name, lb=0, ub=1, type="binary")
+            vars[rxn.id] = model_util.model.problem.Variable(var_name, lb=0, ub=1, type="binary")
             model_util.add_cons_vars([vars[rxn.id]])
             # bin_flux: {rxn_bin}*1000 >= {rxn_rev_flux}
-            model_util.create_constraint(Constraint(Zero, lb=0, ub=None, name=cons_name),
+            model_util.create_constraint(model_util.model.problem.Constraint(Zero, lb=0, ub=None, name=cons_name),
                                          coef={vars[rxn.id]: 1000, rxn.reverse_variable: -1})
         return vars
 
@@ -181,7 +180,7 @@ class MSMinimalMedia:
             sol_media = _exchange_solution(sol_rxns_dict)
             min_media = sol_media if len(sol_media) < len(min_media) else min_media
             ## omit the solution from future searches
-            model_util.create_constraint(Constraint(
+            model_util.create_constraint(model_util.model.problem.Constraint(
                 Zero, lb=None, ub=len(sol_dict)-1, name=f"exclude_sol{len(solution_dicts)}"), sol_dict)
 
             # search the permutation space by omitting previously investigated solution_dicts
@@ -219,8 +218,7 @@ class MSMinimalMedia:
                          for rxnVar2 in sol_dict if (
                                  rxnVar != rxnVar2 and any(["_e0" in met.id for met in rxnVar2.metabolites]))
                          })
-        knocked_model_utl.create_constraint(Constraint(Zero, lb=0.1, ub=None,
-                                                       name=f"{rxnVar.name}-sol{sol_index}"), coef)
+        knocked_model_utl.create_constraint(org_model.problem.Constraint(Zero, lb=0.1, ub=None, name=f"{rxnVar.name}-sol{sol_index}"), coef)
         return knocked_model_utl.optimize()
 
     @staticmethod
