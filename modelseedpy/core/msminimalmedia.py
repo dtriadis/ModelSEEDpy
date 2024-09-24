@@ -91,8 +91,8 @@ class MSMinimalMedia:
         model_util.add_medium(environment or model_util.model.medium)
         # define the MILP
         sol_growth = model_util.run_fba(None, pfba).fluxes[model_util.biomass_objective]
+        ## some models can't grow at min_growth and therefore are limited by their max_growth
         min_growth = sol_growth if min_growth is None else min(min_growth, sol_growth)
-        # min_flux = MSMinimalMedia._min_consumption_objective(model_util, interacting)
         media_exchanges = MSMinimalMedia._influx_objective(model_util, interacting)
         # parse the minimal media
         sol, sol_dict = minimizeFlux_withGrowth(model_util, min_growth, sum(media_exchanges))
@@ -105,6 +105,17 @@ class MSMinimalMedia:
             print(f"The minimal flux media for {org_model.id} consists of {len(min_media)} compounds and a {total_flux} total influx,"
                   f" with a growth value of {simulated_sol.objective_value}")
         return min_media, sol
+
+    @staticmethod
+    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None, interacting=True, pfba=True, printing=True):
+        if minimization_method == "minFlux":
+            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, pfba, printing)
+        if minimization_method == "minComponents":
+            return minimal_medium(model, min_growth, minimize_components=True)
+            # return MSMinimalMedia.minimize_components(
+            #     model, min_growth, environment, interacting, solution_limit, printing)
+        if minimization_method == "jenga":
+            return MSMinimalMedia.jenga_method(model, printing=printing)
 
     @staticmethod
     def _min_consumption_objective(model_util, interacting):
@@ -256,18 +267,6 @@ class MSMinimalMedia:
                     return interdependencies
                 MSMinimalMedia._examine_permutations(model, new_sol_exchanges, variables, new_sol_dict, sol_index+1, interacting)
             return interdependencies
-
-    @staticmethod
-    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
-                            interacting=True, solution_limit=5, printing=True):
-        if minimization_method == "minFlux":
-            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
-        if minimization_method == "minComponents":
-            return minimal_medium(model, min_growth, minimize_components=True)
-            # return MSMinimalMedia.minimize_components(
-            #     model, min_growth, environment, interacting, solution_limit, printing)
-        if minimization_method == "jenga":
-            return MSMinimalMedia.jenga_method(model, printing=printing)
 
     @staticmethod
     def comm_media_est(models, comm_model, minimization_method="minComponents", min_growth=0.1,
