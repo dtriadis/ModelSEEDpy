@@ -255,6 +255,7 @@ def _load_metabolites(
                             o.get("pka"),
                             o.get("pkb"),
                             o.get("source"),
+                            pathways=o.get('pathways')
                         )
                         if cpd.id in aliases:
                             cpd.annotation.update(aliases[cpd.id])
