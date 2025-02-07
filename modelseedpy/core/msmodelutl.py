@@ -13,7 +13,6 @@ from modelseedpy.core.exceptions import *
 from modelseedpy.core.fbahelper import FBAHelper
 from itertools import chain
 from optlang.symbolics import Zero
-from optlang import Constraint, Objective
 from math import isclose
 from multiprocessing import Value
 
@@ -142,6 +141,7 @@ class MSModelUtil:
         self.test_objective = None
         self.reaction_scores = None
         self.score = None
+        # identify the forward biomass reaction
         try:
             objectiveVars = list(self.model.objective.variables)
             for var in objectiveVars:
@@ -625,7 +625,7 @@ class MSModelUtil:
         return output
 
     def create_constraint(self, constraint, coef=None, sloppy=False, printing=False):
-        if printing:   print(coef)
+        # if printing:   print(coef)
         self.model.add_cons_vars(constraint, sloppy=sloppy)
         self.model.solver.update()
         if coef:   constraint.set_linear_coefficients(coef)
@@ -649,7 +649,7 @@ class MSModelUtil:
         self.model.solver.update()
 
     def add_objective(self, objective, direction="max", coef=None):
-        self.model.objective = Objective(objective, direction=direction)
+        self.model.objective = self.model.problem.Objective(objective, direction=direction)
         self.model.solver.update()
         if coef:
             self.model.objective.set_linear_coefficients(coef)
@@ -667,16 +667,16 @@ class MSModelUtil:
                 # returns the biomass expression of the lowest cytoplasmic compartment
                 return met.constraint.expression
 
-    def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None):
-        if "min_value" not in self.model.constraints:
+    def add_minimal_objective_cons(self, min_value=0.1, objective_expr=None, name="min_value"):
+        if name not in self.model.constraints:
             objective_expr = objective_expr or self.model.objective.expression
-            self.create_constraint(Constraint(objective_expr, lb=min_value, ub=None, name="min_value"))
+            self.create_constraint(self.model.problem.Constraint(objective_expr, lb=min_value, ub=None, name=name))
             # print(self.model.constraints["min_value"])
         else:
-            print(f"The min_value constraint already exists in {self.model.id}, "
+            print(f"The {name} constraint already exists in {self.model.id}, "
                   f"hence the lb is simply updated from"
-                  f" {self.model.constraints['min_value'].lb} to {min_value}.\n")
-            self.model.constraints["min_value"].lb = min_value
+                  f" {self.model.constraints[name].lb} to {min_value}.\n")
+            self.model.constraints[name].lb = min_value
 
     def add_exchange_to_model(self, cpd, rxnID):
         self.model.add_boundary(metabolite=Metabolite(id=cpd.id, name=cpd.name, compartment="e0"),
@@ -1106,7 +1106,7 @@ class MSModelUtil:
         for rxn in self.model.reactions:
             if "EX_" not in rxn.id:
                 vars_coef[rxn.forward_variable] = vars_coef[rxn.reverse_variable] = 1
-        self.create_constraint(Constraint(Zero, lb=0, ub=flux_limit, name="resource_balance_limit"), coef=vars_coef)
+        self.create_constraint(self.model.problem.Constraint(Zero, lb=0, ub=flux_limit, name="resource_balance_limit"), coef=vars_coef)
 
     def apply_test_condition(self, condition, model=None):
         """Applies constraints and objective of specified condition to model
@@ -1645,7 +1645,7 @@ class MSModelUtil:
     def costless_excreta(self, pfba=False):
         # the double optimization is intended to truly find the maximal biomass growth
         original_objective = self.model.objective
-        minObj_cons = Constraint(self.model.objective.expression, lb=self.model.slim_optimize(), name="minObj")
+        minObj_cons = self.model.problem.Constraint(self.model.objective.expression, lb=self.model.slim_optimize(), name="minObj")
         self.add_cons_vars([minObj_cons])
         if pfba:
             self.model.problem.constraints.minObj_cons.lb = self.model.slim_optimize()
@@ -1674,9 +1674,10 @@ class MSModelUtil:
 
     def add_medium(self, media, uniform_uptake=None):
         # add the new media and its flux constraints
-        if media is None:  return self.model.medium
         exIDs = [exRXN.id for exRXN in self.exchange_list()]
         if not hasattr(media, "items"):  media = FBAHelper.convert_kbase_media(media)
+        elif not any(["EX_" in x for x in list(media.keys())]):
+            media = {"EX_"+k+"_e0":v for k,v in media.items()}
         self.model.medium = {ex: uptake for ex, uptake in media.items() if ex in exIDs}
         if uniform_uptake is not None:  self.model.medium = dict(zip(
             list(self.model.medium.keys()), [uniform_uptake]*len(self.model.medium)))
