@@ -73,7 +73,7 @@ class MSMinimalMedia:
         rxns = model_util.exchange_list() if interacting else model_util.transport_list()
         influxes = []
         for rxn in rxns:
-            if any(["e0" in met.id for met in rxn.reactants]):  # this is essentially every exchange
+            if any(["e0" in met.id for met in rxn.reactants]):   # this is essentially every exchange
                 influxes.append(rxn.reverse_variable)
             elif any(["e0" in met.id for met in rxn.products]):  # this captures edge cases or transporters
                 influxes.append(rxn.forward_variable)
@@ -81,13 +81,12 @@ class MSMinimalMedia:
         return influxes
 
     @staticmethod
-    def minimize_flux(org_model, min_growth=None, environment=None, interacting=True, pfba=True, printing=True):
+    def minimize_flux(org_model, min_growth=None, environment=None, interacting=True, pfba=True, climit=None, o2limit=None, printing=True):
         """minimize the total in-flux of exchange reactions in the model"""
         if org_model.slim_optimize() == 0:
             raise ObjectiveError(f"The model {org_model.id} possesses an objective value of 0 in complete media, "
                                  "which is incompatible with minimal media computations.")
-        model_util = MSModelUtil(org_model, True)
-        model_util.add_medium(environment or model_util.model.medium)
+        model_util = MSModelUtil(org_model, True, environment or org_model.medium, climit, o2limit)
         # define the MILP
         sol_growth = model_util.run_fba(None, pfba).fluxes[model_util.biomass_objective]
         min_growth = sol_growth if min_growth is None else min(min_growth, sol_growth)
@@ -257,9 +256,9 @@ class MSMinimalMedia:
 
     @staticmethod
     def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
-                            interacting=True, printing=True):
+                            interacting=True, climit=None, o2limit=None, printing=True):
         if minimization_method == "minFlux":
-            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, printing)
+            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, True, climit, o2limit, printing)
         if minimization_method == "minComponents":
             return minimal_medium(model, min_growth, minimize_components=True)
             # return MSMinimalMedia.minimize_components(

@@ -120,7 +120,9 @@ class MSModelUtil:
         model = factory.build_object_from_file(filename, "KBaseFBA.FBAModel")
         return MSModelUtil(model)
 
-    def __init__(self, model, copy=False, environment=None):
+    
+    
+    def __init__(self, model, copy=False, environment=None, climit=None, o2limit=None, no_constraints=False):
         self.model = model
         if environment is not None:  self.add_medium(environment)
         self.id = model.id
@@ -132,7 +134,7 @@ class MSModelUtil:
                 raise ModelError(f"The {model.id} objective value is corrupted by being copied,"
                                  f" where the original objective value is {org_obj_val}"
                                  f" and the new objective value is {new_obj_val}.")
-        self.pkgmgr = MSPackageManager.get_pkg_mgr(self.model)
+        self.pkgmgr = MSPackageManager.get_pkg_mgr(self)
         self.wsid = None
         self.atputl = None
         self.gfutl = None
@@ -156,12 +158,22 @@ class MSModelUtil:
         if hasattr(self.model, "computed_attributes"):
             if self.model.computed_attributes:
                 self.attributes = self.model.computed_attributes
-        if "pathways" not in self.attributes:
-            self.attributes["pathways"] = {}
-        if "auxotrophy" not in self.attributes:
-            self.attributes["auxotrophy"] = {}
-        if "fbas" not in self.attributes:
-            self.attributes["fbas"] = {}
+        if "pathways" not in self.attributes:    self.attributes["pathways"] = {}
+        if "auxotrophy" not in self.attributes:  self.attributes["auxotrophy"] = {}
+        if "fbas" not in self.attributes:        self.attributes["fbas"] = {}
+            
+        # add constraints
+        # print("ModelUtil", model, copy, climit, o2limit)
+        if no_constraints or "C_elements" in self.model.constraints:    return
+        if o2limit is None and climit is None:
+            print(f"Neither carbon consumption nor oxygen consumption are defined in {self.id}")       
+        else:
+            if o2limit is not None and climit is None:   climit = 3*o2limit
+            elif climit is not None and o2limit is None:   o2limit = climit/3
+            self.pkgmgr.getpkg("ElementUptakePkg").build_package({"C": climit})
+            if "EX_cpd00007_e0" in [rxn.id for rxn in self.exchange_list()]:
+                self.model.reactions.get_by_id("EX_cpd00007_e0").lower_bound = -climit/3
+            else:   print(f"The {self.model.id} does not consume Oxygen")
 
     ########Functions related to ATP gapfilling method
     def get_atputl(self,atp_media_filename=None,core_template=None,gapfilling_delta=0,max_gapfilling=0,forced_media=[],remake_atputil=False):
