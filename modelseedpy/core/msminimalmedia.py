@@ -105,9 +105,10 @@ class MSMinimalMedia:
         return min_media, sol
 
     @staticmethod
-    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None, interacting=True, pfba=True, printing=True):
+    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None, interacting=True, pfba=True,
+                            printing=True, climit=None, o2limit=None):
         if minimization_method == "minFlux":
-            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, pfba, printing)
+            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, pfba, climit, o2limit, printing)
         if minimization_method == "minComponents":
             return minimal_medium(model, min_growth, minimize_components=True)
             # return MSMinimalMedia.minimize_components(
@@ -264,18 +265,6 @@ class MSMinimalMedia:
                     return interdependencies
                 MSMinimalMedia._examine_permutations(model, new_sol_exchanges, variables, new_sol_dict, sol_index+1, interacting)
             return interdependencies
-
-    @staticmethod
-    def determine_min_media(model, minimization_method="minFlux", min_growth=None, environment=None,
-                            interacting=True, climit=None, o2limit=None, printing=True):
-        if minimization_method == "minFlux":
-            return MSMinimalMedia.minimize_flux(model, min_growth, environment, interacting, True, climit, o2limit, printing)
-        if minimization_method == "minComponents":
-            return minimal_medium(model, min_growth, minimize_components=True)
-            # return MSMinimalMedia.minimize_components(
-            #     model, min_growth, environment, interacting, solution_limit, printing)
-        if minimization_method == "jenga":
-            return MSMinimalMedia.jenga_method(model, printing=printing)
 
     @staticmethod
     def comm_media_est(models, comm_model, minimization_method="minComponents", min_growth=0.1,

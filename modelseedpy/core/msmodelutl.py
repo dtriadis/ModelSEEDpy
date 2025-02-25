@@ -122,7 +122,7 @@ class MSModelUtil:
 
     
     
-    def __init__(self, model, copy=False, environment=None, climit=None, o2limit=None, no_constraints=False):
+    def __init__(self, model, copy=False, environment=None, climit=None, o2limit=None):
         self.model = model
         if environment is not None:  self.add_medium(environment)
         self.id = model.id
@@ -164,15 +164,17 @@ class MSModelUtil:
             
         # add constraints
         # print("ModelUtil", model, copy, climit, o2limit)
-        if no_constraints or "C_elements" in self.model.constraints:    return
+        if "C_elements" in self.model.constraints:    return
+        if o2limit is False and climit is False:  return
         if o2limit is None and climit is None:
             print(f"Neither carbon consumption nor oxygen consumption are defined in {self.id}")       
         else:
-            if o2limit is not None and climit is None:   climit = 3*o2limit
-            elif climit is not None and o2limit is None:   o2limit = climit/3
+            if not FBAHelper.isnumber(climit) and FBAHelper.isnumber(o2limit):   climit = 3*o2limit
+            elif not FBAHelper.isnumber(climit):  climit = 60
+            if not FBAHelper.isnumber(o2limit):   o2limit = climit/3
             self.pkgmgr.getpkg("ElementUptakePkg").build_package({"C": climit})
             if "EX_cpd00007_e0" in [rxn.id for rxn in self.exchange_list()]:
-                self.model.reactions.get_by_id("EX_cpd00007_e0").lower_bound = -climit/3
+                self.model.reactions.get_by_id("EX_cpd00007_e0").lower_bound = -o2limit
             else:   print(f"The {self.model.id} does not consume Oxygen")
 
     ########Functions related to ATP gapfilling method

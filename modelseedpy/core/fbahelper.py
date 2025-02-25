@@ -142,7 +142,7 @@ class FBAHelper:
 
     @staticmethod
     def isnumber(string):
-        if str(string) in ["nan", "inf"]:  return False
+        if str(string) in ["nan", "inf", "True", "False"]:  return False
         try:  float(string);  return True
         except:  return False
 
