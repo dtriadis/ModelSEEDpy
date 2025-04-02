@@ -46,10 +46,12 @@ class OptlangHelper:
     
     @staticmethod
     def add_variables(var_name:str, var_bounds:(list, tuple), var_type:str="continuous"):
+        assert var_bounds[0] <= var_bounds[1], f"The {var_name} variable lower bound {var_bounds[0]} is greater than the upper bound {var_bounds[1]}.  The lower bound must be less than the upper bound."
         return {"name": var_name.replace(" ", "_"), "lb": var_bounds[0], "ub": var_bounds[1], "type": var_type}
     
     @staticmethod
     def add_constraint(cons_name:str, cons_bounds:(list, tuple), cons_expr:dict):
+        assert cons_bounds[0] <= cons_bounds[1], f"The {cons_name} constraint lower bound {cons_bounds[0]} is greater than the upper bound {cons_bounds[1]}.  The lower bound must be less than the upper bound."
         return {"name": cons_name.replace(" ", "_"),
                 "expression": OptlangHelper._define_expression(cons_expr),
                 "lb": cons_bounds[0], "ub": cons_bounds[1], "indicator_variable": None, "active_when": 1}
