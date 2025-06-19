@@ -443,12 +443,12 @@ class MSBuilder:
             for role, (triggering, optional) in cpx.roles.items():
                 rn_norm = normalize_role(role.name)
                 template_reaction_complexes[cpx.id][role.id] = [
-                    sn,
+                    rn_norm,
                     triggering,
                     optional,
                     set()
-                    if sn not in self.search_name_to_genes
-                    else set(self.search_name_to_genes[sn]),
+                    if rn_norm not in self.search_name_to_genes
+                    else set(self.search_name_to_genes[rn_norm]),
                 ]
         return template_reaction_complexes
 
