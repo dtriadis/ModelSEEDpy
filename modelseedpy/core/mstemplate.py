@@ -16,6 +16,7 @@ from modelseedpy.core.msmodel import (
 )
 from cobra.core.dictlist import DictList
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Tuple, Union
+import warnings
 
 # from gevent.libev.corecext import self
 
@@ -1414,7 +1415,7 @@ class MSTemplate:
             well (default False).
         """
         if isinstance(reactions, str) or hasattr(reactions, "id"):
-            warn("need to pass in a list")
+            warnings.warn("need to pass in a list")
             reactions = [reactions]
 
         for reaction in reactions:
@@ -1422,7 +1423,7 @@ class MSTemplate:
             try:
                 reaction = self.reactions[self.reactions.index(reaction)]
             except ValueError:
-                warn(f"{reaction} not in {self}")
+                warnings.warn(f"{reaction} not in {self}")
 
             else:
                 self.reactions.remove(reaction)
@@ -1573,4 +1574,7 @@ class MSTemplateBuilder:
         template.add_complexes([NewModelTemplateComplex.from_dict(x, template) for x in self.complexes])
         template.add_reactions([MSTemplateReaction.from_dict(x, template) for x in self.reactions])
         template.biomasses += [AttrDict(x) for x in self.biomasses]  # TODO: biomass object
+        # DT: Not sure why biomasses are added as AttrDicts above, conversion to MSTemplateBiomass below.
+        for ii in range(len(template.biomasses)):
+            template.biomasses[ii] = MSTemplateBiomass.from_dict(template.biomasses[ii], template)
         return template

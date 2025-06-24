@@ -10,6 +10,7 @@ from modelseedpy.core.mstemplate import TemplateReactionType
 from modelseedpy.core.msmodel import (
     get_gpr_string,
     get_reaction_constraints_from_direction,
+    MSModel
 )
 from cobra.core import Gene, Metabolite, Model, Reaction, Group
 from modelseedpy.core import FBAHelper
@@ -466,7 +467,7 @@ class MSBuilder:
                 complete &= len(complx[3]) > 0 or not complx[1] or complx[2]
                 if len(complx[3]) > 0:
                     roles.add(role_id)
-                    role_genes[role_id] = t[3]
+                    role_genes[role_id] = complx[3]
             # print(cpx_id, complete, roles)
             if len(roles) > 0 and (allow_incomplete_complexes or complete):
                 complexes[cpx_id] = {}
@@ -1116,7 +1117,7 @@ class MSBuilder:
 
     @staticmethod
     def gapfill_model(original_mdl, target_reaction, template, media):
-        FBAHelper.set_objective_from_target_reaction(original_mdl, target_reaction)
+        MSModel.set_objective_from_target_reaction(original_mdl, target_reaction)
         model = cobra.io.json.from_json(cobra.io.json.to_json(original_mdl))  #!!! what is the benefit of this I/O processing?
         pkgmgr = MSPackageManager.get_pkg_mgr(model)
         pkgmgr.getpkg("GapfillingPkg").build_package(

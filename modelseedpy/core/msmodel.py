@@ -142,6 +142,12 @@ class MSModel(Model):
     def genome(self, genome):
         self._genome = genome
 
+    def set_objective_from_target_reaction(self, target_rxn, minimize=False):
+        target_rxn = target_rxn if not isinstance(target_rxn, str) else self.reactions.get_by_id(target_rxn)
+        sense = "max" if not minimize else "min"
+        self.objective = self.problem.Objective(target_rxn.flux_expression, direction=sense)
+        return target_rxn
+
     def _set_genome_to_model(self, genome):
         # TODO: implement genome assignment checks if features matches genes
         pass

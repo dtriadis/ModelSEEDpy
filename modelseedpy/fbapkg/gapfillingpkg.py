@@ -469,13 +469,13 @@ class GapfillingPkg(BaseFBAPkg):
                     base_blacklist[template_reaction.reference_id] == ">"
                     or base_blacklist[template_reaction.reference_id] == "="
                 ):
-                    cobra_reaction.upper_bound = 0
+                    cobra_rxn.upper_bound = 0
                 if (
                     base_blacklist[template_reaction.reference_id] == "<"
                     or base_blacklist[template_reaction.reference_id] == "="
                 ):
-                    cobra_reaction.lower_bound = 0
-            new_penalties[cobra_reaction.id] = dict()
+                    cobra_rxn.lower_bound = 0
+            new_penalties[cobra_rxn.id] = dict()
             if (
                 cobra_rxn.id not in self.model.reactions
                 and cobra_rxn.id not in self.new_reactions
@@ -583,7 +583,7 @@ class GapfillingPkg(BaseFBAPkg):
         cobra_rxn.annotation["sbo"] = "SBO:0000176"  # biochemical reaction
         cobra_rxn.annotation["seed.reaction"] = template_reaction.reference_id
 
-        return cobra_reaction
+        return cobra_rxn
 
     def set_media(self, media):
         if self.parameters["base_media"]:
