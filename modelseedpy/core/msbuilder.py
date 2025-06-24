@@ -466,7 +466,7 @@ class MSBuilder:
                 complete &= len(complx[3]) > 0 or not complx[1] or complx[2]
                 if len(complx[3]) > 0:
                     roles.add(role_id)
-                    role_genes[role_id] = t[3]
+                    role_genes[role_id] = complx[3]
             # print(cpx_id, complete, roles)
             if len(roles) > 0 and (allow_incomplete_complexes or complete):
                 complexes[cpx_id] = {}
